@@ -14,6 +14,7 @@ const result = await build({
   entryPoints: [fileURLToPath(new URL("../cli.ts", import.meta.url))],
   outfile,
   bundle: true,
+  external: ["typebox", "@earendil-works/pi-ai", "@earendil-works/pi-agent-core", "@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"],
   metafile: true,
   platform: "node",
   format: "esm",

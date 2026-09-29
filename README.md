@@ -108,6 +108,8 @@ Runtime slash controls:
 
 ## Install
 
+**0.31.2 compatibility:** tested against Pi 0.99.0 (Node 22.19+ for the extension). Pi APIs and TypeBox are host-provided wildcard peers, never bundled; development pins Pi 0.99.0 and TypeBox 1.3.27. Native codemode-only and Fabric declaration hiding leave Fovea tools callable, including nested grep middleware. The standalone CLI remains Node 20+ and host-free.
+
 Requires Node.js 20+. The install provisions [ast-grep](https://ast-grep.github.io/) automatically through the `@ast-grep/cli` npm optional dependency; an `ast-grep` found on PATH takes precedence over the packaged copy, and `FOVEA_AST_GREP=/path/to/sg` overrides both. Bend-only and config/protocol-only roots work without ast-grep; it is required when discovery or refresh includes a language that uses its parser.
 
 ```sh
