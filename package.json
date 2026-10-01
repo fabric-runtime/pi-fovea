@@ -1,6 +1,6 @@
 {
   "name": "pi-fovea",
-  "version": "0.31.2",
+  "version": "0.31.3",
   "description": "Token-budgeted repo mapping for agent sessions: foveated heat diffusion over a cross-language code graph, with progressive disclosure.",
   "type": "module",
   "license": "MIT",
@@ -87,8 +87,8 @@
     "test:smoke": "vitest run tests/verified-kernels.test.ts tests/startup.test.ts tests/config.test.ts tests/settings.test.ts tests/substrate.test.ts tests/scan.test.ts tests/extract.test.ts tests/join.test.ts tests/heat.test.ts tests/nuclei.test.ts tests/render.test.ts"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.99.0",
-    "@earendil-works/pi-tui": "0.99.0",
+    "@earendil-works/pi-coding-agent": "1.0.0",
+    "@earendil-works/pi-tui": "1.0.0",
     "@types/node": "^22.0.0",
     "esbuild": "^0.28.1",
     "knip": "^6.32.0",
