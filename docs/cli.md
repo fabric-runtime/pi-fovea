@@ -44,7 +44,7 @@ directory. Installing the executable alone does not register the skill.
 
 For a global npm install, the skill directory is
 `$(npm root -g)/@monotykamary/fovea/skills/fovea`. It is also available in the
-[source repository](https://github.com/monotykamary/pi-fovea/tree/main/skills/fovea).
+[source repository](https://github.com/fabric-runtime/pi-fovea/tree/main/skills/fovea).
 The separate **pi-fovea** skill covers Pi extension tools and session behavior.
 
 ## Pi extension
@@ -60,6 +60,6 @@ Both distributions share the same engine and release version. The legacy
 to avoid competing for the same executable. Installing the extension through
 Pi and this CLI globally is supported.
 
-See the [project documentation](https://github.com/monotykamary/pi-fovea#readme)
+See the [project documentation](https://github.com/fabric-runtime/pi-fovea#readme)
 for language coverage and configuration. Proof sources and generated-kernel
 receipts are included for auditing, not required at runtime.

@@ -7,11 +7,11 @@
 _See the whole repo on every prompt, sharp where you work and cheap everywhere else._
 
 <p>
-  <img src="https://raw.githubusercontent.com/monotykamary/pi-fovea/main/media/cover.svg" alt="pi-fovea: a code graph seen through a fovea, hot at the center and collapsed at the rim" width="1100">
+  <img src="https://raw.githubusercontent.com/fabric-runtime/pi-fovea/main/media/cover.svg" alt="pi-fovea: a code graph seen through a fovea, hot at the center and collapsed at the rim" width="1100">
 </p>
 
 [![npm version](https://img.shields.io/npm/v/pi-fovea?style=for-the-badge&logo=npm&color=cb3837)](https://www.npmjs.com/package/pi-fovea)
-[![checks](https://img.shields.io/github/actions/workflow/status/monotykamary/pi-fovea/test.yml?branch=main&style=for-the-badge&label=checks)](https://github.com/monotykamary/pi-fovea/actions/workflows/test.yml)
+[![checks](https://img.shields.io/github/actions/workflow/status/fabric-runtime/pi-fovea/test.yml?branch=main&style=for-the-badge&label=checks)](https://github.com/fabric-runtime/pi-fovea/actions/workflows/test.yml)
 [![pi extension](https://img.shields.io/badge/pi-extension-8b5cf6?style=for-the-badge)](https://github.com/earendil-works/pi-coding-agent)
 [![license](https://img.shields.io/badge/license-MIT-f4c430?style=for-the-badge)](LICENSE)
 
@@ -122,7 +122,7 @@ pi install npm:pi-fovea
 From GitHub:
 
 ```sh
-pi install git:github.com/monotykamary/pi-fovea
+pi install git:github.com/fabric-runtime/pi-fovea
 ```
 
 From a local checkout:

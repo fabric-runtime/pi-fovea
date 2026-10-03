@@ -10,10 +10,10 @@
   "author": "monotykamary",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/monotykamary/pi-fovea.git"
+    "url": "git+https://github.com/fabric-runtime/pi-fovea.git"
   },
-  "homepage": "https://github.com/monotykamary/pi-fovea#readme",
-  "bugs": "https://github.com/monotykamary/pi-fovea/issues",
+  "homepage": "https://github.com/fabric-runtime/pi-fovea#readme",
+  "bugs": "https://github.com/fabric-runtime/pi-fovea/issues",
   "keywords": [
     "pi-package",
     "pi-extension",
@@ -31,7 +31,7 @@
     "skills": [
       "./skills"
     ],
-    "image": "https://raw.githubusercontent.com/monotykamary/pi-fovea/main/media/cover.svg"
+    "image": "https://raw.githubusercontent.com/fabric-runtime/pi-fovea/main/media/cover.svg"
   },
   "exports": {
     "./ops": "./src/core/ops.ts",
