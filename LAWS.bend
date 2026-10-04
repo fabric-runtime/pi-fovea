@@ -97,7 +97,7 @@ law basis_complete_retained:
   for +have: Nat
   for +order: Nat
   for complete: {Nat.is_le(1n+have, order) == False{} : Bool}
-  {K.basisStep(1n+have, order) == B.Done{} : B.Step}
+  {K.basisStep(1n+have, order) == B.Complete{} : B.Step}
 
 law basis_first_order:
   for order: Nat

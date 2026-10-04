@@ -150,7 +150,7 @@ def invalid_column() -> {H.sum(H.transport([H.Source{2n, [1n]}])) == 4n : Nat}:
   it.each([
     ["D.disclosure(scope, excluded, seen, repeat, nucleus)", "D.disclosure(False{}, excluded, seen, repeat, nucleus)", "fresh_revealed"],
     ["C.fastShown(total, requested)", "total", "shown_bounded_by_total"],
-    ["B.step(have, order)", "B.Done{}", "basis_empty_refused"],
+    ["B.step(have, order)", "B.Complete{}", "basis_empty_refused"],
   ])("the law covers the actual exported wrapper: %s", (before, after, law) => {
     const dir = fixture();
     const file = join(dir, "proofs/kernel.bend");

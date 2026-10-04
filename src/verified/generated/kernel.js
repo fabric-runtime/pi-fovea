@@ -9,7 +9,7 @@ function o(n) {
     throw "bend: a Nat past the largest immediate 2^48-1";
   return n;
 }
-function u(n, t) {
+function r(n, t) {
   return { $: "$JMP", f: n, x: t };
 }
 function i(n) {
@@ -18,63 +18,63 @@ function i(n) {
   return n;
 }
 function $(n, t) {
-  return (...r) => r.length < t ? $((...e) => n(...r, ...e), t - r.length) : i(n(...r));
+  return (...e) => e.length < t ? $((...u) => n(...e, ...u), t - e.length) : i(n(...e));
 }
-function l(n, t, r, e, s) {
-  return u(b, [n, t, r, e, s]);
-}
-function a(n, t) {
-  return u(c, [n, t]);
+function l(n, t, e, u, s) {
+  return r(b, [n, t, e, u, s]);
 }
 function m(n, t) {
-  return u(d, [n, t]);
+  return r(c, [n, t]);
+}
+function a(n, t) {
+  return r(d, [n, t]);
 }
 function h(n, t) {
-  return u(g, [n, t]);
+  return r(g, [n, t]);
 }
-function b(n, t, r, e, s) {
-  return n ? t ? { $: "Drop" } : r ? e ? s ? { $: "Reveal" } : { $: "Suppress" } : { $: "Suppress" } : { $: "Reveal" } : { $: "Drop" };
+function b(n, t, e, u, s) {
+  return n ? t ? { $: "Drop" } : e ? u ? s ? { $: "Reveal" } : { $: "Suppress" } : { $: "Suppress" } : { $: "Reveal" } : { $: "Drop" };
 }
 function c(n, t) {
-  return u(w, [i(f(n, t)), n, t]);
+  return r(C, [i(f(n, t)), n, t]);
 }
 function d(n, t) {
-  let r = i(c(n, t));
-  return n < r ? 0n : n - r;
+  let e = i(c(n, t));
+  return n < e ? 0n : n - e;
 }
 function g(n, t) {
   if (n === 0n)
     return { $: "Empty" };
   {
-    let r = n - 1n;
-    return u(C, [i(f(o(r + 1n), t)), o(r + 1n)]);
+    let e = n - 1n;
+    return r(w, [i(f(o(e + 1n), t)), o(e + 1n)]);
   }
 }
-function w(n, t, r) {
-  return n ? t : r;
+function C(n, t, e) {
+  return n ? t : e;
 }
 function f(n, t) {
-  return u(S, [p(n, t)]);
+  return r(S, [p(n, t)]);
 }
-function C(n, t) {
+function w(n, t) {
   if (n) {
     if (t === 0n)
       return { $: "Empty" };
     if (t === 1n)
       return { $: "First" };
     {
-      let r = t - 2n;
-      return { $: "Next", at: o(r + 2n), previous: o(r + 1n), older: r };
+      let e = t - 2n;
+      return { $: "Next", at: o(e + 2n), previous: o(e + 1n), older: e };
     }
   } else
-    return { $: "Done" };
+    return { $: "Complete" };
 }
 function S(n) {
   return n.$ === "LT" ? !0 : n.$ === "EQ";
 }
-var x = /* @__PURE__ */ $(l, 5), E = /* @__PURE__ */ $(a, 2), y = /* @__PURE__ */ $(m, 2), D = /* @__PURE__ */ $(h, 2);
+var x = /* @__PURE__ */ $(l, 5), E = /* @__PURE__ */ $(m, 2), y = /* @__PURE__ */ $(a, 2), N = /* @__PURE__ */ $(h, 2);
 export {
-  D as basisStep,
+  N as basisStep,
   x as disclosure,
   y as remainingCount,
   E as shownCount

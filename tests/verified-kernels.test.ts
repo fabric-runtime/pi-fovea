@@ -55,7 +55,7 @@ describe("executed verified kernels", () => {
 
   it("decodes exact predecessor commands without overflowing backend naturals", () => {
     expect(nextBasisStep(0, 10)).toEqual({ $: "Empty" });
-    expect(nextBasisStep(1, 0)).toEqual({ $: "Done" });
+    expect(nextBasisStep(1, 0)).toEqual({ $: "Complete" });
     expect(nextBasisStep(1, 1)).toEqual({ $: "First" });
     // Only the minimum recurrence and maximum backend index need codec probes.
     for (const have of [2, BEND_NAT_MAX]) {
