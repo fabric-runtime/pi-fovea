@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { VERSION, createAgentSession, createCodemodeExtension, DefaultResourceLoader, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 
-it.each(["augment", "replace"])("Pi 1.0 loads %s mode, preserves callable tools and runs nested grep middleware", async (grepMode) => {
-  expect(VERSION).toBe("1.0.0");
+it.each(["augment", "replace"])("Pi 1.1 loads %s mode, preserves callable tools and runs nested grep middleware", async (grepMode) => {
+  expect(VERSION).toBe("1.1.0");
   const root = await mkdtemp(join(tmpdir(), "fovea-pi1-"));
   const agentDir = join(root, "agent");
   await mkdir(agentDir);
