@@ -4,14 +4,14 @@ import Base
 # vectors, but may only write the index and read the predecessors issued here.
 type Step is Data:
   Empty{}
-  Done{}
+  Complete{}
   First{}
   Next{at: Nat, previous: Nat, older: Nat}
 
 def choose(allowed: Bool, +have: Nat) -> Step:
   match allowed:
     case False{}:
-      Done{}
+      Complete{}
     case True{}:
       match have:
         case 0n:

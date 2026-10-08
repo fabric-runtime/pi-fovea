@@ -143,7 +143,7 @@ export const extendChebyshevVectors = (csr: Csr, tk: Float64Array[], K: number):
     const step = nextBasisStep(tk.length, K);
     switch (step.$) {
       case "Empty": throw new Error("Cannot extend an empty Chebyshev basis");
-      case "Done": return tk;
+      case "Complete": return tk;
       case "First":
         invSqrt ??= inverseDegrees(csr);
         tk[1] = applyNegP(csr, tk[0]!, invSqrt);
