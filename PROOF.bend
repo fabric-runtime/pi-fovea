@@ -103,7 +103,7 @@ def Laws.basis_empty_refused(order):
   {==}
 
 def Laws.basis_complete_retained(have, order, complete):
-  %Equal.sym(Bool, Nat.is_le(1n+have, order), False{}, complete) : {B.choose(_, 1n+have) == B.Done{} : B.Step}
+  %Equal.sym(Bool, Nat.is_le(1n+have, order), False{}, complete) : {B.choose(_, 1n+have) == B.Complete{} : B.Step}
   {==}
 
 def Laws.basis_first_order(order):

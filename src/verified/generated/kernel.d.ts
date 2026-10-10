@@ -1,6 +1,6 @@
 // Generated ABI; see proofs/kernel-abi.json.
 export type DisclosureDecision = { $: "Drop" } | { $: "Suppress" } | { $: "Reveal" };
-export type BasisStep = { $: "Empty" } | { $: "Done" } | { $: "First" }
+export type BasisStep = { $: "Empty" } | { $: "Complete" } | { $: "First" }
   | { $: "Next"; at: bigint; previous: bigint; older: bigint };
 
 export declare function disclosure(scope: boolean, excluded: boolean, seen: boolean, repeat: boolean, nucleus: boolean): DisclosureDecision;

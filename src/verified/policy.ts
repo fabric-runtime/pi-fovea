@@ -22,7 +22,7 @@ const decode = (value: bigint): number => {
 export const shownCount = (total: number, requested: number): number => decode(shown(encode(total), encode(requested)));
 export const remainingCount = (total: number, requested: number): number => decode(remaining(encode(total), encode(requested)));
 
-export type BasisStep = { $: "Empty" } | { $: "Done" } | { $: "First" }
+export type BasisStep = { $: "Empty" } | { $: "Complete" } | { $: "First" }
   | { $: "Next"; at: number; previous: number; older: number };
 
 /** Trusted numeric codec only. Admission, next index and predecessors all
@@ -30,7 +30,7 @@ export type BasisStep = { $: "Empty" } | { $: "Done" } | { $: "First" }
 export const nextBasisStep = (have: number, order: number): BasisStep => {
   const step = basisStep(encode(have), encode(order));
   switch (step.$) {
-    case "Empty": case "Done": case "First": return step;
+    case "Empty": case "Complete": case "First": return step;
     case "Next": return { $: "Next", at: decode(step.at), previous: decode(step.previous), older: decode(step.older) };
     default: throw new Error("Invalid basis command from verified kernel");
   }

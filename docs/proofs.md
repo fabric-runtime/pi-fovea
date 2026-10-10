@@ -163,11 +163,11 @@ and desired maximum order, the compiled result is the only admission decision:
 | Law | Guarantee |
 | --- | --- |
 | `basis_empty_refused` | An empty basis yields `Empty`, never a recurrence. |
-| `basis_complete_retained` | A basis already beyond the target order yields `Done`. |
+| `basis_complete_retained` | A basis already beyond the target order yields `Complete`. |
 | `basis_first_order` | A one-vector basis with requested order >= 1 yields `First`. |
 | `basis_next_exact` | A missing order >= 2 yields exactly `Next(have, have-1, have-2)`. |
 
-The host refuses `Empty`, returns on `Done`, computes the first multiplication
+The host refuses `Empty`, returns on `Complete`, computes the first multiplication
 on `First`, and reads/writes the indices from `Next`. Existing basis vectors
 are reused. This is a structural bridge, **not** a proof of the Float64 recurrence,
 array dimensions/aliasing, cache generation, Bessel coefficients or heat accuracy.
@@ -229,7 +229,7 @@ unproved compiler/codec boundaries in `tests/verified-kernels.test.ts`:
 | --- | --- | --- |
 | 32-case disclosure truth table | Six exhaustive disclosure laws | Three cases covering all tags and distinct Boolean patterns for every argument position. |
 | 6 × 6 count-pair matrix against `Math.min` | Five accounting laws plus `shown_equiv` | Five selected pairs: zero in either argument, asymmetric counts, 2^32, and the backend maximum (also catches recursive lowering). |
-| Repeated basis-order samples / duplicate `Done` case | Four basis-command laws | Every command tag and `Next` indices at the minimum and backend maximum; real heat-interpreter wiring. |
+| Repeated basis-order samples / duplicate `Complete` case | Four basis-command laws | Every command tag and `Next` indices at the minimum and backend maximum; real heat-interpreter wiring. |
 
 Invalid-input rejection, unsafe/import guards, artifact/ABI mutations and actual
 consumer-call tests remain: Bend does not prove the host bridge or safety gate.
