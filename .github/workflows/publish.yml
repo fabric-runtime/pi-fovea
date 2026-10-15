@@ -1,0 +1,130 @@
+name: Publish
+
+# Releases of @monotykamary/fovea, pi-fovea go out from here, and only from here.
+#
+#   1. Bump "version" in package.json (the `chore(release): X.Y.Z` commit).
+#      @monotykamary/fovea is built from the same source at the same version.
+#   2. Push it to main. This workflow publishes every version that npm does
+#      not have yet; any other push is a no-op.
+#
+# Run it from the Actions tab to retry a failed release, or tick "dry_run" to
+# build, check and pack without publishing.
+#
+# Auth is npm Trusted Publishing (OIDC): npm trusts this file, so no npm token
+# is stored anywhere. Registered once with
+#   npm trust github @monotykamary/fovea --repo fabric-runtime/pi-fovea --file publish.yml --allow-publish
+#   npm trust github pi-fovea --repo fabric-runtime/pi-fovea --file publish.yml --allow-publish
+#
+# Bun installs and packs exactly as `bun publish` does; npm uploads the
+# tarballs because only the npm CLI speaks trusted publishing.
+
+on:
+  push:
+    branches: [main]
+    paths: [package.json]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build, check and pack, but do not publish
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Find versions npm does not have
+        id: release
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          specs=$(
+          v=$(node -p "require('./package.json').version")
+          echo "@monotykamary/fovea@$v"
+          echo "pi-fovea@$v"
+          )
+          missing=""
+          for spec in $specs; do
+            # npm runs from outside the checkout so the repo's devEngines do not apply.
+            if (cd "$RUNNER_TEMP" && npm view "$spec" version >/dev/null 2>&1); then
+              echo "$spec is already on npm"
+            else
+              missing="$missing $spec"
+            fi
+          done
+          if [ "$DRY_RUN" = "true" ]; then
+            mode=dry-run
+          elif [ -n "$missing" ]; then
+            mode=publish
+            echo "::notice::Publishing$missing"
+          else
+            mode=skip
+            echo "::notice::Nothing to publish"
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        if: steps.release.outputs.mode != 'skip'
+        run: bun install --frozen-lockfile
+
+      - name: Install the pinned Bend proof compiler
+        if: steps.release.outputs.mode != 'skip'
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/bend.tar.gz" https://github.com/bendlang/bend/releases/download/v2.0.26/bend-2.0.26-linux-x64.tar.gz
+          echo "5edcc8e5c12d525655431ab02659ddf88e362aafbe7c7bb7f783a1ffaeb6165c  $RUNNER_TEMP/bend.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/bend.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/bend/bin" >> "$GITHUB_PATH"
+
+      - name: Check
+        if: steps.release.outputs.mode != 'skip'
+        run: bun run typecheck
+
+      - name: Pack
+        if: steps.release.outputs.mode != 'skip'
+        run: |
+          bun run pack:cli
+          bun run check:package:cli dist/fovea-cli.tgz
+          bun pm pack --filename dist/pi-fovea.tgz --quiet
+          bun run check:package dist/pi-fovea.tgz
+          mkdir -p "$RUNNER_TEMP/pack"
+          mv dist/fovea-cli.tgz "$RUNNER_TEMP/pack/1-fovea-cli.tgz"
+          mv dist/pi-fovea.tgz "$RUNNER_TEMP/pack/2-pi-fovea.tgz"
+
+      - name: Publish
+        if: steps.release.outputs.mode != 'skip'
+        env:
+          MODE: ${{ steps.release.outputs.mode }}
+        run: |
+          # Trusted publishing needs npm 11.5.1 or newer.
+          npm install --global npm@latest
+          cd "$RUNNER_TEMP"
+          for tarball in pack/*.tgz; do
+            spec=$(tar -xOzf "$tarball" package/package.json | node -p "const p = JSON.parse(require('fs').readFileSync(0, 'utf8')); p.name + '@' + p.version")
+            echo "::group::$spec"
+            tar -tzf "$tarball"
+            echo "::endgroup::"
+            if [ "$MODE" = "dry-run" ]; then
+              echo "Dry run: not publishing $spec"
+            elif npm view "$spec" version >/dev/null 2>&1; then
+              echo "$spec is already on npm"
+            else
+              npm publish "$tarball" --access public --provenance
+            fi
+          done
