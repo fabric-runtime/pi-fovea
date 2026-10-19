@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { hasAstGrepAsync, langOf } from "./astgrep.js";
+import { isNativeLang } from "./extract.js";
 import {
   clearPersistTimer,
   discoverFiles,
@@ -190,11 +191,11 @@ const assembleState = async (
 };
 
 const requireExtractionBackend = async (files: readonly string[]): Promise<void> => {
-  // Bend and config/protocol readers are native; do not even probe a binary
-  // until discovery finds a language whose facts depend on ast-grep.
+  // Bend, R, and config/protocol readers are native; do not even probe a
+  // binary until discovery finds a language whose facts depend on ast-grep.
   const needed = files.some((file) => {
     const language = langOf(file);
-    return language !== undefined && language !== "Bend";
+    return language !== undefined && !isNativeLang(language);
   });
   if (needed && !(await hasAstGrepAsync())) {
     throw new Error(

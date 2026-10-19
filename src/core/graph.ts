@@ -104,6 +104,14 @@ const resolveImportToFile = (
     if (local === ".." || local.startsWith("../")) return undefined;
     return exact([local], "relative-import");
   }
+  if (fam === "r") {
+    // library(pkg) names an installed package and stays unresolved by
+    // design; source("file.R") includes are relative to the importing script.
+    if (!/\.r$/i.test(spec) || posix.isAbsolute(spec)) return undefined;
+    const local = posix.normalize(posix.join(posix.dirname(fromFile), spec));
+    if (local === ".." || local.startsWith("../")) return undefined;
+    return exact([local], "relative-import");
+  }
   if (spec.startsWith("./") || spec.startsWith("../")) {
     let base = posix.normalize(posix.join(posix.dirname(fromFile), spec));
     // NodeNext convention: TS files import "./sibling.js" — the .js refers to

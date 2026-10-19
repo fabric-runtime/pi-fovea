@@ -21,6 +21,7 @@ import {
 } from "./astgrep.js";
 import { mapLimit } from "./asyncutil.js";
 import { extractBend } from "./bend.js";
+import { extractR, R_BASE_HUBS } from "./r.js";
 import { makeFileSource, type FileSource } from "./source.js";
 import type {
   CallSite,
@@ -81,6 +82,15 @@ const SIG_RULES: Record<string, Array<{ re: RegExp; kind: NodeKind; parentGroup?
   ],
   Kotlin: [],
   Lua: [RX(/\bfunction\s+([\w.:]+)/, "function")],
+  R: [
+    // Defensive: the native reader names R symbols itself, but sig-derived
+    // paths stay correct should these rules ever see R outlines.
+    RX(/^\s*([A-Za-z.][\w.]*)\s*(?:<<-|<-|=)\s*function\s*\(/, "function"),
+    RX(/^\s*setClass\s*\(\s*["']?([\w.]+)/, "class"),
+    RX(/^\s*setGeneric\s*\(\s*["']?([\w.]+)/, "function"),
+    RX(/^\s*setMethod\s*\(\s*["']?([\w.]+)/, "method"),
+    RX(/^\s*([A-Za-z.][\w.]*)\s*(?:<<-|<-|=)\s*R6Class\s*\(/, "class"),
+  ],
 };
 SIG_RULES["C++"] = SIG_RULES.C!;
 SIG_RULES.Kotlin = SIG_RULES.Java!;
@@ -289,15 +299,34 @@ const parseOutlineText = (text: string, lang: string): SymbolRec[] => {
 
 const defaultSource = (cwd: string): FileSource => makeFileSource(cwd);
 
-const bendFacts = async (files: string[], source: FileSource) =>
-  mapLimit(files.filter((file) => langOf(file) === "Bend"), SOURCE_SCAN_CONCURRENCY, async (file) =>
-    extractBend(file, await source.read(file) ?? ""));
+// Grammar-less languages: pure TypeScript source readers whose facts never
+// spawn ast-grep (Bend 2, R). Each reader is a complete extraction surface.
+type NativeReader = (file: string, text: string) => {
+  symbols: SymbolRec[];
+  imports: ImportSite[];
+  calls: CallSite[];
+  literals: LiteralSite[];
+};
+const NATIVE_READERS: Record<string, NativeReader> = {
+  Bend: extractBend,
+  R: extractR,
+};
+const nativeReader = (language: string | undefined): NativeReader | undefined =>
+  language !== undefined && language in NATIVE_READERS ? NATIVE_READERS[language]! : undefined;
+export const isNativeLang = (language: string | undefined): boolean => nativeReader(language) !== undefined;
+const nativeFacts = async (files: string[], source: FileSource) => {
+  const native = files.filter((file) => isNativeLang(langOf(file)));
+  return mapLimit(native, SOURCE_SCAN_CONCURRENCY, async (file) => {
+    const read = nativeReader(langOf(file))!;
+    return read(file, await source.read(file) ?? "");
+  });
+};
 
 export const extractSymbols = async (files: string[], cwd: string, source: FileSource = defaultSource(cwd)): Promise<SymbolRec[]> => {
   const out: SymbolRec[] = [];
   for (const [lang, langFiles] of groupByLang(files)) {
-    if (lang === "Bend") {
-      for (const facts of await bendFacts(langFiles, source)) pushAll(out, facts.symbols);
+    if (isNativeLang(lang)) {
+      for (const facts of await nativeFacts(langFiles, source)) pushAll(out, facts.symbols);
       continue;
     }
     const structured = await outlineStructured(langFiles, lang, cwd);
@@ -337,7 +366,7 @@ const IMPORT_PATTERNS: Record<string, string[]> = {
 IMPORT_PATTERNS.JavaScript = IMPORT_PATTERNS.TypeScript!;
 IMPORT_PATTERNS.Tsx = IMPORT_PATTERNS.TypeScript!;
 
-export const supportsImportExtraction = (language: string): boolean => language === "Bend" || !!IMPORT_PATTERNS[language]?.length;
+export const supportsImportExtraction = (language: string): boolean => isNativeLang(language) || !!IMPORT_PATTERNS[language]?.length;
 
 // Only literal paths and one-hole expressions are modeled. Never evaluate code
 // or interpret arbitrary expressions as a static module specifier.
@@ -398,7 +427,7 @@ export const extractImports = async (files: string[], cwd: string, source: FileS
   ));
   const matches: AgMatch[] = [];
   for (const local of perLang) pushAll(matches, local);
-  return [...importsFromMatches(matches), ...(await bendFacts(files, source)).flatMap((facts) => facts.imports)];
+  return [...importsFromMatches(matches), ...(await nativeFacts(files, source)).flatMap((facts) => facts.imports)];
 };
 
 const CALL_PATTERNS = ["$O.$M($$$A)", "$F($$$A)"];
@@ -430,11 +459,13 @@ const CALL_WARDS = new Set([
   // rust std noise
   "unwrap", "expect", "clone", "into", "from", "collect", "iter", "eprintln",
   "format", "vec", "assert", "asserteq", "assertne", "dbg",
+  // R base mega-hubs (shared with the native R reader)
+  ...R_BASE_HUBS,
 ]);
 const CALL_WARD_PATTERN = `^(?i:${[...CALL_WARDS].join("|")})$`;
 
 const isTestFile = (file: string): boolean =>
-  /(^|\/)(test_|conftest)|\.(test|spec)\.[tj]sx?$|_test\.go$/.test(file);
+  /(^|\/)(test_|conftest)|\.(test|spec)\.[tj]sx?$|_test\.go$|^tests\/testthat(\.R$|\/)|(^|\/)test-[^\/]*\.[rR]$/.test(file);
 
 export { isTestFile };
 
@@ -451,12 +482,12 @@ const callsFromMatches = (matches: readonly AgMatch[]): CallSite[] => {
 };
 
 export const extractCalls = async (files: string[], cwd: string, source: FileSource = defaultSource(cwd)): Promise<CallSite[]> => {
-  const perLang = await Promise.all([...groupByLang(files)].filter(([lang]) => lang !== "Bend").map(([lang, langFiles]) =>
+  const perLang = await Promise.all([...groupByLang(files)].filter(([lang]) => !isNativeLang(lang)).map(([lang, langFiles]) =>
     patternRunAll(CALL_PATTERNS, lang, langFiles, cwd),
   ));
   const matches: AgMatch[] = [];
   for (const local of perLang) pushAll(matches, local);
-  return [...callsFromMatches(matches), ...(await bendFacts(files, source)).flatMap((facts) => facts.calls)];
+  return [...callsFromMatches(matches), ...(await nativeFacts(files, source)).flatMap((facts) => facts.calls)];
 };
 
 const STRING_PATTERNS: Record<string, string[]> = {
@@ -539,7 +570,7 @@ const completeLiterals = async (
   out: LiteralSite[],
 ): Promise<LiteralSite[]> => {
   pushAll(out, await extractConfigLiterals(files, cwd, source));
-  const codeFiles = files.filter((f) => !isConfigFile(f) && langOf(f) !== "Bend");
+  const codeFiles = files.filter((f) => !isConfigFile(f) && !isNativeLang(langOf(f)));
   const templateSites = await mapLimit(codeFiles, SOURCE_SCAN_CONCURRENCY, async (f) => {
     const local: LiteralSite[] = [];
     const src = await source.read(f);
@@ -563,7 +594,7 @@ export const extractLiterals = async (files: string[], cwd: string, source: File
   ));
   const matches: AgMatch[] = [];
   for (const local of perLang) pushAll(matches, local);
-  const native = (await bendFacts(files, source)).flatMap((facts) => facts.literals);
+  const native = (await nativeFacts(files, source)).flatMap((facts) => facts.literals);
   return completeLiterals(files, cwd, source, [...literalsFromMatches(matches), ...native]);
 };
 
@@ -588,7 +619,7 @@ export const coreScanRules = (files: string[]): ScanRule[] => {
     });
   };
   for (const [language] of groupByLang(files)) {
-    if (language === "Bend") continue;
+    if (isNativeLang(language)) continue;
     for (const pattern of IMPORT_PATTERNS[language] ?? []) add(CORE_IMPORT_PREFIX, language, pattern);
     for (const pattern of CALL_PATTERNS) {
       const metavar = pattern.startsWith("$O.") ? "M" : "F";
@@ -619,7 +650,7 @@ export const coreFactsFromScan = async (
     else if (match.ruleId.startsWith(CORE_CALL_PREFIX)) calls.push(match);
     else if (match.ruleId.startsWith(CORE_LITERAL_PREFIX)) literals.push(match);
   }
-  const native = await bendFacts(files, source);
+  const native = await nativeFacts(files, source);
   return {
     imports: [...importsFromMatches(imports), ...native.flatMap((facts) => facts.imports)],
     calls: [...callsFromMatches(calls), ...native.flatMap((facts) => facts.calls)],
