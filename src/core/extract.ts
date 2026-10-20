@@ -21,7 +21,7 @@ import {
 } from "./astgrep.js";
 import { mapLimit } from "./asyncutil.js";
 import { extractBend } from "./bend.js";
-import { extractR, R_BASE_HUBS } from "./r.js";
+import { extractR } from "./r.js";
 import { extractQuarto } from "./quarto.js";
 import { makeFileSource, type FileSource } from "./source.js";
 import type {
@@ -461,8 +461,6 @@ const CALL_WARDS = new Set([
   // rust std noise
   "unwrap", "expect", "clone", "into", "from", "collect", "iter", "eprintln",
   "format", "vec", "assert", "asserteq", "assertne", "dbg",
-  // R base mega-hubs (shared with the native R reader)
-  ...R_BASE_HUBS,
 ]);
 const CALL_WARD_PATTERN = `^(?i:${[...CALL_WARDS].join("|")})$`;
 

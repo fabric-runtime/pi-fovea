@@ -3,7 +3,7 @@
 // function(...)` (or `=`), classes are S4 setClass/setGeneric/setMethod or
 // R6Class blocks, dependencies are library()/require()/requireNamespace()
 // (installed packages, unresolved by design) plus source() file includes.
-// R 4.0 raw strings (r"(...)") are not modeled; standard quotes never span lines.
+// R 4.0 raw strings (r"(...)") are not modeled; standard quotes may span lines.
 import type { CallSite, ImportSite, LiteralSite, SymbolRec } from "./types.js";
 
 interface RFacts {
@@ -36,9 +36,9 @@ const CALL_KEYWORDS = new Set([
 ]);
 
 // Base mega-hubs: the apply family, data constructors, coercion, plumbing.
-// Shared with the ast-grep ward list in extract.ts; single-letter helpers
-// (c(), t(), I()) fall below the minimum callee length instead.
-export const R_BASE_HUBS = new Set([
+// Native-reader-only warding (ast-grep languages are unaffected); single-
+// letter helpers (c(), t(), I()) fall below the minimum callee length instead.
+const R_BASE_HUBS = new Set([ // native-reader-internal since the ward split
   "sapply", "lapply", "vapply", "apply", "tapply", "mapply", "eapply", "rapply",
   "data.frame", "as.data.frame", "matrix", "as.matrix", "as.list", "as.vector",
   "as.numeric", "as.character", "as.integer", "as.logical", "as.factor", "as.date",
@@ -95,6 +95,13 @@ export const extractR = (file: string, text: string): RFacts => {
   let depth = 0; // open ( [ { across lines, with strings and comments masked
   const classes: Array<{ name: string; at: number }> = []; // open R6Class blocks
   const lines = text.split("\n");
+  // R string literals may span lines (SQL, glue templates): this quote
+  // state persists across the line loop below so string bodies stay masked
+  // and bracket counting stays honest; unterminated quotes emit nothing.
+  let quote = "";
+  let value = "";
+  let start = -1;
+  let quoteLine = 1;
   for (let at = 0; at < lines.length; at++) {
     const raw = lines[at]!;
     const line = at + 1;
@@ -103,9 +110,6 @@ export const extractR = (file: string, text: string): RFacts => {
     let code = "";
     let visible = "";
     const strings: Array<{ start: number; text: string }> = [];
-    let quote = "";
-    let value = "";
-    let start = -1;
     for (let i = 0; i < raw.length; i++) {
       const ch = raw[i]!;
       if (quote) {
@@ -117,9 +121,9 @@ export const extractR = (file: string, text: string): RFacts => {
           code += " ";
           visible += escaped;
         } else if (ch === quote) {
-          if (value.length >= 2 && value.length <= 200 && !seenLiterals.has(`${line}|${value}`)) {
-            seenLiterals.add(`${line}|${value}`);
-            facts.literals.push({ file, line, text: value });
+          if (value.length >= 2 && value.length <= 200 && !seenLiterals.has(`${quoteLine}|${value}`)) {
+            seenLiterals.add(`${quoteLine}|${value}`);
+            facts.literals.push({ file, line: quoteLine, text: value });
           }
           strings.push({ start, text: value });
           quote = "";
@@ -132,6 +136,7 @@ export const extractR = (file: string, text: string): RFacts => {
         quote = ch;
         value = "";
         start = i;
+        quoteLine = line;
         code += " ";
         visible += ch;
       } else {
@@ -202,6 +207,8 @@ export const extractR = (file: string, text: string): RFacts => {
       if (name.length <= 1 || CALL_KEYWORDS.has(name) || R_BASE_HUBS.has(name.toLowerCase())) continue;
       facts.calls.push({ file, line, callee: name });
     }
+    const depthBefore = depth; // R6 blocks anchor at the pre-line depth: a
+    // single-line `R6Class(..., list(` header must not hide its members.
     let net = 0;
     for (const ch of code) {
       if ("([{".includes(ch)) net++;
@@ -209,7 +216,7 @@ export const extractR = (file: string, text: string): RFacts => {
     }
     depth = Math.max(0, depth + net);
     while (classes.length && depth <= classes.at(-1)!.at) classes.pop();
-    if (r6) classes.push({ name: r6[1]!, at: depth });
+    if (r6) classes.push({ name: r6[1]!, at: depthBefore });
   }
   // A generic and its setMethod implementations share a graph identity;
   // likewise a re-assigned name keeps one symbol. First site wins.

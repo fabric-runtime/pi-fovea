@@ -128,6 +128,35 @@ describe("R source reader", () => {
     ]);
   });
 
+  it("keeps depth honest across multi-line R strings", () => {
+    const text = [
+      'dbGetQuery(con, "SELECT *',
+      '  FROM t WHERE id IN (1, 2)")',
+      "after_sql <- function(x) x",
+    ].join("\n");
+    const facts = extractR("sql.R", text);
+    expect(facts.symbols.map(({ name, kind, line }) => [name, kind, line])).toEqual([
+      ["after_sql", "function", 3],
+    ]);
+    expect(facts.literals.map(({ text: t, line }) => [t, line])).toEqual([
+      ["SELECT *  FROM t WHERE id IN (1, 2)", 1],
+    ]);
+    expect(facts.calls.map(({ callee }) => callee)).toEqual(["dbGetQuery"]);
+  });
+
+  it("records R6 methods after a single-line class header", () => {
+    const text = [
+      'Wallet <- R6Class("Wallet", public = list(',
+      "  deposit = function(amount) amount",
+      "))",
+    ].join("\n");
+    const facts = extractR("r6.R", text);
+    expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
+      ["Wallet", "class"],
+      ["Wallet.deposit", "method"],
+    ]);
+  });
+
   it("skips argument-default and local nested function definitions", () => {
     const text = [
       "optimize(",
