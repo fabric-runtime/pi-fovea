@@ -67,7 +67,7 @@ export interface FileFacts {
   sigs?: FileSigs;
 }
 
-const CACHE_VERSION = 17; // v17: native R facts
+const CACHE_VERSION = 19; // v19: R section markers; knitr chunk labels
 
 // Honest coverage: what the extractor could NOT see. Tools and status render
 // this so a thin graph never reads as a small repo; omissions are explicit.

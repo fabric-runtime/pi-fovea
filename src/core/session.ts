@@ -29,7 +29,8 @@ export interface FoveaSession {
   tkKey: string;
 }
 
-export const FOCUS_T0 = 2;
+// Internal only: the ops.ts import went away with the lang: prefix work.
+const FOCUS_T0 = 2;
 
 const sessions = new Map<string, FoveaSession>();
 

@@ -17,9 +17,17 @@ const HEAT_EPS = 1e-9;
 const MAX_UNRELATED_WARM_PER_FILE = 4;
 
 export const formatNodeLocation = (node: NodeRec): string => {
+  if (node.kind === "package") return "(external)";
   if (node.kind === "file" || node.line <= 0) return node.file;
-  if (node.lineApproximate) return `${node.file} (member line unavailable)`;
-  return `${node.file}:${node.line}`;
+  // Notebook symbols carry their chunk (label when present):
+  // ana/gw_ana.qmd#chunk-setup:12
+  const site = node.chunk === undefined
+    ? node.file
+    : node.chunkLabel
+      ? `${node.file}#chunk-${node.chunkLabel}`
+      : `${node.file}#chunk-${node.chunk}`;
+  if (node.lineApproximate) return `${site} (member line unavailable)`;
+  return `${site}:${node.line}`;
 };
 
 interface DirectRelation {

@@ -9,7 +9,7 @@ import { join, posix } from "node:path";
 import { diffHunks, prFiles, uncommittedFiles } from "./git.js";
 import { chebyshevVectors, chooseOrder, extendChebyshevVectors, forwardHeat, heatField } from "./heat.js";
 import { formatNodeLocation, revealFoveated, revealGroups, tokenEstimate, type GroupLine, type RevealedNode } from "./render.js";
-import { clearSessionFocus, FOCUS_T0, getSession, observeSessionPaths, retainSessionVectors } from "./session.js";
+import { clearSessionFocus, getSession, observeSessionPaths, retainSessionVectors } from "./session.js";
 import { detectBasins } from "./basins.js";
 import { classifyLiteral, normalizeLiteral } from "./join.js";
 import { isTestFile } from "./extract.js";
@@ -122,6 +122,13 @@ export interface FocusOptions {
   language?: string;
   kind?: NodeKind;
 }
+
+const SHORT_LANG: Record<string, string> = {
+  TypeScript: "ts", Tsx: "tsx", JavaScript: "js", Python: "py", R: "R", Quarto: "qmd",
+  Go: "go", Rust: "rs", Bend: "bend", Lua: "lua", Php: "php", Java: "java",
+  Kotlin: "kt", C: "c", "C++": "cpp", Ruby: "rb", Elixir: "ex", Swift: "swift",
+  Scala: "scala", Haskell: "hs", Bash: "sh",
+};
 
 const QUERY_STOP_WORDS = new Set([
   "a", "an", "and", "are", "do", "does", "find", "for", "happen", "happens", "how",
@@ -362,7 +369,7 @@ const seedVector = (n: number, seeds: number[]): Float64Array => {
  */
 export const historySeedWeights = (
   seedFiles: ReadonlySet<string>,
-  graph: Readonly<Graph>,
+  _graph: Readonly<Graph>, // positional API stability; body reads history only
   history: CoChangeHistory,
   now: number,
 ): Map<string, number> => {
@@ -435,6 +442,25 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
   // (implicit features on non-web repos: CLIs, libraries, kernels).
   const claimed = new Set<number>();
   const groups: GroupLine[] = [];
+  // Language composition (R_TODO #2): mixed-language regions describe their
+  // mix — [R30/py2] — instead of letting one language's names stand in for
+  // the whole region. Monolingual groups render exactly as before.
+  const langByFile = new Map<string, string>();
+  for (const n of g.nodes) if (n.kind === "file") langByFile.set(n.file, n.lang);
+  const langCounts = (files: ReadonlySet<string>): Map<string, number> => {
+    const counts = new Map<string, number>();
+    for (const f of files) {
+      const lang = langByFile.get(f) ?? "other";
+      counts.set(lang, (counts.get(lang) ?? 0) + 1);
+    }
+    return counts;
+  };
+  const langMix = (files: ReadonlySet<string>): string => {
+    const counts = langCounts(files);
+    if (counts.size <= 1) return "";
+    const short = (lang: string): string => SHORT_LANG[lang] ?? lang.toLowerCase().slice(0, 4);
+    return ` [${[...counts.entries()].sort((a, b2) => b2[1] - a[1]).map(([lang, n]) => `${short(lang)}${n}`).join("/")}]`;
+  };
   const basins = productionAnchorIdx.length < 6 && g.nodes.length >= 48
     ? detectBasins(
         state.adjacency,
@@ -451,14 +477,25 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
       mass += field[j] ?? 0;
       bfiles.add(g.nodes[j]!.file);
     }
-    const topName = b.members
+    const ranked = b.members
       .map((j) => [field[j] ?? 0, j] as const)
       .filter(([, j]) => g.nodes[j]!.kind !== "file")
-      .sort((a, b2) => b2[0] - a[0])[0];
+      .sort((a, b2) => b2[0] - a[0]);
+    let topName = ranked[0];
+    const counts = langCounts(bfiles);
+    if (topName && counts.size > 1) {
+      // A py variable must not headline an R-dominant region: when the
+      // hottest member speaks the minority language, the headline goes to
+      // the hottest member of the dominant one.
+      const dominant = [...counts.entries()].sort((a, b2) => b2[1] - a[1])[0]![0];
+      if (langByFile.get(g.nodes[topName[1]]!.file) !== dominant) {
+        topName = ranked.find(([, j]) => langByFile.get(g.nodes[j]!.file) === dominant) ?? topName;
+      }
+    }
     groups.push({
       label: `◈ region ${topName ? g.nodes[topName[1]]!.name : g.nodes[b.seed]!.name}`,
       mass,
-      detail: `${b.members.length} nodes · ${bfiles.size} files · seed ${g.nodes[b.seed]!.file}`,
+      detail: `${b.members.length} nodes · ${bfiles.size} files${langMix(bfiles)} · seed ${g.nodes[b.seed]!.file}`,
     });
     for (const j of b.members) claimed.add(j);
   }
@@ -498,7 +535,7 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
   // Directory groups over the rest (depth-2 prefixes).
   const dirAgg = new Map<string, { mass: number; files: Set<string>; top: Array<[number, number]> }>();
   g.nodes.forEach((n, i) => {
-    if (claimed.has(i) || n.kind === "anchor") return;
+    if (claimed.has(i) || n.kind === "anchor" || n.kind === "package") return;
     const parts = n.file.split("/");
     const dir = parts.length === 1 ? "(root)" : parts.length === 2 ? `${parts[0]}/` : `${parts.slice(0, 2).join("/")}/`;
     const agg = dirAgg.get(dir) ?? { mass: 0, files: new Set<string>(), top: [] as Array<[number, number]> };
@@ -509,12 +546,23 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
   });
   for (const [dir, agg] of dirAgg) {
     agg.top.sort((a, b) => b[0] - a[0]);
-    const names = agg.top.slice(0, 3).map(([, i]) => g.nodes[i]!.name).join(", ");
+    // One name once: the same helper defined across files (theme_set in every
+    // script) must not crowd out the variety the summary exists for.
+    const picked: string[] = [];
+    const seenNames = new Set<string>();
+    for (const [, i] of agg.top) {
+      const name = g.nodes[i]!.name;
+      if (seenNames.has(name)) continue;
+      seenNames.add(name);
+      picked.push(name);
+      if (picked.length === 3) break;
+    }
+    const names = picked.join(", ");
     const testScope = [...agg.files].every(isTestScope);
     groups.push({
       label: dir,
       mass: agg.mass * (testScope ? 0.1 : 1),
-      detail: `${testScope ? "test scope · " : ""}${agg.files.size} files${names ? ` · top: ${names}` : ""}`,
+      detail: `${testScope ? "test scope · " : ""}${agg.files.size} files${langMix(agg.files)}${names ? ` · top: ${names}` : ""}`,
     });
   }
 
@@ -554,6 +602,13 @@ export const focus = async (
   const g = state.graph;
   const session = getSession(root);
   const B = clampBudget(budget, 512);
+  // Inline scope prefix: "lang:r enrichment" scopes the query exactly like
+  // options.language; an explicitly passed option wins over the prefix.
+  const langPrefix = /^lang:([A-Za-z]+)\s+/i.exec(query);
+  if (langPrefix) {
+    query = query.slice(langPrefix[0].length);
+    options = { ...options, language: options.language ?? langPrefix[1] };
+  }
   const requestedCoverage = looksLikeRepoPath(query)
     ? await explainPathCoverage(state, [query])
     : [];

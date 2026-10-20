@@ -7,7 +7,7 @@ import { extractR } from "../src/core/r.js";
 import { cachePathFor, clearPersistTimer, filterSupported, loadFacts, refreshFacts, type FileFacts } from "../src/core/build.js";
 import { coreFactsFromScan, coreScanRules, extractCalls, extractImports, extractLiterals, extractSymbols, isTestFile, supportsImportExtraction } from "../src/core/extract.js";
 import { assembleGraphWithIndex } from "../src/core/graph.js";
-import { ensureState, evictState, focus } from "../src/core/ops.js";
+import { ensureState, evictState, focus, sketch } from "../src/core/ops.js";
 import { resetSessions } from "../src/core/session.js";
 import { makeFileSource } from "../src/core/source.js";
 
@@ -96,10 +96,35 @@ describe("R source reader", () => {
       "y <- 'single \"quoted\"'",
     ].join("\n");
     const facts = extractR("edge.R", text);
-    expect(facts.symbols).toEqual([]);
+    // Top-level data assignments are decls; the `eq ==` comparison is not.
+    expect(facts.symbols.map(({ name, kind, line }) => [name, kind, line])).toEqual([
+      ["x", "decl", 2],
+      ["y", "decl", 6],
+    ]);
     expect(facts.calls).toEqual([]);
     expect(facts.literals.map((site) => site.text)).toEqual([
       "quoted # not a comment", 'single "quoted"',
+    ]);
+  });
+
+  it("records non-function top-level assignments as data decls", () => {
+    const text = [
+      "library(ggplot2)",
+      'theme <- theme_bw() + theme(legend.position = "bottom")',
+      'codon_table <- read.csv("data/codons.csv")',
+      'SAMPLES <<- c("A", "B")',
+      "eq == function(x) x", // comparison, never an assignment
+      "for (i in 1:3) {",
+      "  loop_local <- i", // depth > 0: local stays invisible
+      "}",
+      "calc_usage <- function(x) x", // function form still wins
+    ].join("\n");
+    const facts = extractR("data.R", text);
+    expect(facts.symbols.map(({ name, kind, line }) => [name, kind, line])).toEqual([
+      ["theme", "decl", 2],
+      ["codon_table", "decl", 3],
+      ["SAMPLES", "decl", 4],
+      ["calc_usage", "function", 9],
     ]);
   });
 
@@ -248,5 +273,131 @@ describe("R graph integration", () => {
     expect(cached.store.facts.get("main.R")!.calls[0]!.callee).toBe("renamed");
     const graph = (await assembleGraphWithIndex(root, files, cached.store.facts)).graph;
     expect(graph.edges.filter((edge) => edge.kind === "invokes")).toEqual([]);
+  });
+});
+
+describe("R package edges", () => {
+  it("surfaces library() and pkg:: usage as pkg:x nodes with per-file strategies", async () => {
+    const graph = await graphFor({
+      "R/main.R": [
+        "library(dplyr)",
+        "requireNamespace('tibble')",
+        "main <- function() {",
+        "  dplyr::mutate(data)",
+        "}",
+        "stats::rnorm(3)",
+      ].join("\n"),
+      "R/plot.R": ["library(ggplot2)", "plot_it <- function(x) x"].join("\n"),
+    });
+    const pkgs = graph.nodes.filter((n) => n.kind === "package");
+    expect(pkgs.map((p) => p.id).sort()).toEqual(["pkg:dplyr", "pkg:ggplot2", "pkg:stats", "pkg:tibble"]);
+    const pkgEdges = graph.edges
+      .filter((edge) => graph.nodes[edge.b]!.kind === "package")
+      .map((edge) => [graph.nodes[edge.a]!.file, graph.nodes[edge.b]!.name, edge.evidence?.strategy])
+      .sort();
+    expect(pkgEdges).toEqual([
+      ["R/main.R", "dplyr", "package-import"],
+      ["R/main.R", "stats", "qualified-call"],
+      ["R/main.R", "tibble", "package-import"],
+      ["R/plot.R", "ggplot2", "package-import"],
+    ]);
+    // graphFor's root has no DESCRIPTION: no declaration state in the sig.
+    expect(pkgs.find((p) => p.name === "dplyr")?.sig).toBe("R package dplyr");
+  });
+
+  it("marks declared vs undeclared packages from DESCRIPTION", async () => {
+    const root = fixture({
+      DESCRIPTION: "Package: demo\nImports: ggplot2 (>= 3.4)\nDepends: R (>= 4.0), methods\n",
+      "R/a.R": "library(ggplot2)\nlibrary(seqinr)\n",
+    });
+    const { store } = await loadFacts(root, ["R/a.R"]);
+    const { graph } = await assembleGraphWithIndex(root, ["R/a.R"], store.facts);
+    const sig = (name: string): string | undefined => graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
+    expect(sig("ggplot2")).toBe("R package ggplot2 · declared in DESCRIPTION");
+    expect(sig("seqinr")).toBe("R package seqinr · used without DESCRIPTION entry");
+    // Declared but unused (methods) creates no node: nodes come from usage.
+    expect(graph.nodes.some((n) => n.id === "pkg:methods")).toBe(false);
+  });
+
+  it("records top-level section markers and skips nested ones", () => {
+    const text = [
+      "# Setup ----",
+      "helper <- function(x) {",
+      "  # inner note ----", // nested: never a navigation section
+      "  x",
+      "}",
+      "## Data prep =====",
+      "#' roxygen ----", // roxygen comment: not a section
+    ].join("\n");
+    const facts = extractR("sections.R", text);
+    expect(facts.symbols.map(({ name, kind, line }) => [name, kind, line])).toEqual([
+      ["Setup", "section", 1],
+      ["helper", "function", 2],
+      ["Data prep", "section", 6],
+    ]);
+  });
+
+  it("wires testthat files by naming convention without source()", async () => {
+    const graph = await graphFor({
+      "R/stats.R": "summarize <- function(x) x\n",
+      "tests/testthat/test-stats.R": [
+        "test_that('summarize works', {",
+        "  summarize(1)",
+        "})",
+      ].join("\n"),
+    });
+    const tests = graph.edges.filter((edge) => edge.kind === "tests");
+    expect(tests.map((edge) => [graph.nodes[edge.a]!.file, graph.nodes[edge.b]!.file, edge.evidence?.strategy])).toEqual([
+      ["tests/testthat/test-stats.R", "R/stats.R", "test-naming-convention"],
+    ]);
+  });
+
+  it("scopes focus by an inline lang: prefix or a language option", async () => {
+    const root = fixture({
+      "ana/fetch_enrichment.py": "def fetch_enrichment_data():\n    return 1\n",
+      "ana/run_enrichment.R": "library(clusterProfiler)\nenrichment_run <- function(df) df\n",
+    });
+    const both = await focus(root, "enrichment", 700, { fresh: true });
+    expect(both.text).toContain("fetch_enrichment_data");
+    expect(both.text).toContain("enrichment_run");
+    const rOnly = await focus(root, "lang:r enrichment", 700, { fresh: true });
+    expect(rOnly.text).toContain("enrichment_run");
+    expect(rOnly.text).not.toContain("fetch_enrichment_data");
+    // An explicit option wins over the inline prefix.
+    const pyOption = await focus(root, "lang:r enrichment", 700, { language: "Python", fresh: true });
+    expect(pyOption.text).toContain("fetch_enrichment_data");
+    expect(pyOption.text).not.toContain("enrichment_run");
+  });
+
+  it("describes mixed-language region composition in sketch", async () => {
+    const sources: Record<string, string> = {
+      "ana/define_sets.py": 'gene_sets = load("gene_sets")\ndef export_sets():\n    return gene_sets\n',
+      "ana/fetch_sets.py": 'def fetch_sets():\n    return "gene_sets"\n',
+    };
+    for (let i = 1; i <= 30; i++) {
+      const n = String(i).padStart(2, "0");
+      sources[`ana/calc_${n}.R`] = `read_sets <- function(x) "gene_sets"\nplot_${n} <- function(df) df\n`;
+    }
+    const root = fixture(sources);
+    await ensureState(root);
+    const out = await sketch(root, 1600);
+    expect(out.text).toContain("ana/ 32 files [R30/py2]");
+    // Pure directories and monolingual basins render exactly as before.
+    const pure = await sketch(root, 1600); // same repo: no [ in any other group
+    expect((pure.text.match(/ \[/g) ?? []).length).toBe(1);
+  });
+
+  it("keeps package nodes out of sketch regions but focus-reachable", async () => {
+    const root = fixture({
+      "R/a.R": "library(ggplot2)\nf <- function() 1\n",
+      "R/b.R": "library(ggplot2)\ng <- function() 2\n",
+    });
+    await ensureState(root);
+    const out = await sketch(root, 1200);
+    expect(out.text).not.toContain("(external)");
+    const fo = await focus(root, "ggplot2", 800, { fresh: true });
+    expect(fo.text).toContain("R package ggplot2");
+    expect(fo.text).toContain("(external)");
+    expect(fo.text).toContain("package-import/r-library:ggplot2");
   });
 });

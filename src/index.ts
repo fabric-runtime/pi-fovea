@@ -520,9 +520,9 @@ export default function fovea(pi: ExtensionAPI) {
     parameters: Type.Object({
       query: Type.String({ description: "Symbol, route, env key, repo path, or canonical feature id such as RPC pkg.Service/Method, GRAPHQL QUERY field, TRPC procedure, or CHANNEL key." }),
       path: Type.Optional(Type.String({ description: "Optional repo-relative file or directory scope." })),
-      language: Type.Optional(Type.String({ description: "Optional ast-grep language scope, such as TypeScript or Go." })),
+      language: Type.Optional(Type.String({ description: "Optional language scope: TypeScript, Go, R, Quarto, ... A leading \"lang:r \" query prefix does the same." })),
       kind: Type.Optional(Type.Union(
-        ["function", "method", "class", "interface", "type", "field", "decl", "file", "anchor"].map((kind) => Type.Literal(kind)),
+        ["function", "method", "class", "interface", "type", "field", "decl", "file", "anchor", "package", "section"].map((kind) => Type.Literal(kind)),
         { description: "Optional node-kind scope." },
       )),
       fresh: Type.Optional(Type.Boolean({ description: "Reset disclosure and return a reproducible full focus view." })),

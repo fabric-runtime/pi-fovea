@@ -22,6 +22,7 @@ import {
 import { mapLimit } from "./asyncutil.js";
 import { extractBend } from "./bend.js";
 import { extractR, R_BASE_HUBS } from "./r.js";
+import { extractQuarto } from "./quarto.js";
 import { makeFileSource, type FileSource } from "./source.js";
 import type {
   CallSite,
@@ -310,6 +311,7 @@ type NativeReader = (file: string, text: string) => {
 const NATIVE_READERS: Record<string, NativeReader> = {
   Bend: extractBend,
   R: extractR,
+  Quarto: extractQuarto,
 };
 const nativeReader = (language: string | undefined): NativeReader | undefined =>
   language !== undefined && language in NATIVE_READERS ? NATIVE_READERS[language]! : undefined;

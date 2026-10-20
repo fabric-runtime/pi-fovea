@@ -13,7 +13,9 @@ export type NodeKind =
   | "field"
   | "decl"
   | "file"
-  | "anchor";
+  | "anchor"
+  | "package"  // external dependency surface: pkg:x nodes (R library()/:: usage)
+  | "section";  // navigation marker: R `# Name ----` comment sections
 
 export type EdgeKind =
   | "contains"   // file -> its symbols
@@ -31,6 +33,8 @@ export interface NodeRec {
   file: string;      // repo-relative path
   line: number;      // 1-indexed
   lineApproximate?: boolean; // legacy outlines only know the enclosing declaration
+  chunk?: number;    // Quarto notebook: ordinal of the owning {r}/{python} chunk
+  chunkLabel?: string; // Quarto notebook: knitr chunk label, when present
   sig: string;       // one-line signature for foveated rendering
   lang: string;      // ast-grep language name, or "config" / "text"
 }
@@ -52,7 +56,10 @@ type EdgeStrategy =
   | "normalized-literal"
   | "declared-anchor"
   | "discovered-anchor"
-  | "anchor-membership";
+  | "anchor-membership"
+  | "package-import"   // file -> pkg:x node over library()/require()/requireNamespace()
+  | "qualified-call"   // file -> pkg:x node over pkg:: qualified call sites
+  | "test-naming-convention"; // testthat test-x.R -> R/x.R without an import
 
 /** Deterministic derivation metadata. This is provenance, not probability. */
 export interface EdgeEvidence {
@@ -120,6 +127,8 @@ export interface SymbolRec {
   file: string;
   line: number;
   lineApproximate?: boolean;
+  chunk?: number;    // Quarto notebook: ordinal of the owning {r}/{python} chunk
+  chunkLabel?: string; // Quarto notebook: knitr chunk label, when present
   sig: string;
   lang: string;
 }

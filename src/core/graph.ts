@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { basename, posix } from "node:path";
 import { forEachChunked } from "./asyncutil.js";
 import { LANG_BY_EXT } from "./astgrep.js";
@@ -21,6 +22,37 @@ const langFamily = (file: string): string => {
   if (ext === "rs") return "rs";
   if (ext === "go") return "go";
   return ext;
+};
+
+// pkg:: qualified calls name their package before the ::.
+const PKG_QUALIFIER = /^([A-Za-z][\w.]*)::/;
+
+// Declared R package dependencies: DESCRIPTION's Imports:/Depends: fields.
+// Continuation lines (indented) belong to the previous key; entries may carry
+// version constraints (`dplyr (>= 1.0)`) — the bare name is what joins.
+const declaredPackages = (root: string): Set<string> | undefined => {
+  let text: string;
+  try {
+    text = readFileSync(posix.join(root, "DESCRIPTION"), "utf8");
+  } catch {
+    return undefined;
+  }
+  const rows = text.split("\n");
+  const declared = new Set<string>();
+  for (let i = 0; i < rows.length; i++) {
+    const head = /^(Imports|Depends):/i.exec(rows[i]!);
+    if (!head) continue;
+    const parts = [rows[i]!.slice(head[0].length)];
+    for (const cont of rows.slice(i + 1)) {
+      if (!/^\s+\S/.test(cont)) break;
+      parts.push(cont.trim());
+    }
+    for (const entry of parts.join(",").split(",")) {
+      const name = entry.replace(/\(.*\)/, "").trim();
+      if (name && name !== "R") declared.add(name);
+    }
+  }
+  return declared;
 };
 
 /**
@@ -296,7 +328,7 @@ export const assembleGraphWithIndex = async (
       (byName.get(key) ?? byName.set(key, []).get(key)!).push(idx);
     };
     nodes.forEach((n, i) => {
-      if (n.kind === "file" || n.kind === "anchor") return;
+      if (n.kind === "file" || n.kind === "anchor" || n.kind === "package") return;
       addKey(n.name.toLowerCase(), i);
       const dot = n.name.indexOf(".");
       if (dot > 0) addKey(n.name.slice(dot + 1).toLowerCase(), i);
@@ -317,6 +349,15 @@ export const assembleGraphWithIndex = async (
     } else importCoverage.examplesOmitted++;
   };
 
+  // External R package usage joins as pkg:x nodes: library()/require()/
+  // requireNamespace() sites plus pkg:: qualified calls, one node per package.
+  const pkgSites = new Map<string, { name: string; files: Set<string> }>();
+  const pkgQuals = new Map<string, { name: string; files: Set<string> }>();
+  const notePkgSite = (map: Map<string, { name: string; files: Set<string> }>, name: string, file: string): void => {
+    const agg = map.get(name.toLowerCase()) ?? { name, files: new Set<string>() };
+    agg.files.add(file);
+    map.set(name.toLowerCase(), agg);
+  };
   // Import edges (file-level, low conductance backbone) + tests wiring.
   const importTargets = new Map<string, ImportResolution[]>();
   await forEachChunked(files, 512, (rel) => {
@@ -346,6 +387,13 @@ export const assembleGraphWithIndex = async (
       const target = resolveImportToFile(imp.spec, rel, importIndex);
       if (!target) {
         importCoverage.unresolved++;
+        // R-family package imports (library()/require()/requireNamespace() in
+        // scripts, bare module imports in notebook python chunks) join the
+        // graph as pkg:x external nodes: installed packages are dependencies
+        // even though nothing in this tree resolves them.
+        if (["r", "qmd", "rmd"].includes(langFamily(rel)) && /^[A-Za-z][\w.]*$/.test(imp.spec)) {
+          notePkgSite(pkgSites, imp.spec, rel);
+        }
         noteImport(imp, "unresolved", "not resolved within the selected graph; may be external or outside the modeled import forms");
         continue;
       }
@@ -355,13 +403,29 @@ export const assembleGraphWithIndex = async (
       (importTargets.get(rel) ?? importTargets.set(rel, []).get(rel)!).push({ ...target, alias: imp.alias });
     }
     if (isTestFile(rel)) {
+      const wired = new Set<string>();
       for (const target of importTargets.get(rel) ?? []) {
+        wired.add(target.file);
         pushEdge(fileIdx.get(rel)!, fileIdx.get(target.file)!, "tests", 0.6, {
           strategy: "test-import",
           rule: "test-subject-import",
           source: target.evidence.source,
           candidates: target.evidence.candidates,
         });
+      }
+      // Naming-convention fallback (testthat): tests/testthat/test-x.R pairs
+      // with R/x.R even when no source() import links them. R/ wins over
+      // same-stem files elsewhere in the tree.
+      if (langFamily(rel) === "r") {
+        const stem = posix.basename(rel).replace(/^test[-_]/i, "").replace(/\.[rR]$/, "");
+        const stemOf = (f: string): string => posix.basename(f).replace(/\.[rR]$/, "");
+        const subject = files.find((f) => f !== rel && /^R\//.test(f) && stemOf(f) === stem)
+          ?? files.find((f) => f !== rel && !isTestFile(f) && langFamily(f) === "r" && stemOf(f) === stem);
+        if (subject && !wired.has(subject)) {
+          pushEdge(fileIdx.get(rel)!, fileIdx.get(subject)!, "tests", 0.6, {
+            strategy: "test-naming-convention", rule: "testthat-filename", source: stem,
+          });
+        }
       }
     }
   });
@@ -380,6 +444,8 @@ export const assembleGraphWithIndex = async (
     for (const call of f.calls) {
       const alias = aliases.find((target) => call.callee.startsWith(`${target.alias}.`));
       const name = alias ? call.callee.slice(alias.alias!.length + 1) : call.callee;
+      const pkgQual = PKG_QUALIFIER.exec(call.callee);
+      if (pkgQual && ["r", "qmd", "rmd"].includes(langFamily(rel))) notePkgSite(pkgQuals, pkgQual[1]!, rel);
       const cands = (byName.get(name.toLowerCase()) ?? []).filter((i) => !bend ||
         (nodes[i]!.lang === "Bend" && nodes[i]!.name === name && nodes[i]!.file === (alias?.file ?? rel)));
       if (!cands.length || cands.length > 48) continue;
@@ -401,6 +467,31 @@ export const assembleGraphWithIndex = async (
       }
     }
   });
+
+  // External package nodes: opt-in surfaces, kept out of every backbone path
+  // by low-conductance edges; focus("dplyr") lights the using files.
+  if (pkgSites.size || pkgQuals.size) {
+    const declared = declaredPackages(root);
+    const declaredHas = (name: string): boolean | undefined =>
+      declared === undefined ? undefined : declared.has(name) || [...declared].some((d) => d.toLowerCase() === name.toLowerCase());
+    for (const key of new Set([...pkgSites.keys(), ...pkgQuals.keys()])) {
+      const name = pkgSites.get(key)?.name ?? pkgQuals.get(key)!.name;
+      const declaredState = declaredHas(name);
+      const idx = addNode(nodes, seen, {
+        id: `pkg:${name}`, name, kind: "package", file: "", line: 0,
+        sig: `R package ${name}${declaredState === undefined ? "" : declaredState ? " · declared in DESCRIPTION" : " · used without DESCRIPTION entry"}`,
+        lang: "external",
+      });
+      const importFiles = pkgSites.get(key)?.files ?? new Set<string>();
+      for (const file of new Set([...importFiles, ...(pkgQuals.get(key)?.files ?? [])])) {
+        pushEdge(fileIdx.get(file)!, idx, "imports", 0.15, {
+          strategy: importFiles.has(file) ? "package-import" : "qualified-call",
+          rule: importFiles.has(file) ? "r-library" : "r-qualified-call",
+          source: name,
+        });
+      }
+    }
+  }
 
   // Inherits edges from class signatures (TS/py style visible on the sig line).
   nodes.forEach((node, i) => {

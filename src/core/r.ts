@@ -16,6 +16,9 @@ interface RFacts {
 const NAME = "[A-Za-z.][A-Za-z0-9._]*";
 const DEF = new RegExp(`^\\s*(${NAME})\\s*(?:<<-|<-|=)\\s*function\\s*\\(`);
 const R6_DEF = new RegExp(`^\\s*(${NAME})\\s*(?:<<-|<-|=)\\s*R6Class\\s*\\(`);
+// Top-level data assignment: any RHS except a function literal. `==` and
+// comparisons never match: `=(?![=>])` rejects the second `=` of `==`.
+const ASSIGN = new RegExp(`^\\s*(${NAME})\\s*(?:<<-|<-|=(?![=>]))\\s*(?!function\\s*\\()(?=\\S)`);
 // S4 meta objects may be assigned a generator first: Foo <- setClass("Foo").
 const SET = (fn: string) => new RegExp(`^\\s*(?:(${NAME})\\s*(?:<<-|<-|=)\\s*)?${fn}\\s*\\(`);
 const SET_CLASS = SET("setClass");
@@ -80,6 +83,10 @@ const stringArg = (
   return quoted && code.slice(open + 1, quoted.start).trim() === "" ? quoted.text : undefined;
 };
 
+// Section navigation markers (languageserver convention): `# Name ----` or
+// `## Name =====` at top level; roxygen `#'` lines never match.
+const SECTION = /^#{1,2}\s+(.+?)\s+[-=]{4,}\s*$/;
+
 export const extractR = (file: string, text: string): RFacts => {
   const facts: RFacts = { symbols: [], imports: [], calls: [], literals: [] };
   // Mirror the pipeline literal dedupe key (file|line|text): a repeated
@@ -132,6 +139,13 @@ export const extractR = (file: string, text: string): RFacts => {
         visible += ch;
       }
     }
+    // Section markers live entirely in comments, so `code` is empty and
+    // the shared `decl` helper below never sees them; record them directly.
+    const section = SECTION.exec(raw);
+    if (section && depth === 0 && classes.length === 0) {
+      const sig = raw.trim();
+      facts.symbols.push({ file, line, name: section[1]!.trim(), kind: "section", sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig, lang: "R" });
+    }
     if (!code.trim()) continue;
     const inClass = classes.length > 0 && depth > classes.at(-1)!.at;
     const sig = visible.trim();
@@ -161,6 +175,14 @@ export const extractR = (file: string, text: string): RFacts => {
         } else if (setMethod) {
           const name = stringArg(code, strings) ?? setMethod[1];
           if (name) decl(name, "method");
+        } else {
+          // Non-function top-level assignments are the data surface of an
+          // analysis script: theme <- theme_bw(), counts <- read.csv(...).
+          // Nested depth (locals, argument defaults) stays invisible.
+          // Match against `visible`, not `code`: a string-literal RHS
+          // (PREFIX <- "fig_") is masked to spaces in `code`.
+          const assign = ASSIGN.exec(visible);
+          if (assign && depth === 0) decl(assign[1]!, "decl");
         }
       }
     }
