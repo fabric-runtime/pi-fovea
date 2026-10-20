@@ -40,7 +40,7 @@ const declaredPackages = (root: string): Set<string> | undefined => {
   const rows = text.split("\n");
   const declared = new Set<string>();
   for (let i = 0; i < rows.length; i++) {
-    const head = /^(Imports|Depends):/i.exec(rows[i]!);
+    const head = /^(Imports|Depends|Suggests|LinkingTo):/i.exec(rows[i]!);
     if (!head) continue;
     const parts = [rows[i]!.slice(head[0].length)];
     for (const cont of rows.slice(i + 1)) {
@@ -299,7 +299,9 @@ export const assembleGraphWithIndex = async (
     const f = facts(rel);
     if (!f) return;
     for (const s of f.symbols) {
-      const idx = addNode(nodes, seen, { id: `${s.name}@${s.file}`, ...s });
+      // Sections keep a distinct identity: `# Fit ----` and Fit <- function
+      // are two symbols that happen to share a name.
+      const idx = addNode(nodes, seen, { id: s.kind === "section" ? `section:${s.name}@${s.file}` : `${s.name}@${s.file}`, ...s });
       (byFile.get(rel) ?? byFile.set(rel, []).get(rel)!).push(idx);
       pushEdge(fileIdx.get(rel)!, idx, "contains", 1.0, { strategy: "file-membership", rule: "symbol-contained-by-file", source: rel });
       const key = `${rel}:${s.line}`;
@@ -391,7 +393,9 @@ export const assembleGraphWithIndex = async (
         // scripts, bare module imports in notebook python chunks) join the
         // graph as pkg:x external nodes: installed packages are dependencies
         // even though nothing in this tree resolves them.
-        if (["r", "qmd", "rmd"].includes(langFamily(rel)) && /^[A-Za-z][\w.]*$/.test(imp.spec)) {
+        // File-like specs (helpers.R, data.csv) are never packages: a
+        // trailing short suffix rejects them while data.table survives.
+        if (["r", "qmd", "rmd"].includes(langFamily(rel)) && /^[A-Za-z][\w.]*$/.test(imp.spec) && !/\.[A-Za-z]{1,4}$/.test(imp.spec)) {
           notePkgSite(pkgSites, imp.spec, rel);
         }
         noteImport(imp, "unresolved", "not resolved within the selected graph; may be external or outside the modeled import forms");

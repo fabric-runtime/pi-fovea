@@ -211,7 +211,9 @@ const focusScope = (options: FocusOptions): ((node: NodeRec) => boolean) => {
   const language = options.language?.toLowerCase();
   const kind = options.kind;
   return (node) => (!pathScope || node.file === pathScope || node.file.startsWith(`${pathScope}/`)) &&
-    (!language || node.lang.toLowerCase() === language) && (!kind || node.kind === kind);
+    // "Quarto" also matches notebook symbols, whose lang is the chunk
+    // engine (R/python) while only the file node says "Quarto".
+    (!language || node.lang.toLowerCase() === language || (language === "quarto" && node.chunk !== undefined)) && (!kind || node.kind === kind);
 };
 
 export const resolveSeeds = (state: RepoState, query: string, options: FocusOptions = {}): SeedResolution => {
@@ -466,8 +468,8 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
         state.adjacency,
         conductance,
         g.nodes.length,
-        (i) => g.nodes[i]!.kind !== "file" && g.nodes[i]!.kind !== "anchor" && !isTestScope(g.nodes[i]!.file),
-        (i) => !isTestScope(g.nodes[i]!.file),
+        (i) => g.nodes[i]!.kind !== "file" && g.nodes[i]!.kind !== "anchor" && g.nodes[i]!.kind !== "package" && !isTestScope(g.nodes[i]!.file),
+        (i) => g.nodes[i]!.kind !== "package" && !isTestScope(g.nodes[i]!.file),
       )
     : [];
   for (const b of basins) {
@@ -479,7 +481,7 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
     }
     const ranked = b.members
       .map((j) => [field[j] ?? 0, j] as const)
-      .filter(([, j]) => g.nodes[j]!.kind !== "file")
+      .filter(([, j]) => g.nodes[j]!.kind !== "file" && g.nodes[j]!.kind !== "package")
       .sort((a, b2) => b2[0] - a[0]);
     let topName = ranked[0];
     const counts = langCounts(bfiles);

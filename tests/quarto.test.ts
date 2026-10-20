@@ -77,6 +77,33 @@ describe("Quarto notebook reader", () => {
     expect(facts.literals).toEqual([]); // prose strings stay markdown
   });
 
+  it("matches fence lengths and skips example blocks", () => {
+    const nb = [
+      "````{r real}",
+      "a <- function(x) x",
+      "```", // 3 < 4: content, not a close
+      "b <- function(x) x",
+      "````", // closes the 4-backtick chunk
+      "````", // bare 4-fence: markdown example begins
+      "```{r fake}", // displayed literally: skipped
+      "phantom <- function(x) x",
+      "```", // 3 < 4: does not close the example
+      "````", // closes the example
+      "```{bash}", // non-target opener: skipped block
+      "echo ignored",
+      "```",
+      "```{r after}",
+      "c <- function(x) x",
+      "```",
+    ].join("\n");
+    const facts = extractQuarto("fences.qmd", nb);
+    expect(facts.symbols.map(({ name, chunk, chunkLabel }) => [name, chunk, chunkLabel])).toEqual([
+      ["a", 1, "real"],
+      ["b", 1, "real"],
+      ["c", 2, "after"],
+    ]);
+  });
+
   it("carries knitr chunk labels into attribution", () => {
     const nb = [
       "```{r setup}",

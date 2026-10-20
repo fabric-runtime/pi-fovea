@@ -17,11 +17,12 @@ export type QuartoFacts = {
 
 // ```{r label, opts} / ```{python label} — engine word, then options.
 // `{.r}` dot-syntax cells are a Quarto variant left outside this reader.
-const CHUNK_OPEN = /^```+\s*\{\s*(r|python)\b\s*([^}]*)\}/;
+const CHUNK_OPEN = /^(`{3,})\s*\{\s*(r|python)\b\s*([^}]*)\}/;
 // The chunk label is the first option token when it is a bare word: an
 // identifier followed by a comma or end-of-options (`echo=FALSE` never wins).
 const CHUNK_LABEL = /^([A-Za-z0-9_.+-]+)\s*(?:,|$)/;
-const FENCE_CLOSE = /^```+\s*$/
+// A close fence needs a backtick run at least as long as the opener's.
+const FENCE_CLOSE = /^(`{3,})\s*$/
 // Python imports: the one cheap, low-noise fact for non-R chunks.
 const PY_IMPORT = /^\s*(?:from\s+([A-Za-z_][\w.]*)|import\s+([A-Za-z_][\w.]*))/;
 
@@ -52,22 +53,38 @@ export const extractQuarto = (file: string, text: string): QuartoFacts => {
     engine = undefined;
     body = [];
   };
+  let fenceLen = 0; // backticks in the current chunk opener
+  let skipFence = 0; // a non-target fence block being skipped (markdown examples)
   for (let at = 0; at < lines.length; at++) {
     const raw = lines[at]!;
+    const fence = FENCE_CLOSE.exec(raw);
     if (engine) {
-      if (FENCE_CLOSE.test(raw)) {
+      // A chunk closes only at a fence at least as long as its opener:
+      // a shorter run inside the body is content, not a terminator.
+      if (fence && fence[1]!.length >= fenceLen) {
         flush();
         continue;
       }
       body.push(raw);
       continue;
     }
+    if (skipFence) {
+      if (fence && fence[1]!.length >= skipFence) skipFence = 0;
+      continue;
+    }
     const open = CHUNK_OPEN.exec(raw);
     if (open) {
-      engine = open[1] as "r" | "python";
-      label = CHUNK_LABEL.exec(open[2] ?? "")?.[1];
+      fenceLen = open[1]!.length;
+      engine = open[2] as "r" | "python";
+      label = CHUNK_LABEL.exec(open[3] ?? "")?.[1];
       offset = at + 1;
+      continue;
     }
+    // Any other fence-like opener ({bash}, {.r}, a bare run) starts a
+    // non-target block - often a markdown example displaying a literal
+    // chunk header; skip to its matching close.
+    const otherFence = /^(`{3,})/.exec(raw);
+    if (otherFence) skipFence = otherFence[1]!.length;
   }
   flush(); // an unterminated final chunk still counts
   return facts;

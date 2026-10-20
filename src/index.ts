@@ -109,6 +109,7 @@ const syncDelivery = (nextPrompt: boolean): { deliverAs: "nextTurn" } | { delive
 
 const NODE_KINDS = new Set<NodeKind>([
   "function", "method", "class", "interface", "type", "field", "decl", "file", "anchor",
+  "package", "section",
 ]);
 const focusKind = (value: string | undefined): NodeKind | undefined =>
   value && NODE_KINDS.has(value as NodeKind) ? value as NodeKind : undefined;

@@ -334,6 +334,18 @@ describe("R package edges", () => {
     expect(pkgs.find((p) => p.name === "dplyr")?.sig).toBe("R package dplyr");
   });
 
+  it("counts Suggests: declarations and never invents packages from file specs", async () => {
+    const root = fixture({
+      DESCRIPTION: "Package: demo\nSuggests: testthat\n",
+      "R/a.R": "library(testthat)\nsource('missing.R')\n",
+    });
+    const { store } = await loadFacts(root, ["R/a.R"]);
+    const { graph } = await assembleGraphWithIndex(root, ["R/a.R"], store.facts);
+    const sig = (name: string): string | undefined => graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
+    expect(sig("testthat")).toBe("R package testthat · declared in DESCRIPTION");
+    expect(graph.nodes.some((n) => n.id === "pkg:missing.R")).toBe(false);
+  });
+
   it("marks declared vs undeclared packages from DESCRIPTION", async () => {
     const root = fixture({
       DESCRIPTION: "Package: demo\nImports: ggplot2 (>= 3.4)\nDepends: R (>= 4.0), methods\n",
@@ -366,6 +378,18 @@ describe("R package edges", () => {
     ]);
   });
 
+  it("keeps a section and a same-named function as distinct symbols", async () => {
+    const text = ["# Fit ----", "Fit <- function(x) x"].join("\n");
+    const facts = extractR("fit.R", text);
+    expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
+      ["Fit", "section"],
+      ["Fit", "function"],
+    ]);
+    const graph = await graphFor({ "fit.R": text });
+    const ids = graph.nodes.filter((n) => n.file === "fit.R" && n.name === "Fit").map((n) => n.id);
+    expect(new Set(ids)).toEqual(new Set(["section:Fit@fit.R", "Fit@fit.R"]));
+  });
+
   it("wires testthat files by naming convention without source()", async () => {
     const graph = await graphFor({
       "R/stats.R": "summarize <- function(x) x\n",
@@ -392,6 +416,11 @@ describe("R package edges", () => {
     const rOnly = await focus(root, "lang:r enrichment", 700, { fresh: true });
     expect(rOnly.text).toContain("enrichment_run");
     expect(rOnly.text).not.toContain("fetch_enrichment_data");
+    // "Quarto" also matches notebook symbols (their lang is the chunk engine).
+    const root2 = fixture({ "nb.qmd": "```{r}\nprep <- function(df) df\n```", "plain.R": "prep <- function(x) x" });
+    const fo2 = await focus(root2, "prep", 700, { language: "Quarto", fresh: true });
+    expect(fo2.text).toContain("nb.qmd");
+    expect(fo2.text).not.toContain("plain.R");
     // An explicit option wins over the inline prefix.
     const pyOption = await focus(root, "lang:r enrichment", 700, { language: "Python", fresh: true });
     expect(pyOption.text).toContain("fetch_enrichment_data");

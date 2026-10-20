@@ -67,7 +67,7 @@ export interface FileFacts {
   sigs?: FileSigs;
 }
 
-const CACHE_VERSION = 20; // v20: multi-line R strings; R6 header depth; ward split
+const CACHE_VERSION = 21; // v21: fence-length chunks; section identities; Suggests; pkg gate
 
 // Honest coverage: what the extractor could NOT see. Tools and status render
 // this so a thin graph never reads as a small repo; omissions are explicit.

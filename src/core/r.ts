@@ -98,10 +98,10 @@ export const extractR = (file: string, text: string): RFacts => {
   // R string literals may span lines (SQL, glue templates): this quote
   // state persists across the line loop below so string bodies stay masked
   // and bracket counting stays honest; unterminated quotes emit nothing.
-  let quote = "";
-  let value = "";
-  let start = -1;
-  let quoteLine = 1;
+  let quote = ""; // open delimiter ("" = closed); survives across lines
+  let value = ""; // string body accumulated across lines
+  let start = -1; // column of the opening quote
+  let quoteLine = 1; // 1-based line of the opening quote
   for (let at = 0; at < lines.length; at++) {
     const raw = lines[at]!;
     const line = at + 1;
@@ -221,7 +221,8 @@ export const extractR = (file: string, text: string): RFacts => {
   // A generic and its setMethod implementations share a graph identity;
   // likewise a re-assigned name keeps one symbol. First site wins.
   const symbols = new Map<string, SymbolRec>();
-  for (const symbol of facts.symbols) if (!symbols.has(symbol.name)) symbols.set(symbol.name, symbol);
+  const symbolKey = (symbol: SymbolRec): string => symbol.kind === "section" ? `section:${symbol.name}` : symbol.name;
+  for (const symbol of facts.symbols) if (!symbols.has(symbolKey(symbol))) symbols.set(symbolKey(symbol), symbol);
   facts.symbols = [...symbols.values()].sort((a, b) => a.line - b.line);
   return facts;
 };
