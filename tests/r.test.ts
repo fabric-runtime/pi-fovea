@@ -157,6 +157,21 @@ describe("R source reader", () => {
     ]);
   });
 
+  it("does not let a closed single-line R6Class swallow the next section", () => {
+    const text = [
+      'Base <- R6Class("Base")',
+      "",
+      "# Helpers ----",
+      "f <- function(x) x",
+    ].join("\n");
+    const facts = extractR("r6one.R", text);
+    expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
+      ["Base", "class"],
+      ["Helpers", "section"],
+      ["f", "function"],
+    ]);
+  });
+
   it("skips argument-default and local nested function definitions", () => {
     const text = [
       "optimize(",
@@ -332,6 +347,17 @@ describe("R package edges", () => {
     ]);
     // graphFor's root has no DESCRIPTION: no declaration state in the sig.
     expect(pkgs.find((p) => p.name === "dplyr")?.sig).toBe("R package dplyr");
+  });
+
+  it("admits dotted CRAN package names while file-like specs stay rejected", async () => {
+    const graph = await graphFor({
+      "R/dotted.R": [
+        "library(data.tree)",
+        "source('helpers.R')",
+      ].join("\n"),
+    });
+    const pkgs = graph.nodes.filter((n) => n.kind === "package");
+    expect(pkgs.map((p) => p.id)).toEqual(["pkg:data.tree"]);
   });
 
   it("counts Suggests: declarations and never invents packages from file specs", async () => {

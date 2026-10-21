@@ -393,9 +393,11 @@ export const assembleGraphWithIndex = async (
         // scripts, bare module imports in notebook python chunks) join the
         // graph as pkg:x external nodes: installed packages are dependencies
         // even though nothing in this tree resolves them.
-        // File-like specs (helpers.R, data.csv) are never packages: a
-        // trailing short suffix rejects them while data.table survives.
-        if (["r", "qmd", "rmd"].includes(langFamily(rel)) && /^[A-Za-z][\w.]*$/.test(imp.spec) && !/\.[A-Za-z]{1,4}$/.test(imp.spec)) {
+        // File-like specs (helpers.R, data.csv) are never packages. Reject
+        // known R-ecosystem file extensions, not any short dotted suffix:
+        // data.tree is a real CRAN package and must survive.
+        const R_FILE_EXT = /\.(?:R|r|Rmd|rmd|Rnw|rnw|qmd|csv|tsv|txt|json|ya?ml|toml|rds|rda|RData|Rproj|so|dll|png|jpe?g|gif|svg|pdf|html|css|js|mjs|ts|tsx|py|sh|bash|md)$/i;
+        if (["r", "qmd", "rmd"].includes(langFamily(rel)) && /^[A-Za-z][\w.]*$/.test(imp.spec) && !R_FILE_EXT.test(imp.spec)) {
           notePkgSite(pkgSites, imp.spec, rel);
         }
         noteImport(imp, "unresolved", "not resolved within the selected graph; may be external or outside the modeled import forms");

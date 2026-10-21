@@ -104,6 +104,26 @@ describe("Quarto notebook reader", () => {
     ]);
   });
 
+  it("accepts indented close fences and skips tilde-fenced examples", () => {
+    const nb = [
+      "```{r indented}",
+      "a <- function(x) x",
+      "  ```", // two-space indent: legal close (CommonMark allows 3)
+      "~~~", // tilde example begins
+      "```{r fake}", // displayed literally: must be skipped
+      "phantom <- function(x) x",
+      "~~~", // closes the tilde example
+      "```{r real}",
+      "b <- function(x) x",
+      "```",
+    ].join("\n");
+    const facts = extractQuarto("fences2.qmd", nb);
+    expect(facts.symbols.map(({ name, chunk, chunkLabel }) => [name, chunk, chunkLabel])).toEqual([
+      ["a", 1, "indented"],
+      ["b", 2, "real"],
+    ]);
+  });
+
   it("carries knitr chunk labels into attribution", () => {
     const nb = [
       "```{r setup}",

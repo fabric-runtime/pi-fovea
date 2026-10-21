@@ -216,7 +216,10 @@ export const extractR = (file: string, text: string): RFacts => {
     }
     depth = Math.max(0, depth + net);
     while (classes.length && depth <= classes.at(-1)!.at) classes.pop();
-    if (r6) classes.push({ name: r6[1]!, at: depthBefore });
+    // Only a header that leaves a bracket open scopes members. A single-line
+    // R6Class("Base") closes itself: pushing it anyway would swallow the next
+    // # section and poison inClass for the next function body.
+    if (r6 && net > 0) classes.push({ name: r6[1]!, at: depthBefore });
   }
   // A generic and its setMethod implementations share a graph identity;
   // likewise a re-assigned name keeps one symbol. First site wins.
