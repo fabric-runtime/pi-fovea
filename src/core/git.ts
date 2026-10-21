@@ -450,6 +450,10 @@ export const diffHunks = async (
   const range = base ? `${base}...HEAD` : "HEAD";
   const out = await gitOut(root, [
     "-c", "core.quotePath=false",
+    // Pin canonical a/ b/ path prefixes: user-level diff.mnemonicprefix
+    // (i/ w/ c/ o/) or diff.noprefix would rename every parsed path into
+    // a spurious rename pair and every nuclei probe would come back empty.
+    "-c", "diff.mnemonicprefix=false", "-c", "diff.noprefix=false",
     "diff", "--unified=0", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames",
     range, "--", ".",
   ], { maxBuffer: DIFF_MAX_BUFFER });
