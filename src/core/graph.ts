@@ -24,6 +24,13 @@ const langFamily = (file: string): string => {
   return ext;
 };
 
+// Base R packages ship with the interpreter; using one without a
+// DESCRIPTION entry is not a missing dependency.
+const R_BASE_PACKAGES = new Set([
+  "base", "compiler", "datasets", "grdevices", "graphics", "grid", "methods",
+  "parallel", "splines", "stats", "stats4", "tcltk", "tools", "utils",
+]);
+
 // pkg:: qualified calls name their package before the ::.
 const PKG_QUALIFIER = /^([A-Za-z][\w.]*)::/;
 
@@ -485,7 +492,7 @@ export const assembleGraphWithIndex = async (
       const declaredState = declaredHas(name);
       const idx = addNode(nodes, seen, {
         id: `pkg:${name}`, name, kind: "package", file: "", line: 0,
-        sig: `R package ${name}${declaredState === undefined ? "" : declaredState ? " · declared in DESCRIPTION" : " · used without DESCRIPTION entry"}`,
+        sig: `R package ${name}${declaredState === undefined ? "" : declaredState ? " · declared in DESCRIPTION" : R_BASE_PACKAGES.has(name.toLowerCase()) ? " · base package" : " · used without DESCRIPTION entry"}`,
         lang: "external",
       });
       const importFiles = pkgSites.get(key)?.files ?? new Set<string>();

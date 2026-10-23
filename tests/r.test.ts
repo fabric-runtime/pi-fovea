@@ -188,6 +188,89 @@ describe("R source reader", () => {
     expect(facts.calls.map((call) => call.callee)).toEqual(["optimize", "local_helper"]);
   });
 
+  it("masks R 4.0 raw strings so inner quotes and brackets stay honest", () => {
+    const text = [
+      'sql <- r"(SELECT a " b ( c FROM t)"',
+      "real_fn <- function(x) x",
+      'label <- R"[contains ] bracket]"',
+      "other <- function(y) y",
+    ].join("\n");
+    const facts = extractR("raw.R", text);
+    expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
+      ["sql", "decl"], ["real_fn", "function"], ["label", "decl"], ["other", "function"],
+    ]);
+    expect(facts.literals.map((site) => site.text)).toEqual([
+      'SELECT a " b ( c FROM t', "contains ] bracket",
+    ]);
+  });
+
+  it("masks multi-line raw strings with dash delimiters", () => {
+    const text = [
+      'query <- r"--(SELECT [col]',
+      '  FROM t WHERE x = 1)--"',
+      "after <- function(x) x",
+    ].join("\n");
+    const facts = extractR("rawml.R", text);
+    expect(facts.symbols.map(({ name, kind, line }) => [name, kind, line])).toEqual([
+      ["query", "decl", 1], ["after", "function", 3],
+    ]);
+    expect(facts.literals).toEqual([{ file: "rawml.R", line: 1, text: "SELECT [col]  FROM t WHERE x = 1" }]);
+  });
+
+  it("records backtick and quoted operator definitions", () => {
+    const text = [
+      "`%+%` <- function(x, y) x",
+      '"%>%" <- function(lhs, rhs) rhs',
+      "`%||%` = function(a, b) b",
+    ].join("\n");
+    const facts = extractR("ops.R", text);
+    expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
+      ["%+%", "function"], ["%>%", "function"], ["%||%", "function"],
+    ]);
+  });
+
+  it("records functions split across the assignment and the literal", () => {
+    const text = [
+      "long_name <-",
+      "  function(x) {",
+      "    x",
+      "  }",
+      "delayed <-",
+      "",
+      "  function(y) y",
+      "Wallet <-",
+      '  R6Class("Wallet")',
+    ].join("\n");
+    const facts = extractR("split.R", text);
+    expect(facts.symbols.map(({ name, kind, line }) => [name, kind, line])).toEqual([
+      ["long_name", "function", 1], ["delayed", "function", 5], ["Wallet", "class", 8],
+    ]);
+  });
+
+  it("records right-assignment definitions without string forgeries", () => {
+    const text = [
+      "function(x) x -> make_id",
+      "TOTAL ->> cap",
+      "fn <- function(s) paste(s, 'a -> b')",
+    ].join("\n");
+    const facts = extractR("right.R", text);
+    expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
+      ["make_id", "function"], ["cap", "decl"], ["fn", "function"],
+    ]);
+  });
+
+  it("accepts deeper hash headers and hash terminators for sections", () => {
+    const text = [
+      "### Deep section ----",
+      "f <- function(x) x",
+      "# Data ####",
+    ].join("\n");
+    const facts = extractR("deep.R", text);
+    expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
+      ["Deep section", "section"], ["f", "function"], ["Data", "section"],
+    ]);
+  });
+
   it("keeps standalone and consolidated facts identical without a grammar", async () => {
     const root = fixture({ "stats.R": program });
     const source = makeFileSource(root);
@@ -274,6 +357,17 @@ describe("R graph integration", () => {
     const root = fixture({ "main.R": "main <- function() 1\n", "api.ts": "export const api = 1;\n" });
     vi.stubEnv("FOVEA_AST_GREP", join(root, "missing-ast-grep"));
     await expect(ensureState(root)).rejects.toThrow("no usable ast-grep binary");
+  });
+
+  it("skips renv and packrat vendored libraries during discovery", async () => {
+    const root = fixture({
+      "R/main.R": "main <- function() 1\n",
+      "renv/library/dplyr/R/arrange.R": "arrange <- function(x) x\n",
+      "packrat/lib-demo/R/fit.R": "fit <- function(x) x\n",
+    });
+    vi.stubEnv("FOVEA_AST_GREP", join(root, "missing-ast-grep"));
+    const state = await ensureState(root);
+    expect(state.files).toEqual(["R/main.R"]);
   });
 
   it.skipIf(!hasAstGrep())("keeps mixed-language scans on the consolidated path", async () => {
@@ -384,6 +478,18 @@ describe("R package edges", () => {
     expect(sig("seqinr")).toBe("R package seqinr · used without DESCRIPTION entry");
     // Declared but unused (methods) creates no node: nodes come from usage.
     expect(graph.nodes.some((n) => n.id === "pkg:methods")).toBe(false);
+  });
+
+  it("labels base R packages instead of missing DESCRIPTION entries", async () => {
+    const root = fixture({
+      DESCRIPTION: "Package: demo\nImports: dplyr\n",
+      "R/a.R": "library(dplyr)\nf <- function() stats::rnorm(1)\n",
+    });
+    const { store } = await loadFacts(root, ["R/a.R"]);
+    const { graph } = await assembleGraphWithIndex(root, ["R/a.R"], store.facts);
+    const sig = (name: string): string | undefined => graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
+    expect(sig("dplyr")).toBe("R package dplyr · declared in DESCRIPTION");
+    expect(sig("stats")).toBe("R package stats · base package");
   });
 
   it("records top-level section markers and skips nested ones", () => {

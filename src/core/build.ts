@@ -67,7 +67,7 @@ export interface FileFacts {
   sigs?: FileSigs;
 }
 
-const CACHE_VERSION = 21; // v21: fence-length chunks; section identities; Suggests; pkg gate
+const CACHE_VERSION = 22; // v22: R raw strings; quoted/backtick names; right assignment; deferred defs; sections
 
 // Honest coverage: what the extractor could NOT see. Tools and status render
 // this so a thin graph never reads as a small repo; omissions are explicit.
@@ -113,7 +113,8 @@ export interface FileDiscovery {
   report: DiscoveryReport;
 }
 
-const IGNORE_DIRS = new Set([".git", "node_modules", "dist", "vendor", ".venv", "venv", "target", "coverage", ".next", "build", "__pycache__", ".pi", ".pi-fovea", "deps", "_build", ".tox", "Pods", ".cargo"]);
+// R dependency vendoring (renv/library, packrat/lib-*) mirrors node_modules.
+const IGNORE_DIRS = new Set([".git", "node_modules", "dist", "vendor", ".venv", "venv", "target", "coverage", ".next", "build", "__pycache__", ".pi", ".pi-fovea", "deps", "_build", ".tox", "Pods", ".cargo", "renv", "packrat"]);
 // File count is also a resident-graph budget, not just a discovery limit.
 // Override deliberately for giant monorepos; normal roots stay bounded.
 const MAX_FILES = envInt("FOVEA_MAX_FILES", 8000, 100, 100_000);

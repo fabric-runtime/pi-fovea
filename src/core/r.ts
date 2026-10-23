@@ -3,7 +3,8 @@
 // function(...)` (or `=`), classes are S4 setClass/setGeneric/setMethod or
 // R6Class blocks, dependencies are library()/require()/requireNamespace()
 // (installed packages, unresolved by design) plus source() file includes.
-// R 4.0 raw strings (r"(...)") are not modeled; standard quotes may span lines.
+// R 4.0 raw strings (r"(...)", R'[...]', dash delimiters) are masked like
+// standard quotes; both may span lines.
 import type { CallSite, ImportSite, LiteralSite, SymbolRec } from "./types.js";
 
 interface RFacts {
@@ -13,14 +14,27 @@ interface RFacts {
   literals: LiteralSite[];
 }
 
-const NAME = "[A-Za-z.][A-Za-z0-9._]*";
-const DEF = new RegExp(`^\\s*(${NAME})\\s*(?:<<-|<-|=)\\s*function\\s*\\(`);
-const R6_DEF = new RegExp(`^\\s*(${NAME})\\s*(?:<<-|<-|=)\\s*R6Class\\s*\\(`);
+// Bare identifiers name most declarations; R's documented backtick syntax
+// (`%+%`, `my fn`) and quoted names ("%>%") are declaration targets too.
+// Call/argument surfaces stay bare: package names are never quoted there.
+const BARE = "[A-Za-z.][A-Za-z0-9._]*";
+const QUOTED = /`(?:[^`\\]|\\.)+`|"(?:[^"\\]|\\.)+"|'(?:[^'\\]|\\.)+'/.source;
+const LHS = `(?:${BARE}|${QUOTED})`;
+const NAME = BARE;
+const unquote = (name: string): string =>
+  /^[`"']/.test(name) ? name.slice(1, -1).replace(/\\(.)/g, "$1") : name;
+const DEF = new RegExp(`^\\s*(${LHS})\\s*(?:<<-|<-|=)\\s*function\\s*\\(`);
+const R6_DEF = new RegExp(`^\\s*(${LHS})\\s*(?:<<-|<-|=)\\s*R6Class\\s*\\(`);
 // Top-level data assignment: any RHS except a function literal. `==` and
 // comparisons never match: `=(?![=>])` rejects the second `=` of `==`.
-const ASSIGN = new RegExp(`^\\s*(${NAME})\\s*(?:<<-|<-|=(?![=>]))\\s*(?!function\\s*\\()(?=\\S)`);
+const ASSIGN = new RegExp(`^\\s*(${LHS})\\s*(?:<<-|<-|=(?![=>]))\\s*(?!function\\s*\\()(?=\\S)`);
+// `name <-` alone defers to the next non-blank line: f <-\n  function(x) x
+// splits long signatures. Right assignments are single-line forms.
+const PENDING_ASSIGN = new RegExp(`^\\s*(${LHS})\\s*(?:<<-|<-|=)\\s*$`);
+const RIGHT_FN = new RegExp(`^\\s*function\\s*\\([^)]*\\).*->>?\\s*(${BARE})\\s*$`);
+const RIGHT_ASSIGN = new RegExp(`^\\s*(?!function\\b)(\\S.*?)\\s*->>?\\s*(${BARE})\\s*$`);
 // S4 meta objects may be assigned a generator first: Foo <- setClass("Foo").
-const SET = (fn: string) => new RegExp(`^\\s*(?:(${NAME})\\s*(?:<<-|<-|=)\\s*)?${fn}\\s*\\(`);
+const SET = (fn: string) => new RegExp(`^\\s*(?:(${LHS})\\s*(?:<<-|<-|=)\\s*)?${fn}\\s*\\(`);
 const SET_CLASS = SET("setClass");
 const SET_GENERIC = SET("setGeneric");
 const SET_METHOD = SET("setMethod");
@@ -83,9 +97,10 @@ const stringArg = (
   return quoted && code.slice(open + 1, quoted.start).trim() === "" ? quoted.text : undefined;
 };
 
-// Section navigation markers (languageserver convention): `# Name ----` or
-// `## Name =====` at top level; roxygen `#'` lines never match.
-const SECTION = /^#{1,2}\s+(.+?)\s+[-=]{4,}\s*$/;
+// Section navigation markers (RStudio/languageserver convention): any hash
+// run, a title, then four or more - = # at top level; roxygen `#'` never
+// matches.
+const SECTION = /^#{1,}\s+(.+?)\s+[-=#]{4,}\s*$/;
 
 export const extractR = (file: string, text: string): RFacts => {
   const facts: RFacts = { symbols: [], imports: [], calls: [], literals: [] };
@@ -94,11 +109,13 @@ export const extractR = (file: string, text: string): RFacts => {
   const seenLiterals = new Set<string>();
   let depth = 0; // open ( [ { across lines, with strings and comments masked
   const classes: Array<{ name: string; at: number }> = []; // open R6Class blocks
+  let pending: { name: string; line: number; sig: string } | undefined; // `name <-` split across lines
   const lines = text.split("\n");
   // R string literals may span lines (SQL, glue templates): this quote
   // state persists across the line loop below so string bodies stay masked
   // and bracket counting stays honest; unterminated quotes emit nothing.
   let quote = ""; // open delimiter ("" = closed); survives across lines
+  let rawClose = ""; // R 4.0 raw-string close sequence ("" = normal string)
   let value = ""; // string body accumulated across lines
   let start = -1; // column of the opening quote
   let quoteLine = 1; // 1-based line of the opening quote
@@ -110,30 +127,71 @@ export const extractR = (file: string, text: string): RFacts => {
     let code = "";
     let visible = "";
     const strings: Array<{ start: number; text: string }> = [];
+    const closeString = (): void => {
+      if (value.length >= 2 && value.length <= 200 && !seenLiterals.has(`${quoteLine}|${value}`)) {
+        seenLiterals.add(`${quoteLine}|${value}`);
+        facts.literals.push({ file, line: quoteLine, text: value });
+      }
+      strings.push({ start, text: value });
+      quote = "";
+      rawClose = "";
+    };
     for (let i = 0; i < raw.length; i++) {
       const ch = raw[i]!;
       if (quote) {
-        visible += ch;
-        code += " ";
-        if (ch === "\\" && i + 1 < raw.length) {
-          const escaped = raw[++i]!;
-          value += ({ n: "\n", r: "\r", t: "\t", "0": "\0" } as Record<string, string>)[escaped] ?? escaped;
-          code += " ";
-          visible += escaped;
-        } else if (ch === quote) {
-          if (value.length >= 2 && value.length <= 200 && !seenLiterals.has(`${quoteLine}|${value}`)) {
-            seenLiterals.add(`${quoteLine}|${value}`);
-            facts.literals.push({ file, line: quoteLine, text: value });
+        if (rawClose) {
+          // Raw strings ignore escapes and close only on the mirrored
+          // opener sequence (`)"`, `]--"`, ...).
+          if (raw.startsWith(rawClose, i)) {
+            for (let k = 0; k < rawClose.length; k++) {
+              visible += raw[i + k]!;
+              code += " ";
+            }
+            i += rawClose.length - 1;
+            closeString();
+          } else {
+            visible += ch;
+            code += " ";
+            value += ch;
           }
-          strings.push({ start, text: value });
-          quote = "";
         } else {
-          value += ch;
+          visible += ch;
+          code += " ";
+          if (ch === "\\" && i + 1 < raw.length) {
+            const escaped = raw[++i]!;
+            value += ({ n: "\n", r: "\r", t: "\t", "0": "\0" } as Record<string, string>)[escaped] ?? escaped;
+            code += " ";
+            visible += escaped;
+          } else if (ch === quote) {
+            closeString();
+          } else {
+            value += ch;
+          }
         }
       } else if (ch === "#") {
         break;
+      } else if ((ch === "r" || ch === "R") && (raw[i + 1] === '"' || raw[i + 1] === "'")) {
+        // R 4.0 raw string: [rR] quote, dashes, optional ( [ { opener; the
+        // close mirrors it. A letter glued to a quote is never valid R
+        // otherwise, so this cannot mask real code.
+        const rAt = i;
+        const q = raw[++i]!;
+        let dashes = "";
+        while (raw[i + 1] === "-") dashes += raw[++i]!;
+        const open = "([{".includes(raw[i + 1] ?? "") ? raw[++i]! : "";
+        const close = open === "(" ? ")" : open === "[" ? "]" : open === "{" ? "}" : "";
+        quote = q;
+        rawClose = close + dashes + q;
+        value = "";
+        start = rAt;
+        quoteLine = line;
+        for (let k = rAt; k <= i; k++) {
+          visible += raw[k]!;
+          code += " ";
+        }
       } else if (ch === '"' || ch === "'") {
         quote = ch;
+        rawClose = "";
         value = "";
         start = i;
         quoteLine = line;
@@ -152,42 +210,69 @@ export const extractR = (file: string, text: string): RFacts => {
       facts.symbols.push({ file, line, name: section[1]!.trim(), kind: "section", sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig, lang: "R" });
     }
     if (!code.trim()) continue;
+    // A bare `name <-` defers its declaration to the next non-blank line
+    // (`f <-\n  function(x) x`); any other line cancels the pending site.
+    let r6Name: string | undefined;
+    if (pending) {
+      const fnLine = /^\s*function\s*\(/.test(visible);
+      const r6Line = /^\s*R6Class\s*\(/.test(visible);
+      if (fnLine || r6Line) {
+        const inCls = classes.length > 0 && depth > classes.at(-1)!.at;
+        const name = fnLine && inCls ? `${classes.at(-1)!.name}.${pending.name}` : pending.name;
+        facts.symbols.push({ file, line: pending.line, name, kind: fnLine ? (inCls ? "method" : "function") : "class", sig: pending.sig, lang: "R" });
+        if (r6Line) r6Name = pending.name;
+      }
+      pending = undefined;
+    }
     const inClass = classes.length > 0 && depth > classes.at(-1)!.at;
     const sig = visible.trim();
     const decl = (name: string, kind: SymbolRec["kind"]): void => {
       facts.symbols.push({ file, line, name, kind, sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig, lang: "R" });
     };
-    const r6 = R6_DEF.exec(code);
+    const r6 = R6_DEF.exec(visible);
     if (r6) {
-      decl(r6[1]!, "class");
+      r6Name = unquote(r6[1]!);
+      decl(r6Name, "class");
     } else {
       // Top-level assignments define functions; inside an R6Class block the
       // list entries become methods. Other nested forms (argument defaults)
-      // are skipped.
-      const def = DEF.exec(code);
+      // are skipped. Declaration forms run against `visible`, where quoted
+      // and backtick names survive masking.
+      const def = DEF.exec(visible);
       if (def && (depth === 0 || inClass)) {
-        decl(inClass ? `${classes.at(-1)!.name}.${def[1]}` : def[1]!, inClass ? "method" : "function");
+        const name = unquote(def[1]!);
+        decl(inClass ? `${classes.at(-1)!.name}.${name}` : name, inClass ? "method" : "function");
       } else {
-        const setClass = SET_CLASS.exec(code);
-        const setGeneric = SET_GENERIC.exec(code);
-        const setMethod = SET_METHOD.exec(code);
+        const setClass = SET_CLASS.exec(visible);
+        const setGeneric = SET_GENERIC.exec(visible);
+        const setMethod = SET_METHOD.exec(visible);
         if (setClass) {
-          const name = stringArg(code, strings) ?? setClass[1];
+          const name = stringArg(visible, strings) ?? (setClass[1] !== undefined ? unquote(setClass[1]) : undefined);
           if (name) decl(name, "class");
         } else if (setGeneric) {
-          const name = stringArg(code, strings) ?? setGeneric[1];
+          const name = stringArg(visible, strings) ?? (setGeneric[1] !== undefined ? unquote(setGeneric[1]) : undefined);
           if (name) decl(name, "function");
         } else if (setMethod) {
-          const name = stringArg(code, strings) ?? setMethod[1];
+          const name = stringArg(visible, strings) ?? (setMethod[1] !== undefined ? unquote(setMethod[1]) : undefined);
           if (name) decl(name, "method");
-        } else {
+        } else if (depth === 0) {
           // Non-function top-level assignments are the data surface of an
           // analysis script: theme <- theme_bw(), counts <- read.csv(...).
           // Nested depth (locals, argument defaults) stays invisible.
           // Match against `visible`, not `code`: a string-literal RHS
-          // (PREFIX <- "fig_") is masked to spaces in `code`.
+          // (PREFIX <- "fig_") is masked to spaces in `code`. Right forms
+          // (`function(x) x -> f`, `value ->> cap`) bind at line end; a
+          // string body cannot forge one because its closing quote trails.
           const assign = ASSIGN.exec(visible);
-          if (assign && depth === 0) decl(assign[1]!, "decl");
+          const rightFn = RIGHT_FN.exec(visible);
+          const rightAssign = RIGHT_ASSIGN.exec(visible);
+          const pendingAssign = PENDING_ASSIGN.exec(visible);
+          if (assign) decl(unquote(assign[1]!), "decl");
+          else if (rightFn) decl(rightFn[1]!, "function");
+          else if (rightAssign) decl(rightAssign[2]!, "decl");
+          else if (pendingAssign) {
+            pending = { name: unquote(pendingAssign[1]!), line, sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig };
+          }
         }
       }
     }
@@ -219,7 +304,7 @@ export const extractR = (file: string, text: string): RFacts => {
     // Only a header that leaves a bracket open scopes members. A single-line
     // R6Class("Base") closes itself: pushing it anyway would swallow the next
     // # section and poison inClass for the next function body.
-    if (r6 && net > 0) classes.push({ name: r6[1]!, at: depthBefore });
+    if (r6Name !== undefined && net > 0) classes.push({ name: r6Name, at: depthBefore });
   }
   // A generic and its setMethod implementations share a graph identity;
   // likewise a re-assigned name keeps one symbol. First site wins.
