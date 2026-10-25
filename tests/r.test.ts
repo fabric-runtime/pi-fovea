@@ -492,6 +492,20 @@ describe("R package edges", () => {
     expect(sig("stats")).toBe("R package stats · base package");
   });
 
+  it("rejects non-file and oversized DESCRIPTION metadata as unknown", async () => {
+    const root = fixture({ "R/a.R": "library(ggplot2)\n" });
+    const sig = async (): Promise<string | undefined> => {
+      const { store } = await loadFacts(root, ["R/a.R"]);
+      const { graph } = await assembleGraphWithIndex(root, ["R/a.R"], store.facts);
+      return graph.nodes.find((n) => n.id === "pkg:ggplot2")?.sig;
+    };
+    mkdirSync(join(root, "DESCRIPTION")); // a directory is not metadata
+    expect(await sig()).toBe("R package ggplot2");
+    rmSync(join(root, "DESCRIPTION"), { recursive: true });
+    writeFileSync(join(root, "DESCRIPTION"), `X: ${"a".repeat(256 * 1024 + 16)}\n`);
+    expect(await sig()).toBe("R package ggplot2");
+  });
+
   it("records top-level section markers and skips nested ones", () => {
     const text = [
       "# Setup ----",

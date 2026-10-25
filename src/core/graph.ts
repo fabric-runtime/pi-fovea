@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { basename, posix } from "node:path";
 import { forEachChunked } from "./asyncutil.js";
 import { LANG_BY_EXT } from "./astgrep.js";
@@ -34,13 +34,23 @@ const R_BASE_PACKAGES = new Set([
 // pkg:: qualified calls name their package before the ::.
 const PKG_QUALIFIER = /^([A-Za-z][\w.]*)::/;
 
-// Declared R package dependencies: DESCRIPTION's Imports:/Depends: fields.
-// Continuation lines (indented) belong to the previous key; entries may carry
-// version constraints (`dplyr (>= 1.0)`) — the bare name is what joins.
+// DESCRIPTION is repository-controlled metadata: admit it like source
+// files (regular file, bounded bytes) and scan continuation lines by index
+// so repeated dependency headers cannot force quadratic suffix copies.
+// Continuation lines (indented) belong to the previous key; entries may
+// carry version constraints (`dplyr (>= 1.0)`) — the bare name joins.
+const MAX_DESCRIPTION_BYTES = 256 * 1024;
 const declaredPackages = (root: string): Set<string> | undefined => {
+  const path = posix.join(root, "DESCRIPTION");
+  try {
+    const info = statSync(path);
+    if (!info.isFile() || info.size > MAX_DESCRIPTION_BYTES) return undefined;
+  } catch {
+    return undefined;
+  }
   let text: string;
   try {
-    text = readFileSync(posix.join(root, "DESCRIPTION"), "utf8");
+    text = readFileSync(path, "utf8");
   } catch {
     return undefined;
   }
@@ -50,10 +60,7 @@ const declaredPackages = (root: string): Set<string> | undefined => {
     const head = /^(Imports|Depends|Suggests|LinkingTo):/i.exec(rows[i]!);
     if (!head) continue;
     const parts = [rows[i]!.slice(head[0].length)];
-    for (const cont of rows.slice(i + 1)) {
-      if (!/^\s+\S/.test(cont)) break;
-      parts.push(cont.trim());
-    }
+    for (let j = i + 1; j < rows.length && /^\s+\S/.test(rows[j]!); j++) parts.push(rows[j]!.trim());
     for (const entry of parts.join(",").split(",")) {
       const name = entry.replace(/\(.*\)/, "").trim();
       if (name && name !== "R") declared.add(name);
@@ -307,8 +314,10 @@ export const assembleGraphWithIndex = async (
     if (!f) return;
     for (const s of f.symbols) {
       // Sections keep a distinct identity: `# Fit ----` and Fit <- function
-      // are two symbols that happen to share a name.
-      const idx = addNode(nodes, seen, { id: s.kind === "section" ? `section:${s.name}@${s.file}` : `${s.name}@${s.file}`, ...s });
+      // are two symbols that happen to share a name. Quarto symbols keep
+      // their chunk identity: same-named definitions in different chunks of
+      // one notebook stay distinct nodes instead of first-wins.
+      const idx = addNode(nodes, seen, { id: s.kind === "section" ? `section:${s.name}@${s.file}` : `${s.name}@${s.file}${s.chunk == null ? "" : `@chunk:${s.chunk}`}`, ...s });
       (byFile.get(rel) ?? byFile.set(rel, []).get(rel)!).push(idx);
       pushEdge(fileIdx.get(rel)!, idx, "contains", 1.0, { strategy: "file-membership", rule: "symbol-contained-by-file", source: rel });
       const key = `${rel}:${s.line}`;

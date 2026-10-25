@@ -163,4 +163,22 @@ describe("Quarto notebook reader", () => {
       ["run", "prepare@ana/helpers.R"],
     ]);
   });
+
+  it("keeps same-named symbols in different chunks as distinct nodes", async () => {
+    const nb = [
+      "```{r prep-a}",
+      "run <- function(x) x + 1",
+      "```",
+      "",
+      "```{r prep-b}",
+      "run <- function(x) x + 2",
+      "```",
+    ].join("\n");
+    const graph = await graphFor({ "nb.qmd": nb });
+    const runs = graph.nodes.filter((n) => n.file === "nb.qmd" && n.name === "run" && n.kind === "function");
+    expect(runs.map((n) => [n.id, n.line, n.chunkLabel])).toEqual([
+      ["run@nb.qmd@chunk:1", 2, "prep-a"],
+      ["run@nb.qmd@chunk:2", 6, "prep-b"],
+    ]);
+  });
 });
