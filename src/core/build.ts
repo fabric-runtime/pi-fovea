@@ -67,7 +67,7 @@ export interface FileFacts {
   sigs?: FileSigs;
 }
 
-const CACHE_VERSION = 22; // v22: R raw strings; quoted/backtick names; right assignment; deferred defs; sections
+const CACHE_VERSION = 23; // v23: python import origins; in-string section guard
 
 // Honest coverage: what the extractor could NOT see. Tools and status render
 // this so a thin graph never reads as a small repo; omissions are explicit.

@@ -181,4 +181,21 @@ describe("Quarto notebook reader", () => {
       ["run@nb.qmd@chunk:2", 6, "prep-b"],
     ]);
   });
+
+  it("keeps notebook python imports off the TypeScript bare-specifier fallback", async () => {
+    const nb = ["```{python}", "import utils", "```"].join("\n");
+    const graph = await graphFor({ "ana/nb.qmd": nb, "ana/utils.ts": "export const u = 1;\n" });
+    const edges = graph.edges.filter((edge) => edge.kind === "imports" && graph.nodes[edge.b]!.file === "ana/utils.ts");
+    expect(edges).toEqual([]);
+    // The bare spec still surfaces as an external package node, python-labeled.
+    expect(graph.nodes.find((n) => n.id === "pkg:utils")?.sig).toBe("Python package utils");
+  });
+
+  it("labels python-chunk packages without R classification", async () => {
+    const nb = ["```{python}", "import numpy", "import utils", "```"].join("\n");
+    const graph = await graphFor({ "nb.qmd": nb });
+    const sig = (name: string): string | undefined => graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
+    expect(sig("numpy")).toBe("Python package numpy");
+    expect(sig("utils")).toBe("Python package utils");
+  });
 });

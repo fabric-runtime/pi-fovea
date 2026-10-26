@@ -150,9 +150,11 @@ const resolveImportToFile = (
     if (local === ".." || local.startsWith("../")) return undefined;
     return exact([local], "relative-import");
   }
-  if (fam === "r") {
+  if (fam === "r" || fam === "qmd" || fam === "rmd") {
     // library(pkg) names an installed package and stays unresolved by
     // design; source("file.R") includes are relative to the importing script.
+    // Notebooks share the rule: python chunk imports (bare specs like
+    // `utils`) must never reach the TypeScript bare-specifier fallback.
     if (!/\.r$/i.test(spec) || posix.isAbsolute(spec)) return undefined;
     const local = posix.normalize(posix.join(posix.dirname(fromFile), spec));
     if (local === ".." || local.startsWith("../")) return undefined;
@@ -369,11 +371,14 @@ export const assembleGraphWithIndex = async (
 
   // External R package usage joins as pkg:x nodes: library()/require()/
   // requireNamespace() sites plus pkg:: qualified calls, one node per package.
-  const pkgSites = new Map<string, { name: string; files: Set<string> }>();
-  const pkgQuals = new Map<string, { name: string; files: Set<string> }>();
-  const notePkgSite = (map: Map<string, { name: string; files: Set<string> }>, name: string, file: string): void => {
-    const agg = map.get(name.toLowerCase()) ?? { name, files: new Set<string>() };
+  type PackageOrigin = "r" | "python";
+  type PackageAgg = { name: string; files: Set<string>; origins: Set<PackageOrigin> };
+  const pkgSites = new Map<string, PackageAgg>();
+  const pkgQuals = new Map<string, PackageAgg>();
+  const notePkgSite = (map: Map<string, PackageAgg>, name: string, file: string, origin: PackageOrigin = "r"): void => {
+    const agg = map.get(name.toLowerCase()) ?? { name, files: new Set<string>(), origins: new Set<PackageOrigin>() };
     agg.files.add(file);
+    agg.origins.add(origin);
     map.set(name.toLowerCase(), agg);
   };
   // Import edges (file-level, low conductance backbone) + tests wiring.
@@ -414,7 +419,7 @@ export const assembleGraphWithIndex = async (
         // data.tree is a real CRAN package and must survive.
         const R_FILE_EXT = /\.(?:R|r|Rmd|rmd|Rnw|rnw|qmd|csv|tsv|txt|json|ya?ml|toml|rds|rda|RData|Rproj|so|dll|png|jpe?g|gif|svg|pdf|html|css|js|mjs|ts|tsx|py|sh|bash|md)$/i;
         if (["r", "qmd", "rmd"].includes(langFamily(rel)) && /^[A-Za-z][\w.]*$/.test(imp.spec) && !R_FILE_EXT.test(imp.spec)) {
-          notePkgSite(pkgSites, imp.spec, rel);
+          notePkgSite(pkgSites, imp.spec, rel, imp.origin ?? "r");
         }
         noteImport(imp, "unresolved", "not resolved within the selected graph; may be external or outside the modeled import forms");
         continue;
@@ -468,8 +473,10 @@ export const assembleGraphWithIndex = async (
       const name = alias ? call.callee.slice(alias.alias!.length + 1) : call.callee;
       const pkgQual = PKG_QUALIFIER.exec(call.callee);
       if (pkgQual && ["r", "qmd", "rmd"].includes(langFamily(rel))) notePkgSite(pkgQuals, pkgQual[1]!, rel);
-      const cands = (byName.get(name.toLowerCase()) ?? []).filter((i) => !bend ||
-        (nodes[i]!.lang === "Bend" && nodes[i]!.name === name && nodes[i]!.file === (alias?.file ?? rel)));
+      // Section markers are navigation, not callables: a call whose name
+      // matches a `# Title ----` line never invokes the marker.
+      const cands = (byName.get(name.toLowerCase()) ?? []).filter((i) => nodes[i]!.kind !== "section" && (!bend ||
+        (nodes[i]!.lang === "Bend" && nodes[i]!.name === name && nodes[i]!.file === (alias?.file ?? rel))));
       if (!cands.length || cands.length > 48) continue;
       let strategy: EdgeEvidence["strategy"] = "same-file-symbol";
       let chosen: number[] = cands.filter((i) => nodes[i]!.file === rel);
@@ -499,9 +506,14 @@ export const assembleGraphWithIndex = async (
     for (const key of new Set([...pkgSites.keys(), ...pkgQuals.keys()])) {
       const name = pkgSites.get(key)?.name ?? pkgQuals.get(key)!.name;
       const declaredState = declaredHas(name);
+      // Python chunk imports join the same pkg: surfaces but are not R
+      // dependencies: label them Python packages and skip R classification.
+      const origins = new Set([...(pkgSites.get(key)?.origins ?? []), ...(pkgQuals.get(key)?.origins ?? [])]);
+      const fromPython = origins.has("python");
+      const label = fromPython ? (origins.has("r") ? "package" : "Python package") : "R package";
       const idx = addNode(nodes, seen, {
         id: `pkg:${name}`, name, kind: "package", file: "", line: 0,
-        sig: `R package ${name}${declaredState === undefined ? "" : declaredState ? " · declared in DESCRIPTION" : R_BASE_PACKAGES.has(name.toLowerCase()) ? " · base package" : " · used without DESCRIPTION entry"}`,
+        sig: `${label} ${name}${fromPython ? "" : declaredState === undefined ? "" : declaredState ? " · declared in DESCRIPTION" : R_BASE_PACKAGES.has(name.toLowerCase()) ? " · base package" : " · used without DESCRIPTION entry"}`,
         lang: "external",
       });
       const importFiles = pkgSites.get(key)?.files ?? new Set<string>();

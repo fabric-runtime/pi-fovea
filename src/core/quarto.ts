@@ -47,7 +47,7 @@ export const extractQuarto = (file: string, text: string): QuartoFacts => {
       } else {
         for (let i = 0; i < body.length; i++) {
           const py = PY_IMPORT.exec(body[i]!);
-          if (py) facts.imports.push({ file, line: i + 1 + offset, spec: (py[1] ?? py[2])! });
+          if (py) facts.imports.push({ file, line: i + 1 + offset, spec: (py[1] ?? py[2])!, origin: "python" });
         }
       }
     }

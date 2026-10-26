@@ -141,6 +141,8 @@ export interface ImportSite {
   alias?: string;
   /** Captured computed expression; absent bounds mean the target is unresolved. */
   dynamic?: { prefix?: string; suffix?: string };
+  /** Import origin language for notebook chunks: python packages are not R dependencies. */
+  origin?: "r" | "python";
 }
 export interface CallSite { file: string; line: number; callee: string; }
 export interface LiteralSite { file: string; line: number; text: string; }

@@ -271,6 +271,25 @@ describe("R source reader", () => {
     ]);
   });
 
+  it("does not emit section markers from inside multi-line strings", () => {
+    const text = [
+      'sql <- "SELECT 1',
+      "# Query ----",
+      '"',
+      "real <- function(x) x",
+    ].join("\n");
+    const facts = extractR("strsec.R", text);
+    expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
+      ["sql", "decl"], ["real", "function"],
+    ]);
+  });
+
+  it("never resolves calls to section markers", async () => {
+    const graph = await graphFor({ "a.R": "# Fit ----\nFit <- function(x) x\nrun <- function() Fit(1)\n" });
+    const invokes = graph.edges.filter((edge) => edge.kind === "invokes");
+    expect(invokes.map((edge) => [graph.nodes[edge.a]!.id, graph.nodes[edge.b]!.id])).toEqual([["run@a.R", "Fit@a.R"]]);
+  });
+
   it("keeps standalone and consolidated facts identical without a grammar", async () => {
     const root = fixture({ "stats.R": program });
     const source = makeFileSource(root);

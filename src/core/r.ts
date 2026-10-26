@@ -124,6 +124,7 @@ export const extractR = (file: string, text: string): RFacts => {
     const line = at + 1;
     // Mask comments (#, #!, #') and string bodies, preserving offsets.
     // Escapes consume the following character, including an escaped quote.
+    const startsInString = quote !== ""; // a string opened on an earlier line owns this line
     let code = "";
     let visible = "";
     const strings: Array<{ start: number; text: string }> = [];
@@ -204,8 +205,10 @@ export const extractR = (file: string, text: string): RFacts => {
     }
     // Section markers live entirely in comments, so `code` is empty and
     // the shared `decl` helper below never sees them; record them directly.
+    // A line that starts inside a string body is string content, not a
+    // marker, no matter how it reads.
     const section = SECTION.exec(raw);
-    if (section && depth === 0 && classes.length === 0) {
+    if (section && !startsInString && depth === 0 && classes.length === 0) {
       const sig = raw.trim();
       facts.symbols.push({ file, line, name: section[1]!.trim(), kind: "section", sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig, lang: "R" });
     }
