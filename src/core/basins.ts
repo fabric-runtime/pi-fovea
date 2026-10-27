@@ -7,7 +7,11 @@
 // outward by best conductance-to-membership ratio until the cut exceeds the
 // basin's internal average (conductance cut). Bounded, deterministic.
 
-export interface Basin { seed: number; members: number[]; mass: number; }
+export interface Basin {
+  seed: number;
+  members: number[];
+  mass: number;
+}
 
 const MAX_BASINS = 12;
 const MAX_BASIN_SIZE = 64;
@@ -47,7 +51,8 @@ export const detectBasins = (
     const deg = (adjacency.get(i) ?? []).length;
     if (deg >= 2 && (conductance[i] ?? 0) > 0 && (!eligible || eligible(i))) {
       const tri = triScore(i);
-      if (tri >= 0.08 || deg >= 6) candidates.push([i, (conductance[i] ?? 0) * (0.25 + 0.75 * tri) + deg * 0.02]);
+      if (tri >= 0.08 || deg >= 6)
+        candidates.push([i, (conductance[i] ?? 0) * (0.25 + 0.75 * tri) + deg * 0.02]);
     }
   }
   candidates.sort((a, b2) => b2[1] - a[1]);
@@ -73,7 +78,10 @@ export const detectBasins = (
         if (claimed.has(j) || members.has(j) || (include && !include(j))) continue;
         const total = [...(adjacency.get(j) ?? [])].reduce((s, e) => s + e.w, 0);
         const ratio = total > 0 ? inW / total : 0;
-        if (ratio > bestRatio) { bestRatio = ratio; best = j; }
+        if (ratio > bestRatio) {
+          bestRatio = ratio;
+          best = j;
+        }
       }
       // Ratio = share of the candidate's total weight pointing into the
       // basin. Small tight groups admit low first-step ratios, so the floor

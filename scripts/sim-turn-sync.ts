@@ -10,14 +10,16 @@ import { focus, type OpResult } from "../src/core/ops";
 import { resetSyncBaselines, sync, type SyncOutcome } from "../src/core/sync";
 import { resetSessions } from "../src/core/session";
 
-const SATELLITE = process.env.PI_FOVEA_SATELLITE_DIR ?? join(homedir(), "VCS/working-remote/open-source");
+const SATELLITE =
+  process.env.PI_FOVEA_SATELLITE_DIR ?? join(homedir(), "VCS/working-remote/open-source");
 const SIM = join(tmpdir(), "pi-fovea-sim");
 
 const banner = (s: string) => console.log(`\n\x1b[1m== ${s} ==\x1b[0m`);
 const turn = (s: string) => console.log(`\n\x1b[2m- turn: ${s}\x1b[0m`);
 const msg = (label: string, s: string) => console.log(`\x1b[33m[${label}]\x1b[0m\n${s}\n`);
 const toolOut = (r: OpResult, cap = 1400) => {
-  const body = r.text.length > cap ? r.text.slice(0, cap) + "\n...(truncated for this demo)" : r.text;
+  const body =
+    r.text.length > cap ? r.text.slice(0, cap) + "\n...(truncated for this demo)" : r.text;
   console.log(`\x1b[36m[tool result ~${r.tokens} tok]\x1b[0m\n${body}\n`);
 };
 
@@ -25,9 +27,15 @@ const sandbox = (src: string, name: string): string => {
   const dest = join(SIM, name);
   rmSync(dest, { recursive: true, force: true });
   try {
-    execFileSync("sh", ["-c", `mkdir -p "${dest}" && git archive HEAD | tar -x -C "${dest}"`], { cwd: src, stdio: "pipe" });
+    execFileSync("sh", ["-c", `mkdir -p "${dest}" && git archive HEAD | tar -x -C "${dest}"`], {
+      cwd: src,
+      stdio: "pipe",
+    });
   } catch {
-    cpSync(src, dest, { recursive: true, filter: (p) => !/node_modules|dist|\.git|_build/.test(p) });
+    cpSync(src, dest, {
+      recursive: true,
+      filter: (p) => !/node_modules|dist|\.git|_build/.test(p),
+    });
   }
   return dest;
 };
@@ -40,7 +48,9 @@ const simulateTurnEnd = async (root: string, touched: string[]): Promise<SyncOut
   } else if (outcome.red && outcome.text) {
     msg(`sendMessage steer+triggerTurn ~${outcome.tokens} tok -> MODEL CONTEXT`, outcome.text);
   } else {
-    console.log(`\x1b[32m(sync: changed but actionless — silent to model; optional clean notification)\x1b[0m`);
+    console.log(
+      `\x1b[32m(sync: changed but actionless — silent to model; optional clean notification)\x1b[0m`,
+    );
   }
   return outcome;
 };
@@ -82,7 +92,10 @@ const scenarioOpenmux = async (): Promise<void> => {
   const p = join(root, "src/cli/parse.ts");
   const src = readFileSync(p, "utf8");
   const fn = src.match(/export (?:function|const) (\w+)/)?.[1];
-  if (!fn) { console.log("(no exported symbol matched — scenario skipped)"); return; }
+  if (!fn) {
+    console.log("(no exported symbol matched — scenario skipped)");
+    return;
+  }
   const renamed = src
     .replace(`export function ${fn}`, `export function ${fn}V2`)
     .replace(`export const ${fn} =`, `export const ${fn}V2 =`);
@@ -96,7 +109,10 @@ const scenarioQuickbeam = async (): Promise<void> => {
   await newSessionAt(root);
 
   const p = join(root, "src/pool.ts");
-  if (!existsSync(p)) { console.log("(src/pool.ts missing — scenario skipped)"); return; }
+  if (!existsSync(p)) {
+    console.log("(src/pool.ts missing — scenario skipped)");
+    return;
+  }
   turn("model edits src/pool.ts internals twice");
   writeFileSync(p, readFileSync(p, "utf8") + "\n// note: children supervised under Pool\n");
   await simulateTurnEnd(root, ["src/pool.ts"]);
@@ -114,10 +130,13 @@ const scenarioNOMAD = async (): Promise<void> => {
   turn("model adds @Get('health') to airports.controller.ts");
   const c = join(root, "server/src/nest/airports/airports.controller.ts");
   const orig = readFileSync(c, "utf8");
-  writeFileSync(c, orig.replace(
-    "  @Get('search')",
-    "  @Get('health')\n  health(): { ok: true } {\n    return { ok: true };\n  }\n\n  @Get('search')",
-  ));
+  writeFileSync(
+    c,
+    orig.replace(
+      "  @Get('search')",
+      "  @Get('health')\n  health(): { ok: true } {\n    return { ok: true };\n  }\n\n  @Get('search')",
+    ),
+  );
   await simulateTurnEnd(root, ["server/src/nest/airports/airports.controller.ts"]);
 
   turn("model reverts it");
@@ -134,5 +153,7 @@ try {
   await scenarioOpenmux();
   await scenarioNOMAD();
 } finally {
-  console.log(`\n\x1b[2m(sandboxes kept at ${SIM} · ran in ${((Date.now() - t0) / 1000).toFixed(1)}s)\x1b[0m`);
+  console.log(
+    `\n\x1b[2m(sandboxes kept at ${SIM} · ran in ${((Date.now() - t0) / 1000).toFixed(1)}s)\x1b[0m`,
+  );
 }

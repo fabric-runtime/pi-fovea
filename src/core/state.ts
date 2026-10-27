@@ -14,7 +14,7 @@ import {
 import type { DiscoveryReport, ExtractionReport, FactStore, FileFacts } from "./build.js";
 import { assembleGraphWithIndex } from "./graph.js";
 import { gitOut, gitProbe, gitReflogAction } from "./git.js";
-import { ROOT_CACHE_LIMIT, envInt, yieldToLoop } from "./asyncutil.js";
+import { ROOT_CACHE_LIMIT, envInt, trimMap, yieldToLoop } from "./asyncutil.js";
 import { loadRepoRules } from "./anchors.js";
 import { buildCsr, type Csr } from "./heat.js";
 import type { JoinIndex } from "./join.js";
@@ -83,12 +83,10 @@ const touch = (root: string): RepoState | undefined => {
 };
 
 const evictLru = (): void => {
-  while (states.size > ROOT_CACHE_LIMIT) {
-    const oldest = states.keys().next().value!;
-    states.delete(oldest);
+  trimMap(states, ROOT_CACHE_LIMIT, (oldest) => {
     inflight.delete(oldest);
     clearPersistTimer(oldest);
-  }
+  });
 };
 
 /** Warm state if present (does not block). */
@@ -121,7 +119,9 @@ const factPass = <T>(job: () => Promise<T>): Promise<T> => {
 const graphGeneration = (graph: Graph): string => {
   const hash = createHash("sha1");
   for (const node of graph.nodes) {
-    hash.update(JSON.stringify([node.id, node.kind, node.file, node.line, node.lang, node.sig])).update("\0");
+    hash
+      .update(JSON.stringify([node.id, node.kind, node.file, node.line, node.lang, node.sig]))
+      .update("\0");
   }
   for (const edge of graph.edges) {
     hash.update(JSON.stringify([edge.a, edge.b, edge.kind, edge.w, edge.evidence])).update("\n");
@@ -136,15 +136,26 @@ const stateVersion = (
   rulesSha: string,
   extraction: ExtractionReport,
   discovery: DiscoveryReport,
-): string => createHash("sha1")
-  .update(Object.entries(facts).map(([file, value]) => `${file}:${value.sha1}`).sort().join("\n"))
-  .update("\0").update(files.join("\n"))
-  .update("\0").update(rulesSha)
-  .update("\0").update(generation)
-  .update("\0").update(JSON.stringify(extraction))
-  .update("\0").update(JSON.stringify(discovery))
-  .digest("hex")
-  .slice(0, 12);
+): string =>
+  createHash("sha1")
+    .update(
+      Object.entries(facts)
+        .map(([file, value]) => `${file}:${value.sha1}`)
+        .sort()
+        .join("\n"),
+    )
+    .update("\0")
+    .update(files.join("\n"))
+    .update("\0")
+    .update(rulesSha)
+    .update("\0")
+    .update(generation)
+    .update("\0")
+    .update(JSON.stringify(extraction))
+    .update("\0")
+    .update(JSON.stringify(discovery))
+    .digest("hex")
+    .slice(0, 12);
 
 const assembleState = async (
   root: string,
@@ -167,26 +178,58 @@ const assembleState = async (
   await yieldToLoop();
   const csr = buildCsr(graph);
   await yieldToLoop();
-  const adjacency = new Map<number, Array<{ to: number; kind: string; w: number; evidence?: EdgeEvidence }>>();
+  const adjacency = new Map<
+    number,
+    Array<{ to: number; kind: string; w: number; evidence?: EdgeEvidence }>
+  >();
   for (const edge of graph.edges) {
     (adjacency.get(edge.a) ?? adjacency.set(edge.a, []).get(edge.a)!).push({
-      to: edge.b, kind: edge.kind, w: edge.w, evidence: edge.evidence,
+      to: edge.b,
+      kind: edge.kind,
+      w: edge.w,
+      evidence: edge.evidence,
     });
     (adjacency.get(edge.b) ?? adjacency.set(edge.b, []).get(edge.b)!).push({
-      to: edge.a, kind: edge.kind, w: edge.w, evidence: edge.evidence,
+      to: edge.a,
+      kind: edge.kind,
+      w: edge.w,
+      evidence: edge.evidence,
     });
   }
   // impact's path-reason walk used to sort a fresh copy of this list per
   // visited node; identical comparator, pre-sorted once here.
   for (const list of adjacency.values()) {
-    list.sort((a, b) => Number(a.kind === "contains") - Number(b.kind === "contains") || b.w - a.w || a.to - b.to);
+    list.sort(
+      (a, b) =>
+        Number(a.kind === "contains") - Number(b.kind === "contains") || b.w - a.w || a.to - b.to,
+    );
   }
   // History memory rides alongside the graph, not in it. Impact re-seeds the
   // partners of a change at recency-decayed strength; focus/sketch stay pure
   // structure. Cached by HEAD + tracked set, so a rebuild is cheap.
   const history = await coChangeHistory(root, files);
   const stamp = Date.now();
-  return { root, version, generation, graph, csr, joinIndex, facts, extraction, discovery, adjacency, store, files, gitKind, head, dirty, history, probedAt: stamp, walkedAt: stamp, sweptAt: stamp };
+  return {
+    root,
+    version,
+    generation,
+    graph,
+    csr,
+    joinIndex,
+    facts,
+    extraction,
+    discovery,
+    adjacency,
+    store,
+    files,
+    gitKind,
+    head,
+    dirty,
+    history,
+    probedAt: stamp,
+    walkedAt: stamp,
+    sweptAt: stamp,
+  };
 };
 
 const requireExtractionBackend = async (files: readonly string[]): Promise<void> => {
@@ -214,11 +257,23 @@ const buildState = async (root: string): Promise<RepoState> => {
   const files = listing.files;
   await requireExtractionBackend(files);
   const { store, report } = await factPass(() => loadFacts(root, files));
-  return assembleState(root, files, store, report, listing.report, gitKind, probe?.head,
-    new Set(probe ? probe.changes.map((c) => c.path).filter((p) => p && !p.endsWith("/")) : []));
+  return assembleState(
+    root,
+    files,
+    store,
+    report,
+    listing.report,
+    gitKind,
+    probe?.head,
+    new Set(probe ? probe.changes.map((c) => c.path).filter((p) => p && !p.endsWith("/")) : []),
+  );
 };
 
-const refreshState = async (state: RepoState, hints: string[] = [], force = false): Promise<RepoState> => {
+const refreshState = async (
+  state: RepoState,
+  hints: string[] = [],
+  force = false,
+): Promise<RepoState> => {
   const now = Date.now();
   // No probe-short-circuit across turns: git porcelain is ~40ms behind the
   // spawn gate and is the correctness oracle; plain roots gate on their own
@@ -236,7 +291,9 @@ const refreshState = async (state: RepoState, hints: string[] = [], force = fals
   // foreign work and keep the loud drift path, and reflog-less repos stay
   // conservative (undefined -> false).
   let checkout = false;
-  const hinted = [...new Set([...filterSupported(hints, routeRes), ...hints.filter((h) => store.facts.has(h))])];
+  const hinted = [
+    ...new Set([...filterSupported(hints, routeRes), ...hints.filter((h) => store.facts.has(h))]),
+  ];
   changed.push(...hinted);
 
   // Progressive disclosure: a nested repository stays outside this root's
@@ -246,7 +303,10 @@ const refreshState = async (state: RepoState, hints: string[] = [], force = fals
   // no orphan facts behind.
   let disclosureChanged = false;
   for (const boundary of [...store.enrolled]) {
-    const exists = await stat(join(state.root, boundary, ".git")).then(() => true, () => false);
+    const exists = await stat(join(state.root, boundary, ".git")).then(
+      () => true,
+      () => false,
+    );
     if (!exists) {
       store.enrolled.delete(boundary);
       disclosureChanged = true;
@@ -256,7 +316,10 @@ const refreshState = async (state: RepoState, hints: string[] = [], force = fals
   for (const h of hinted) {
     let covered = false;
     for (const b of store.enrolled) {
-      if (h.startsWith(b + "/")) { covered = true; break; }
+      if (h.startsWith(b + "/")) {
+        covered = true;
+        break;
+      }
     }
     if (!covered) {
       known ??= new Set(state.files);
@@ -267,7 +330,10 @@ const refreshState = async (state: RepoState, hints: string[] = [], force = fals
     for (const seg of h.split("/").slice(0, -1)) {
       prefix = prefix ? `${prefix}/${seg}` : seg;
       if (store.enrolled.has(prefix)) continue;
-      const boundary = await stat(join(state.root, prefix, ".git")).then(() => true, () => false);
+      const boundary = await stat(join(state.root, prefix, ".git")).then(
+        () => true,
+        () => false,
+      );
       if (!boundary) continue;
       store.enrolled.add(prefix);
       disclosureChanged = true;
@@ -287,12 +353,23 @@ const refreshState = async (state: RepoState, hints: string[] = [], force = fals
       // ignore-rule edits, and HEAD changes refresh the full ledger once.
       const statusPaths = new Set(probe.changes.map((change) => change.path).filter(Boolean));
       const dirtyPathRemoved = [...state.dirty].some((path) => !statusPaths.has(path));
-      const membershipPathAdded = probe.changes.some((change) =>
-        !state.dirty.has(change.path) && /[?ADRCT]/.test(change.code));
-      const ignoreRulesChanged = probe.changes.some((change) =>
-        change.path === ".gitignore" || change.path.endsWith("/.gitignore") || change.path === ".gitmodules");
-      let needsList = probe.relist || disclosureChanged || headMoved || dirtyPathRemoved
-        || membershipPathAdded || ignoreRulesChanged || probe.changes.some((change) => change.path.endsWith("/"));
+      const membershipPathAdded = probe.changes.some(
+        (change) => !state.dirty.has(change.path) && /[?ADRCT]/.test(change.code),
+      );
+      const ignoreRulesChanged = probe.changes.some(
+        (change) =>
+          change.path === ".gitignore" ||
+          change.path.endsWith("/.gitignore") ||
+          change.path === ".gitmodules",
+      );
+      let needsList =
+        probe.relist ||
+        disclosureChanged ||
+        headMoved ||
+        dirtyPathRemoved ||
+        membershipPathAdded ||
+        ignoreRulesChanged ||
+        probe.changes.some((change) => change.path.endsWith("/"));
       if (probe.changes.length) {
         // Porcelain collapses any drift inside a nested checkout (submodule
         // or embedded repo: HEAD move, dirty content, untracked files) to
@@ -300,7 +377,14 @@ const refreshState = async (state: RepoState, hints: string[] = [], force = fals
         // edit event: enroll the boundary and relist. Pushing its path into
         // the file pipeline would fail stat and masquerade as unreadable.
         const dirFlags = await Promise.all(
-          probe.changes.map((c) => !c.path.endsWith("/") && stat(join(state.root, c.path)).then((s) => s.isDirectory(), () => false)),
+          probe.changes.map(
+            (c) =>
+              !c.path.endsWith("/") &&
+              stat(join(state.root, c.path)).then(
+                (s) => s.isDirectory(),
+                () => false,
+              ),
+          ),
         );
         probe.changes.forEach((c, i) => {
           if (!dirFlags[i]) return;
@@ -343,7 +427,10 @@ const refreshState = async (state: RepoState, hints: string[] = [], force = fals
           // stat is the arbiter: a restored file whose facts were dropped
           // with the deletion must come back through changed, not sit
           // deleted until its next porcelain-visible edit.
-          const onDisk = await stat(join(state.root, p)).then((s) => s.isFile(), () => false);
+          const onDisk = await stat(join(state.root, p)).then(
+            (s) => s.isFile(),
+            () => false,
+          );
           if (onDisk) changed.push(p);
           else if (store.facts.has(p) || store.failedSha.has(p)) deleted.push(p);
         }
@@ -377,35 +464,58 @@ const refreshState = async (state: RepoState, hints: string[] = [], force = fals
     refreshFacts(state.root, store, files, [...new Set(changed)], [...new Set(deleted)]),
   );
   const noDelta =
-    !stats.reExtracted.length && !stats.deleted.length && !stats.added.length && files.length === state.files.length;
+    !stats.reExtracted.length &&
+    !stats.deleted.length &&
+    !stats.added.length &&
+    files.length === state.files.length;
   if (noDelta) {
     state.probedAt = Date.now();
     state.extraction = report; // reports are state-wide (taint/unreadable live in the store)
     state.discovery = discovery;
     state.files = files;
-    state.version = stateVersion(state.facts, state.generation, files, store.rulesSha, report, discovery);
+    state.version = stateVersion(
+      state.facts,
+      state.generation,
+      files,
+      store.rulesSha,
+      report,
+      discovery,
+    );
     return state;
   }
-  const fresh = await assembleState(state.root, files, store, report, discovery, state.gitKind, state.head, state.dirty);
+  const fresh = await assembleState(
+    state.root,
+    files,
+    store,
+    report,
+    discovery,
+    state.gitKind,
+    state.head,
+    state.dirty,
+  );
   if (checkout) fresh.checkout = true;
   states.set(state.root, fresh);
   return fresh;
 };
 
-export const ensureState = (root: string, opts: { hints?: string[]; force?: boolean } = {}): Promise<RepoState> => {
+export const ensureState = (
+  root: string,
+  opts: { hints?: string[]; force?: boolean } = {},
+): Promise<RepoState> => {
   const pending = inflight.get(root);
   if (pending) return pending;
   const warm = touch(root);
-  const p: Promise<RepoState> = (warm
+  const p: Promise<RepoState> = warm
     ? refreshState(warm, opts.hints, opts.force)
     : (async () => {
         const st = await stat(root).catch(() => undefined);
-        if (!st?.isDirectory()) throw new Error(`fovea: root does not exist or is not a directory: ${root}`);
+        if (!st?.isDirectory())
+          throw new Error(`fovea: root does not exist or is not a directory: ${root}`);
         const state = await buildState(root);
         states.set(root, state);
         evictLru();
         return state;
-      })());
+      })();
   inflight.set(root, p);
   const clear = (): void => {
     if (inflight.get(root) === p) inflight.delete(root);
@@ -442,7 +552,8 @@ const relativeRequest = (root: string, input: string): string | undefined => {
   const rootPath = resolve(root);
   const absolute = isAbsolute(raw) ? resolve(raw) : resolve(rootPath, raw);
   const rel = relative(rootPath, absolute);
-  if (!rel || rel === "." || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return undefined;
+  if (!rel || rel === "." || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel))
+    return undefined;
   return rel.split(sep).join("/");
 };
 
@@ -463,52 +574,109 @@ export const explainPathCoverage = async (
   for (const input of requested) {
     const rel = relativeRequest(state.root, input);
     if (!rel) {
-      out.push({ requested: input, status: "outside-root", reason: "path does not name a file inside the repository root" });
+      out.push({
+        requested: input,
+        status: "outside-root",
+        reason: "path does not name a file inside the repository root",
+      });
       continue;
     }
-    const closed = state.discovery.closedBoundaries.find((boundary) =>
-      rel === boundary || rel.startsWith(`${boundary}/`));
+    const closed = state.discovery.closedBoundaries.find(
+      (boundary) => rel === boundary || rel.startsWith(`${boundary}/`),
+    );
     if (closed) {
-      out.push({ requested: input, path: rel, status: "closed-boundary", reason: `nested repository ${closed} is not enrolled or readable` });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "closed-boundary",
+        reason: `nested repository ${closed} is not enrolled or readable`,
+      });
       continue;
     }
-    const unreadableDirectory = state.discovery.unreadableDirectories.find((directory) =>
-      directory === "." || rel === directory || rel.startsWith(`${directory}/`));
+    const unreadableDirectory = state.discovery.unreadableDirectories.find(
+      (directory) => directory === "." || rel === directory || rel.startsWith(`${directory}/`),
+    );
     if (unreadableDirectory) {
-      out.push({ requested: input, path: rel, status: "unreadable", reason: `discovery could not traverse ${unreadableDirectory}` });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "unreadable",
+        reason: `discovery could not traverse ${unreadableDirectory}`,
+      });
       continue;
     }
     if (state.discovery.unavailableFiles.includes(rel)) {
-      out.push({ requested: input, path: rel, status: "unavailable", reason: "Git listed the path but the worktree entry was unavailable" });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "unavailable",
+        reason: "Git listed the path but the worktree entry was unavailable",
+      });
       continue;
     }
     const onDisk = await stat(join(state.root, rel)).catch(() => undefined);
     if (!onDisk) {
-      out.push({ requested: input, path: rel, status: "missing", reason: "path does not exist in this worktree" });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "missing",
+        reason: "path does not exist in this worktree",
+      });
       continue;
     }
     if (!onDisk.isFile()) {
-      out.push({ requested: input, path: rel, status: "not-file", reason: "path is not a regular file" });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "not-file",
+        reason: "path is not a regular file",
+      });
       continue;
     }
     if (failed.has(rel)) {
-      out.push({ requested: input, path: rel, status: "partial", reason: "one or more extraction stages failed for this file" });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "partial",
+        reason: "one or more extraction stages failed for this file",
+      });
       continue;
     }
     if (unreadable.has(rel)) {
-      out.push({ requested: input, path: rel, status: "unreadable", reason: "file could not be read during extraction" });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "unreadable",
+        reason: "file could not be read during extraction",
+      });
       continue;
     }
     if (oversized.has(rel)) {
-      out.push({ requested: input, path: rel, status: "oversized", reason: "file exceeds the byte cap for its type (FOVEA_MAX_FILE_BYTES or FOVEA_MAX_PROTO_FILE_BYTES)" });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "oversized",
+        reason:
+          "file exceeds the byte cap for its type (FOVEA_MAX_FILE_BYTES or FOVEA_MAX_PROTO_FILE_BYTES)",
+      });
       continue;
     }
     if (generated.has(rel)) {
-      out.push({ requested: input, path: rel, status: "generated", reason: "file was classified as machine-generated source" });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "generated",
+        reason: "file was classified as machine-generated source",
+      });
       continue;
     }
     if (indexed.has(rel)) {
-      out.push({ requested: input, path: rel, status: "indexed", reason: "file is present in this graph generation" });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "indexed",
+        reason: "file is present in this graph generation",
+      });
       continue;
     }
     const exclusion = discoveryExclusionReason(rel);
@@ -517,7 +685,12 @@ export const explainPathCoverage = async (
       continue;
     }
     if (!filterSupported([rel], routeRes).length) {
-      out.push({ requested: input, path: rel, status: "unsupported", reason: "file type has no structural or protocol extractor" });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "unsupported",
+        reason: "file type has no structural or protocol extractor",
+      });
       continue;
     }
     let prefix = "";
@@ -525,20 +698,33 @@ export const explainPathCoverage = async (
     for (const segment of rel.split("/").slice(0, -1)) {
       prefix = prefix ? `${prefix}/${segment}` : segment;
       if (state.store.enrolled.has(prefix)) continue;
-      const marker = await stat(join(state.root, prefix, ".git")).then(() => true, () => false);
+      const marker = await stat(join(state.root, prefix, ".git")).then(
+        () => true,
+        () => false,
+      );
       if (marker) {
         closedBoundary = prefix;
         break;
       }
     }
     if (closedBoundary) {
-      out.push({ requested: input, path: rel, status: "closed-boundary", reason: `nested repository ${closedBoundary} is not enrolled` });
+      out.push({
+        requested: input,
+        path: rel,
+        status: "closed-boundary",
+        reason: `nested repository ${closedBoundary} is not enrolled`,
+      });
       continue;
     }
     if (state.gitKind === "git") {
       const ignored = await gitOut(state.root, ["check-ignore", "--", rel]);
       if (ignored?.trim()) {
-        out.push({ requested: input, path: rel, status: "excluded", reason: "excluded by Git ignore rules" });
+        out.push({
+          requested: input,
+          path: rel,
+          status: "excluded",
+          reason: "excluded by Git ignore rules",
+        });
         continue;
       }
     }
@@ -548,13 +734,19 @@ export const explainPathCoverage = async (
         requested: input,
         path: rel,
         status: "omitted",
-        reason: omitted === null
-          ? `discovery stopped at FOVEA_MAX_FILES=${state.discovery.maxFiles}`
-          : `omitted by FOVEA_MAX_FILES=${state.discovery.maxFiles} (${omitted} supported files omitted)`,
+        reason:
+          omitted === null
+            ? `discovery stopped at FOVEA_MAX_FILES=${state.discovery.maxFiles}`
+            : `omitted by FOVEA_MAX_FILES=${state.discovery.maxFiles} (${omitted} supported files omitted)`,
       });
       continue;
     }
-    out.push({ requested: input, path: rel, status: "not-indexed", reason: "file was outside the current discovery snapshot" });
+    out.push({
+      requested: input,
+      path: rel,
+      status: "not-indexed",
+      reason: "file was outside the current discovery snapshot",
+    });
   }
   return out;
 };
@@ -563,7 +755,9 @@ export const explainPathCoverage = async (
  * Fire-and-forget indexing. started=true when this call kicked a cold build;
  * the completion is always awaitable via the returned promise.
  */
-export const ensureStateBackground = (root: string): { started: boolean; promise: Promise<RepoState> } => {
+export const ensureStateBackground = (
+  root: string,
+): { started: boolean; promise: Promise<RepoState> } => {
   if (states.has(root) || inflight.has(root)) {
     return { started: false, promise: ensureState(root) };
   }

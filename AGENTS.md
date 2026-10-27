@@ -8,7 +8,7 @@ Finish a change with the change-scoped check:
 bun run check:fast
 ```
 
-Bend laws and generated-kernel parity, typecheck, then only the tests your
+gdp-wired laws and generated-kernel parity, typecheck, then only the tests your
 working tree touches. Do not replace this selection with the full suite.
 There is **no extension build step**: pi loads the extension
 from `src/` via jiti, so green checks on the files you touched mean the change
@@ -67,23 +67,71 @@ second. There is no cross-platform matrix: nothing in `src/` or `tests/` branche
 on `process.platform`.
 
 Publishing runs `prepack` (`check:proofs` then `build:cli`), never the suite.
-The CLI build checks the generated artifact receipt without invoking Bend and
+The CLI build checks the generated artifact receipt without loading the prover and
 rejects unbundled dependencies other than Node built-ins. Before a release, run
 `bun run check:package`: it checks a real Bun tarball outside the checkout,
 including receipt hashes, entry points, licenses and compiler-free execution.
 `bun run check:package path/to/package.tgz` checks an existing archive; publish
 that same checked tarball with `bun publish path/to/package.tgz`.
 
-## Executed Bend kernels
+## Readable authored sources
 
-`LAWS.bend` names the actual exports of `proofs/kernel.bend`. Keep specifications
-independent; never weaken a law to make a proof pass. After editing proof sources,
-the ABI, bridge, or adapters: `bun run proofs:generate`, review the generated JS,
-then `bun run check:fast`. Do not hand-edit `src/verified/generated/`.
-The compiler is pinned to Bend 2.0.26. Unsafe definitions, unsafe Base primitives,
-foreign/remote imports and escaping local imports are forbidden. Installed Fovea
-needs no Bend executable, loader, or extension build; generated JS is committed.
-See `docs/proofs.md` for executed guarantees versus model-only heat algebra.
+Use `bun run format` for authored TypeScript/JavaScript and root JSON configuration,
+and `bun run format:check` to verify without rewriting. Prettier is pinned. Do not
+format semantic files in `tests/fixtures/` or edit `src/verified/generated/` directly;
+the proof generator emits readable JavaScript and declarations itself. Authored
+proofs, runtime bridges, and proof checkers are TypeScript, included in the strict
+root `tsconfig.json`, and run through `tsx` in development. Keep small packaging and
+corpus scripts as directly executable Node ESM where appropriate.
+
+## Executed gdp-wired kernels
+
+`proofs/kernel.ts` and `proofs/controls.ts` are the executable policies;
+`proofs/laws.ts` supplies independent specifications. `proofs/ledger.json` lists
+all required laws. Never weaken a law to make a proof pass. After changing proof
+sources, the ABI, bridge, or adapters: `bun run proofs:generate`, review generated
+JS, then `bun run check:fast`. Do not hand-edit `src/verified/generated/`.
+gdp-wired is pinned to 0.30.1. Require proven && checked; unproved foreign facts,
+effectful proof imports, and escaping local imports are forbidden. Installed
+Fovea loads only generated JavaScript, never the prover. See `docs/proofs.md`
+for executed policies, exact scalar certificates, and remaining numerical gaps.
+
+## Generated arithmetic streams
+
+`proofs/streams.ts` defines five executable digit machines; `scripts/check-streams.ts`
+checks 98 claims including unbounded prefix reconstruction, termination, intermediate
+bounds and ghost erasure. `bun run check:streams` is a quick local check and needs
+no Lean. Do not compile ghost state or pass unproved premises to corollary checks.
+Runtime codecs must enforce parameter bounds; generated steps enforce input kinds.
+The generated module is `src/verified/generated/streams.js`. Keep host packing and
+outer traversal obligations separate; this is not a proof of the entire evaluator.
+
+## Constructive scalar-series foundation
+
+`proofs/series.ts` proves 23 natural/rational claims, including a uniform
+all-future-prefix Cauchy bound and an explicit modulus. `bun run check:series`
+needs no Lean. These are mathematical model proofs, not yet a proof of the
+complete matrix-exponential evaluator; retain the certificate assumptions.
+`scripts/prove-polynomial.ts` is untrusted search. Every returned tree must pass
+`gdp-wired/kernel.check`; do not turn its products, cuts or failed searches into
+assumed facts. Support lists may only remove hypotheses. Derived premises must
+already be checked in the same state context; never import input-dependent
+claims as unconditional state facts.
+
+## Independent Lean numerical models
+
+`proofs/lean` contains 28 model theorems, not proofs of the production TypeScript
+loops. Do not claim runtime correspondence or remove certificate assumptions
+on the strength of these models. `scripts/check-lean.ts` pins Lean/mathlib,
+audits every required theorem's axioms, and rejects proof escapes.
+
+After changing a Lean input, use the pinned checkout described in
+`docs/proofs.md`: `FOVEA_MATHLIB_ROOT=... bun run check:lean --write`, then
+`bun run proofs:generate` and `bun run check:fast`. Run heavy checks on Modal.
+Normal checks/prepack verify the Lean receipt without invoking Lean;
+CI/releases additionally run the full proof check. Keep the required-theorem
+inventory and standard-axiom allowlist strict, and keep mathlib/cache artifacts
+outside the checkout and published packages.
 
 ## Cache invalidation
 

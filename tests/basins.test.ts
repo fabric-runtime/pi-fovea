@@ -5,7 +5,10 @@ import { detectBasins } from "../src/core/basins.js";
 
 type Adj = Map<number, Array<{ to: number; kind: string; w: number }>>;
 
-const build = (edges: Array<[number, number, number]>, n: number): { adjacency: Adj; cond: Float64Array } => {
+const build = (
+  edges: Array<[number, number, number]>,
+  n: number,
+): { adjacency: Adj; cond: Float64Array } => {
   const adjacency: Adj = new Map();
   const cond = new Float64Array(n);
   for (const [a, b, w] of edges) {
@@ -20,7 +23,10 @@ const build = (edges: Array<[number, number, number]>, n: number): { adjacency: 
 describe("detectBasins", () => {
   it("separates two dense clusters joined by a weak bridge", () => {
     const edges: Array<[number, number, number]> = [];
-    for (const grp of [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9]]) {
+    for (const grp of [
+      [0, 1, 2, 3, 4],
+      [5, 6, 7, 8, 9],
+    ]) {
       for (const i of grp) for (const j of grp) if (i < j) edges.push([i, j, 1]);
     }
     edges.push([4, 5, 0.05]); // weak bridge
@@ -36,14 +42,19 @@ describe("detectBasins", () => {
   });
 
   it("pure star topology yields no basin (no community)", () => {
-    const edges: Array<[number, number, number]> = [1, 2, 3, 4, 5].map((j) => [0, j, 1] as [number, number, number]);
+    const edges: Array<[number, number, number]> = [1, 2, 3, 4, 5].map(
+      (j) => [0, j, 1] as [number, number, number],
+    );
     const { adjacency, cond } = build(edges, 6);
     expect(detectBasins(adjacency, cond, 6)).toEqual([]);
   });
 
   it("eligibility filter excludes file/anchor-style nodes", () => {
     const edges: Array<[number, number, number]> = [];
-    for (const grp of [[0, 1, 2, 3], [4, 5, 6, 7]]) {
+    for (const grp of [
+      [0, 1, 2, 3],
+      [4, 5, 6, 7],
+    ]) {
       for (const i of grp) for (const j of grp) if (i < j) edges.push([i, j, 1]);
     }
     const { adjacency, cond } = build(edges, 8);

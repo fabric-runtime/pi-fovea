@@ -5,23 +5,56 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { hasAstGrep } from "../src/core/astgrep.js";
-import { extractCalls, extractImports, extractLiterals, extractSymbols } from "../src/core/extract.js";
+import {
+  extractCalls,
+  extractImports,
+  extractLiterals,
+  extractSymbols,
+} from "../src/core/extract.js";
 import { compileMethods, extractAnchors, extractFileRoutes } from "../src/core/anchors.js";
 import type { SymbolRec } from "../src/core/types.js";
 
 const FIXTURE = new URL("./fixtures/mini", import.meta.url).pathname;
-const CODE = ["server/main.go", "server/users.go", "server/config.go", "web/api.ts", "web/types.ts", "web/api.test.ts", "web/airports.controller.ts", "web/server-switcher.ts", "worker/jobs.py", "worker/search.rs"];
-const ECO = ["server/mux.go", "server/SpringUsersController.java", "worker/urls.py", "server/routes.rb", "server/router.ex", "server/App.kt", "web/api.ts", "worker/jobs.py"];
-const FILE_ROUTES = ["app/api/orders/route.ts", "app/(shop)/reports/page.tsx", "pages/api/health.ts", "src/routes/channels/[name]/+server.ts", "server/api/session.get.ts"];
+const CODE = [
+  "server/main.go",
+  "server/users.go",
+  "server/config.go",
+  "web/api.ts",
+  "web/types.ts",
+  "web/api.test.ts",
+  "web/airports.controller.ts",
+  "web/server-switcher.ts",
+  "worker/jobs.py",
+  "worker/search.rs",
+];
+const ECO = [
+  "server/mux.go",
+  "server/SpringUsersController.java",
+  "worker/urls.py",
+  "server/routes.rb",
+  "server/router.ex",
+  "server/App.kt",
+  "web/api.ts",
+  "worker/jobs.py",
+];
+const FILE_ROUTES = [
+  "app/api/orders/route.ts",
+  "app/(shop)/reports/page.tsx",
+  "pages/api/health.ts",
+  "src/routes/channels/[name]/+server.ts",
+  "server/api/session.get.ts",
+];
 const ALL = [...CODE, "openapi.yaml"];
 
-const enclosing = (syms: SymbolRec[]) => (file: string, line: number): string | undefined => {
-  let best: SymbolRec | undefined;
-  for (const s of syms.filter((x) => x.file === file)) {
-    if (s.line <= line && (!best || s.line > best.line)) best = s;
-  }
-  return best ? `${best.name}@${best.file}` : `file:${file}`;
-};
+const enclosing =
+  (syms: SymbolRec[]) =>
+  (file: string, line: number): string | undefined => {
+    let best: SymbolRec | undefined;
+    for (const s of syms.filter((x) => x.file === file)) {
+      if (s.line <= line && (!best || s.line > best.line)) best = s;
+    }
+    return best ? `${best.name}@${best.file}` : `file:${file}`;
+  };
 
 describe.skipIf(!hasAstGrep())("extraction (ast-grep present)", () => {
   it("extracts symbols across Go, TypeScript and Python via outline", async () => {
@@ -60,12 +93,15 @@ describe.skipIf(!hasAstGrep())("extraction (ast-grep present)", () => {
     expect(byId.get("User.id@web/api.ts")?.line).toBe(4);
     expect(byId.get("UserSearch.new@worker/search.rs")?.line).toBe(9);
     expect(byId.get("UserSearch.fetch@worker/search.rs")?.line).toBe(13);
-    expect(byId.get("AirportsController.search@web/airports.controller.ts")?.lineApproximate).not.toBe(true);
+    expect(
+      byId.get("AirportsController.search@web/airports.controller.ts")?.lineApproximate,
+    ).not.toBe(true);
   });
 
   it("extracts imports across languages", async () => {
     const imps = await extractImports(CODE, FIXTURE);
-    const has = (file: string, spec: string) => imps.some((i) => i.file === file && i.spec === spec);
+    const has = (file: string, spec: string) =>
+      imps.some((i) => i.file === file && i.spec === spec);
     expect(has("web/api.ts", "./types")).toBe(true);
     expect(has("web/api.test.ts", "./api")).toBe(true);
     expect(has("server/main.go", "github.com/acme/app/server")).toBe(true);
@@ -74,7 +110,8 @@ describe.skipIf(!hasAstGrep())("extraction (ast-grep present)", () => {
 
   it("extracts call sites with callee names", async () => {
     const calls = await extractCalls(CODE, FIXTURE);
-    const has = (file: string, callee: string) => calls.some((c) => c.file === file && c.callee === callee);
+    const has = (file: string, callee: string) =>
+      calls.some((c) => c.file === file && c.callee === callee);
     expect(has("server/users.go", "LoadUser")).toBe(true);
     expect(has("server/users.go", "SaveUser")).toBe(true);
     expect(has("web/api.ts", "fetch")).toBe(true);
@@ -156,7 +193,9 @@ describe.skipIf(!hasAstGrep())("extraction (ast-grep present)", () => {
       writeFileSync(
         join(root, "tables.h"),
         "static const int tiny_ok[3] = { 1, 2, 3 };\n\n" +
-          "static const long big_table[] = {\n" + pad + "};\n\n" +
+          "static const long big_table[] = {\n" +
+          pad +
+          "};\n\n" +
           "static long use_tables(void) { return big_table[0] + tiny_ok[1]; }\n",
       );
       const syms = await extractSymbols(["tables.h"], root);

@@ -8,21 +8,31 @@ import type { SymbolRec } from "../src/core/types.js";
 
 const FIXTURE = new URL("./fixtures/mini", import.meta.url).pathname;
 const DOCUMENTS = ["contracts/users.proto", "server/schema.graphql", "web/load-user.graphql"];
-const CODE = ["web/users.grpc.ts", "server/trpc.ts", "web/trpc-client.ts", "worker/events.py", "web/events.ts"];
+const CODE = [
+  "web/users.grpc.ts",
+  "server/trpc.ts",
+  "web/trpc-client.ts",
+  "worker/events.py",
+  "web/events.ts",
+];
 
-const enclosing = (symbols: SymbolRec[]) => (file: string, line: number): string | undefined => {
-  let best: SymbolRec | undefined;
-  for (const symbol of symbols) {
-    if (symbol.file === file && symbol.line <= line && (!best || symbol.line > best.line)) best = symbol;
-  }
-  return best ? `${best.name}@${best.file}` : `file:${file}`;
-};
+const enclosing =
+  (symbols: SymbolRec[]) =>
+  (file: string, line: number): string | undefined => {
+    let best: SymbolRec | undefined;
+    for (const symbol of symbols) {
+      if (symbol.file === file && symbol.line <= line && (!best || symbol.line > best.line))
+        best = symbol;
+    }
+    return best ? `${best.name}@${best.file}` : `file:${file}`;
+  };
 
 describe("exact protocol documents", () => {
   it("anchors protobuf RPCs and matching GraphQL root fields without a model", async () => {
     const anchors = await extractProtocolAnchors(DOCUMENTS, makeFileSource(FIXTURE));
     const byId = new Map<string, typeof anchors>();
-    for (const item of anchors) (byId.get(item.id) ?? byId.set(item.id, []).get(item.id)!).push(item);
+    for (const item of anchors)
+      (byId.get(item.id) ?? byId.set(item.id, []).get(item.id)!).push(item);
 
     expect(byId.get("RPC users.v1.Users/GetUser")).toMatchObject([
       { file: "contracts/users.proto", ruleId: "proto-rpc-declaration" },
@@ -55,12 +65,18 @@ describe("exact protocol documents", () => {
       "server/schema.graphql",
       "web/load-user.graphql",
     ]);
-    expect(byId.get("GRAPHQL TYPE Query")?.some((item) =>
-      item.ruleId === "graphql-inline-fragment-type" && item.line === 2,
-    )).toBe(true);
-    expect(byId.get("GRAPHQL TYPE UserFilter")).toContainEqual(expect.objectContaining(
-      { file: "web/load-user.graphql", line: 1, ruleId: "graphql-variable-type" },
-    ));
+    expect(
+      byId
+        .get("GRAPHQL TYPE Query")
+        ?.some((item) => item.ruleId === "graphql-inline-fragment-type" && item.line === 2),
+    ).toBe(true);
+    expect(byId.get("GRAPHQL TYPE UserFilter")).toContainEqual(
+      expect.objectContaining({
+        file: "web/load-user.graphql",
+        line: 1,
+        ruleId: "graphql-variable-type",
+      }),
+    );
     expect(byId.has("GRAPHQL TYPE true")).toBe(false);
     expect(byId.get("GRAPHQL TYPE User")?.map((item) => item.ruleId)).toEqual([
       "graphql-field-type",
@@ -109,12 +125,18 @@ describe.skipIf(!hasAstGrep())("exact protocol call shapes", () => {
     expect(sites).toContain("CHANNEL users.changed@web/events.ts");
     expect(sites.some((site) => site.startsWith("RPC users.v1.Users/Computed@"))).toBe(false);
     expect(sites.some((site) => site.startsWith("CHANNEL users.computed@"))).toBe(false);
-    expect(anchors.find((item) => item.id === "TRPC loadUser" && item.file === "server/trpc.ts")?.ruleId)
-      .toBe("trpc-procedure-declaration:query");
-    expect(anchors.find((item) => item.id === "CHANNEL users.changed" && item.file === "worker/events.py")?.ruleId)
-      .toBe("message-channel-call:publish");
-    expect(anchors.find((item) => item.id === "CHANNEL users.changed" && item.file === "web/events.ts")?.ruleId)
-      .toBe("message-channel-call:subscribe");
+    expect(
+      anchors.find((item) => item.id === "TRPC loadUser" && item.file === "server/trpc.ts")?.ruleId,
+    ).toBe("trpc-procedure-declaration:query");
+    expect(
+      anchors.find(
+        (item) => item.id === "CHANNEL users.changed" && item.file === "worker/events.py",
+      )?.ruleId,
+    ).toBe("message-channel-call:publish");
+    expect(
+      anchors.find((item) => item.id === "CHANNEL users.changed" && item.file === "web/events.ts")
+        ?.ruleId,
+    ).toBe("message-channel-call:subscribe");
     expect(anchors.every((item) => typeof item.ruleId === "string")).toBe(true);
   });
 });
@@ -131,14 +153,28 @@ describe.skipIf(!hasAstGrep())("orpc and hono call shapes", () => {
     expect(sites).toContain("ORPC echo@server/orpc.ts");
     expect(sites).toContain("ORPC listPlanet@server/orpc.ts");
     expect(sites).toContain("ORPC findPlanet@server/orpc.ts");
-    expect(anchors.find((item) => item.id === "ORPC ping")?.ruleId).toBe("orpc-procedure-declaration:route");
-    expect(anchors.find((item) => item.id === "ORPC pong")).toMatchObject({ line: 11, ruleId: "orpc-procedure-declaration:handler" });
-    expect(anchors.find((item) => item.id === "ORPC echo")).toMatchObject({ line: 12, ruleId: "orpc-procedure-declaration:handler" });
-    expect(anchors.find((item) => item.id === "ORPC listPlanet")).toMatchObject({ line: 15, ruleId: "orpc-procedure-declaration:handler" });
+    expect(anchors.find((item) => item.id === "ORPC ping")?.ruleId).toBe(
+      "orpc-procedure-declaration:route",
+    );
+    expect(anchors.find((item) => item.id === "ORPC pong")).toMatchObject({
+      line: 11,
+      ruleId: "orpc-procedure-declaration:handler",
+    });
+    expect(anchors.find((item) => item.id === "ORPC echo")).toMatchObject({
+      line: 12,
+      ruleId: "orpc-procedure-declaration:handler",
+    });
+    expect(anchors.find((item) => item.id === "ORPC listPlanet")).toMatchObject({
+      line: 15,
+      ruleId: "orpc-procedure-declaration:handler",
+    });
     expect(sites.some((site) => site.startsWith("ORPC detachedHandler@"))).toBe(false);
     expect(sites.some((site) => site.startsWith("ORPC wrongRoot@"))).toBe(false);
     expect(sites).toContain("TRPC createUser@server/trpc.ts");
-    expect(anchors.find((item) => item.id === "TRPC createUser")).toMatchObject({ line: 18, ruleId: "trpc-procedure-declaration:mutation" });
+    expect(anchors.find((item) => item.id === "TRPC createUser")).toMatchObject({
+      line: 18,
+      ruleId: "trpc-procedure-declaration:mutation",
+    });
   });
 
   it("anchors Hono routes and joins the RPC client to the server-declared hub", async () => {
@@ -146,7 +182,8 @@ describe.skipIf(!hasAstGrep())("orpc and hono call shapes", () => {
     const symbols = await extractSymbols(FILES, FIXTURE);
     const anchors = await extractAnchors(FILES, FIXTURE, enclosing(symbols));
     const byId = new Map<string, typeof anchors>();
-    for (const item of anchors) (byId.get(item.id) ?? byId.set(item.id, []).get(item.id)!).push(item);
+    for (const item of anchors)
+      (byId.get(item.id) ?? byId.set(item.id, []).get(item.id)!).push(item);
 
     expect(
       [...(byId.get("GET /posts") ?? [])]
@@ -162,8 +199,12 @@ describe.skipIf(!hasAstGrep())("orpc and hono call shapes", () => {
     expect(byId.get("PUT /posts/{*}")).toMatchObject([
       { file: "server/hono.ts", ruleId: "http-method-route-on" },
     ]);
-    expect(byId.get("ALL /wild")).toMatchObject([{ file: "server/hono.ts", ruleId: "http-route-call" }]);
-    expect(byId.get("ANY /middleware")).toMatchObject([{ file: "server/hono.ts", ruleId: "http-route-call" }]);
+    expect(byId.get("ALL /wild")).toMatchObject([
+      { file: "server/hono.ts", ruleId: "http-route-call" },
+    ]);
+    expect(byId.get("ANY /middleware")).toMatchObject([
+      { file: "server/hono.ts", ruleId: "http-route-call" },
+    ]);
     const ids = anchors.map((item) => item.id);
     expect(ids.some((id) => id.includes("purge"))).toBe(false);
     expect(ids.some((id) => id.includes("/a") || id.includes("/b"))).toBe(false);

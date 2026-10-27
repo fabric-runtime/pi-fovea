@@ -66,10 +66,13 @@ describe("co-change history heat", () => {
       files: ["a.ts", "b.ts", "c.ts"],
     };
     const history: CoChangeHistory = new Map<string, CoChangePartner[]>([
-      ["a.ts", [
-        { partner: "b.ts", w: 0.4, lastTs: NOW - 3 * DAY },
-        { partner: "c.ts", w: 0.5, lastTs: NOW - 1000 * DAY }, // ancient: must drop out
-      ]],
+      [
+        "a.ts",
+        [
+          { partner: "b.ts", w: 0.4, lastTs: NOW - 3 * DAY },
+          { partner: "c.ts", w: 0.5, lastTs: NOW - 1000 * DAY }, // ancient: must drop out
+        ],
+      ],
       ["b.ts", [{ partner: "a.ts", w: 0.4, lastTs: NOW - 3 * DAY }]],
     ]);
     const out = historySeedWeights(new Set(["a.ts"]), g, history, NOW);
@@ -82,7 +85,12 @@ describe("co-change history heat", () => {
 
 describe("co-change history mining (real git)", () => {
   const iso = (ms: number): string => new Date(ms).toISOString();
-  const commit = (root: string, msg: string, dateMs: number, files: Record<string, string>): void => {
+  const commit = (
+    root: string,
+    msg: string,
+    dateMs: number,
+    files: Record<string, string>,
+  ): void => {
     for (const [f, text] of Object.entries(files)) writeFileSync(join(root, f), text, "utf8");
     execSync("git add -A", { cwd: root });
     execSync(`git -c user.name=t -c user.email=t@t commit -qm "${msg}"`, {
@@ -153,10 +161,16 @@ describe.skipIf(!hasAstGrep())("impact history overlay on a real graph", () => {
       commit("joint2", Date.now() - DAY);
 
       await ensureState(root);
-      const r = await impact(root, { files: ["server/users.go"], includeUncommitted: false, budget: 4000 });
+      const r = await impact(root, {
+        files: ["server/users.go"],
+        includeUncommitted: false,
+        budget: 4000,
+      });
       expect(Number(r.details.historyPartners)).toBeGreaterThanOrEqual(1);
       const reasons = r.details.warmedReasons as Record<string, string[]>;
-      const withHistory = Object.entries(reasons).filter(([, arr]) => arr.includes("co-change history"));
+      const withHistory = Object.entries(reasons).filter(([, arr]) =>
+        arr.includes("co-change history"),
+      );
       expect(withHistory.length).toBeGreaterThan(0);
       expect(withHistory.some(([f]) => f === "server/main.go")).toBe(true);
     } finally {

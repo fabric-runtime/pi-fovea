@@ -1,12 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { assembleFactGraph, diffuseMass, SUBSTRATE_VERSION, type SnapshotFacts } from "../src/substrate.js";
+import {
+  assembleFactGraph,
+  certifyDiffusion,
+  diffuseMass,
+  SUBSTRATE_VERSION,
+  type SnapshotFacts,
+} from "../src/substrate.js";
 import { buildCsr, forwardHeat } from "../src/core/heat.js";
 
-const fact = (file: string, spec?: string): SnapshotFacts => ({ sha1: file, symbols: [], calls: [], literals: [], anchors: [], imports: spec ? [{ file, spec, line: 1 }] : [] });
+const fact = (file: string, spec?: string): SnapshotFacts => ({
+  sha1: file,
+  symbols: [],
+  calls: [],
+  literals: [],
+  anchors: [],
+  imports: spec ? [{ file, spec, line: 1 }] : [],
+});
 
 describe("snapshot substrate v1", () => {
   it("assembles supplied facts without discovering the current repository", async () => {
-    const graph = await assembleFactGraph(new Map([["a.ts", fact("a.ts", "./b.js")], ["b.ts", fact("b.ts")], ["alone.ts", fact("alone.ts")]]));
+    const graph = await assembleFactGraph(
+      new Map([
+        ["a.ts", fact("a.ts", "./b.js")],
+        ["b.ts", fact("b.ts")],
+        ["alone.ts", fact("alone.ts")],
+      ]),
+    );
     expect(SUBSTRATE_VERSION).toBe(1);
     expect(graph.files).toEqual(["a.ts", "alone.ts", "b.ts"]);
     expect(graph.edges).toHaveLength(1);
@@ -20,9 +39,28 @@ describe("snapshot substrate v1", () => {
     }
     expect([...source]).toEqual([2, 3, 0]);
   });
+  it("certifies the actual public diffusion output without changing it", async () => {
+    const graph = await assembleFactGraph(
+      new Map([
+        ["a.ts", fact("a.ts", "./b.js")],
+        ["b.ts", fact("b.ts")],
+      ]),
+    );
+    const source = new Float64Array([1, 0]),
+      expected = diffuseMass(graph, source, [4])[0]!.mass;
+    const certificate = await certifyDiffusion(graph, source, 4);
+    expect(certificate.value).toEqual(expected);
+    expect(certificate.withinTolerance).toBe(true);
+    expect(certificate.target).toBe("exact-edge-normalized-markov-heat");
+    expect(certificate.assumptions.length).toBeGreaterThan(0);
+  });
   it("rejects invalid witnesses and numerical inputs", async () => {
-    await expect(assembleFactGraph(new Map([["../escape.ts", fact("../escape.ts")]]))).rejects.toThrow("path");
-    await expect(assembleFactGraph(new Map([["a.ts", fact("b.ts", "./c")]]))).rejects.toThrow("Witness");
+    await expect(
+      assembleFactGraph(new Map([["../escape.ts", fact("../escape.ts")]])),
+    ).rejects.toThrow("path");
+    await expect(assembleFactGraph(new Map([["a.ts", fact("b.ts", "./c")]]))).rejects.toThrow(
+      "Witness",
+    );
     const graph = await assembleFactGraph(new Map([["a.ts", fact("a.ts")]]));
     expect(() => diffuseMass(graph, new Float64Array([-1]), [1])).toThrow("Mass");
     expect(() => diffuseMass(graph, new Float64Array([1]), [Infinity])).toThrow("scales");

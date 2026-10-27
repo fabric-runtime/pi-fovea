@@ -16,7 +16,13 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { ROOT_CACHE_LIMIT, OBSERVED_ROOT_LIMIT, envInt, forEachChunked, mapLimit } from "./asyncutil.js";
+import {
+  ROOT_CACHE_LIMIT,
+  OBSERVED_ROOT_LIMIT,
+  envInt,
+  forEachChunked,
+  mapLimit,
+} from "./asyncutil.js";
 import { gitProbe, gitReflogAction } from "./git.js";
 import { discoverFiles, filterSupported } from "./build.js";
 import { loadRepoRules } from "./anchors.js";
@@ -96,9 +102,18 @@ const setBaseline = (root: string, baseline: SyncBaseline): void => {
 
 export const resetSyncBaselines = (root?: string): void => {
   if (root !== undefined) {
-    baselines.delete(root); warmCache.delete(root); lastProbe.delete(root); coldSweeps.delete(root); boundaryProbes.delete(root); return;
+    baselines.delete(root);
+    warmCache.delete(root);
+    lastProbe.delete(root);
+    coldSweeps.delete(root);
+    boundaryProbes.delete(root);
+    return;
   }
-  baselines.clear(); warmCache.clear(); lastProbe.clear(); coldSweeps.clear(); boundaryProbes.clear();
+  baselines.clear();
+  warmCache.clear();
+  lastProbe.clear();
+  coldSweeps.clear();
+  boundaryProbes.clear();
 };
 
 // Send-path drift probe TTL. The at-most-once-per-window git porcelain probe
@@ -148,7 +163,7 @@ const CHANNEL_WEIGHT: Record<string, number> = {
   "call dependency": 1,
   "import dependency": 1,
   "test dependency": 1,
-  "inheritance": 1,
+  inheritance: 1,
   "shared route": 1,
   "co-change history": 0.5,
   "shared literal": 0.35,
@@ -208,7 +223,8 @@ const semanticDrift = (state: RepoState, prev: SyncBaseline): string[] => {
     (file) => prev.shas.get(file) !== state.facts[file]!.sha1,
   );
   return changed.filter(
-    (file) => prev.semantics.get(file) !== semanticFacts(state, file) && state.graph.byFile.has(file),
+    (file) =>
+      prev.semantics.get(file) !== semanticFacts(state, file) && state.graph.byFile.has(file),
   );
 };
 
@@ -219,7 +235,11 @@ export interface WarmParams {
   budget: number;
 }
 
-export const warmSync = async (root: string, params: WarmParams, state?: RepoState): Promise<void> => {
+export const warmSync = async (
+  root: string,
+  params: WarmParams,
+  state?: RepoState,
+): Promise<void> => {
   try {
     const cur = state ?? (await ensureState(root, { hints: params.files ?? [], force: false }));
     const prev = getBaseline(root);
@@ -235,7 +255,11 @@ export const warmSync = async (root: string, params: WarmParams, state?: RepoSta
     const next = await snapshot(cur);
     // The impact cascade runs against the same immutable state snapshot the
     // fingerprint used, so the cached pair is consistent for cur.version.
-    const result = await impact(root, { files, includeUncommitted: false, budget: params.budget }, cur);
+    const result = await impact(
+      root,
+      { files, includeUncommitted: false, budget: params.budget },
+      cur,
+    );
     warmCache.set(root, {
       version: cur.version,
       filesKey: key,
@@ -243,7 +267,9 @@ export const warmSync = async (root: string, params: WarmParams, state?: RepoSta
       warmedFiles: (result.details.warmedFiles as string[] | undefined) ?? [],
       warmedMass: (result.details.warmedMass as Record<string, number> | undefined) ?? {},
       warmReasons: (result.details.warmedReasons as Record<string, string[]> | undefined) ?? {},
-      warmedNodes: (result.details.warmedNodes as Record<string, { file: string; m: number; r: string[] }> | undefined) ?? {},
+      warmedNodes:
+        (result.details.warmedNodes as
+          Record<string, { file: string; m: number; r: string[] }> | undefined) ?? {},
     });
     while (warmCache.size > ROOT_CACHE_LIMIT) warmCache.delete(warmCache.keys().next().value!);
   } catch {
@@ -291,14 +317,32 @@ const semanticFacts = (state: RepoState, file: string): string => {
   if (cached !== undefined) return cached;
   const stable = (rows: unknown[][]): string[] => rows.map((row) => JSON.stringify(row)).sort();
   const compactSig = (sig: string): string => sig.replace(/\s+/g, " ").trim();
-  const value = createHash("sha1").update(JSON.stringify({
-    symbols: stable(facts.symbols.map((symbol) => [symbol.name, symbol.kind, compactSig(symbol.sig), symbol.lang])),
-    imports: stable(facts.imports.map((site) => [site.spec, site.alias])),
-    calls: stable(facts.calls.map((site) => [site.callee])),
-    literals: stable(facts.literals.map((site) => [site.text])),
-    anchors: stable(facts.anchors.map((anchor) => [anchor.id, anchor.kind, anchor.nodeId, anchor.implicit === true])),
-    sigs: Object.entries(facts.sigs ?? {}).sort(([a], [b]) => a.localeCompare(b)),
-  })).digest("hex");
+  const value = createHash("sha1")
+    .update(
+      JSON.stringify({
+        symbols: stable(
+          facts.symbols.map((symbol) => [
+            symbol.name,
+            symbol.kind,
+            compactSig(symbol.sig),
+            symbol.lang,
+          ]),
+        ),
+        imports: stable(facts.imports.map((site) => [site.spec, site.alias])),
+        calls: stable(facts.calls.map((site) => [site.callee])),
+        literals: stable(facts.literals.map((site) => [site.text])),
+        anchors: stable(
+          facts.anchors.map((anchor) => [
+            anchor.id,
+            anchor.kind,
+            anchor.nodeId,
+            anchor.implicit === true,
+          ]),
+        ),
+        sigs: Object.entries(facts.sigs ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+      }),
+    )
+    .digest("hex");
   semanticCache.set(facts, value);
   return value;
 };
@@ -308,23 +352,45 @@ const semanticFacts = (state: RepoState, file: string): string => {
 const coldSweeps = new Map<string, number>();
 const boundaryProbes = new Map<string, number>();
 const rememberProbe = (map: Map<string, number>, root: string): void => {
-  map.delete(root); map.set(root, Date.now());
+  map.delete(root);
+  map.set(root, Date.now());
   while (map.size > OBSERVED_ROOT_LIMIT) map.delete(map.keys().next().value!);
 };
-const coldManifestDrift = async (root: string, baseline: SyncBaseline, routes: RegExp[]): Promise<boolean> => {
+const coldManifestDrift = async (
+  root: string,
+  baseline: SyncBaseline,
+  routes: RegExp[],
+): Promise<boolean> => {
   // Explicit umbrella scopes keep the existing progressive-boundary oracle.
-  if ((baseline.closed || baseline.enrolled.size) && Date.now() - (boundaryProbes.get(root) ?? 0) >= 4000) {
-    rememberProbe(boundaryProbes, root); return true;
+  if (
+    (baseline.closed || baseline.enrolled.size) &&
+    Date.now() - (boundaryProbes.get(root) ?? 0) >= 4000
+  ) {
+    rememberProbe(boundaryProbes, root);
+    return true;
   }
   const listing = await discoverFiles(root, routes, baseline.enrolled);
-  if (listing.files.length !== baseline.files.length || listing.files.some((file, i) => file !== baseline.files[i])) return true;
+  if (
+    listing.files.length !== baseline.files.length ||
+    listing.files.some((file, i) => file !== baseline.files[i])
+  )
+    return true;
   const sweep = Date.now() - (coldSweeps.get(root) ?? baseline.capturedAt) >= 20_000;
-  const changed = await mapLimit(listing.files, 32, async file => {
+  const changed = await mapLimit(listing.files, 32, async (file) => {
     try {
-      const info = await stat(join(root, file)), before = baseline.meta.get(file);
+      const info = await stat(join(root, file)),
+        before = baseline.meta.get(file);
       if (!before || info.size !== before.size || info.mtimeMs !== before.mtime) return true;
-      return sweep && baseline.shas.has(file) && createHash("sha1").update(await readFile(join(root, file))).digest("hex") !== baseline.shas.get(file);
-    } catch { return true; }
+      return (
+        sweep &&
+        baseline.shas.has(file) &&
+        createHash("sha1")
+          .update(await readFile(join(root, file)))
+          .digest("hex") !== baseline.shas.get(file)
+      );
+    } catch {
+      return true;
+    }
   });
   if (sweep) rememberProbe(coldSweeps, root);
   return changed.some(Boolean);
@@ -332,19 +398,27 @@ const coldManifestDrift = async (root: string, baseline: SyncBaseline, routes: R
 const coldDrift = async (root: string, baseline: SyncBaseline): Promise<boolean> => {
   const rules = await loadRepoRules(root);
   if (rules.sha !== baseline.rulesSha) return true;
-  const routes = rules.fileRoutes.map(rule => new RegExp(rule.re));
+  const routes = rules.fileRoutes.map((rule) => new RegExp(rule.re));
   if (baseline.gitKind !== "git") return coldManifestDrift(root, baseline, routes);
   const probe = await gitProbe(root);
   if (!probe || probe.head !== baseline.head || probe.relist) return true;
   // Include formerly dirty paths so a revert to porcelain-clean is still drift.
-  const candidates = new Set([...baseline.dirty, ...probe.changes.map(change => change.path)]);
+  const candidates = new Set([...baseline.dirty, ...probe.changes.map((change) => change.path)]);
   for (const file of candidates) {
-    const path = join(root, file), info = await stat(path).catch(() => undefined);
+    const path = join(root, file),
+      info = await stat(path).catch(() => undefined);
     if (info?.isDirectory() || file.endsWith("/")) return coldManifestDrift(root, baseline, routes);
     if (!baseline.shas.has(file) && !filterSupported([file], routes).length) continue;
     try {
-      if (createHash("sha1").update(await readFile(path)).digest("hex") !== baseline.shas.get(file)) return true;
-    } catch { if (baseline.shas.has(file)) return true; }
+      if (
+        createHash("sha1")
+          .update(await readFile(path))
+          .digest("hex") !== baseline.shas.get(file)
+      )
+        return true;
+    } catch {
+      if (baseline.shas.has(file)) return true;
+    }
   }
   return false;
 };
@@ -358,9 +432,21 @@ const snapshot = async (state: RepoState): Promise<SyncBaseline> => {
     shas.set(file, facts.sha1);
     semantics.set(file, semanticFacts(state, file));
   });
-  return { version: state.version, capturedAt: Date.now(), anchors, shas, semantics, gitKind: state.gitKind, head: state.head,
-    dirty: new Set(state.dirty), files: [...state.files], meta: new Map(state.store.meta), enrolled: new Set(state.store.enrolled),
-    closed: state.discovery.closedBoundariesSeen > 0, rulesSha: state.store.rulesSha };
+  return {
+    version: state.version,
+    capturedAt: Date.now(),
+    anchors,
+    shas,
+    semantics,
+    gitKind: state.gitKind,
+    head: state.head,
+    dirty: new Set(state.dirty),
+    files: [...state.files],
+    meta: new Map(state.store.meta),
+    enrolled: new Set(state.store.enrolled),
+    closed: state.discovery.closedBoundariesSeen > 0,
+    rulesSha: state.store.rulesSha,
+  };
 };
 
 export const sync = async (
@@ -370,8 +456,15 @@ export const sync = async (
   opts?: { probe?: "cheap" | "full" | "defer"; current?: () => boolean },
 ): Promise<SyncOutcome> => {
   const isCurrent = () => opts?.current?.() !== false;
-  const cancelled = (): SyncOutcome => ({ structural: false, red: false, tokens: 0, details: { cancelled: true } });
-  const commitBaseline = (baseline: SyncBaseline): void => { if (isCurrent()) setBaseline(root, baseline); };
+  const cancelled = (): SyncOutcome => ({
+    structural: false,
+    red: false,
+    tokens: 0,
+    details: { cancelled: true },
+  });
+  const commitBaseline = (baseline: SyncBaseline): void => {
+    if (isCurrent()) setBaseline(root, baseline);
+  };
   if (!isCurrent()) return cancelled();
   if (params.sessionId && params.files?.length) observeSessionPaths(root, params.files);
   let state = now;
@@ -385,20 +478,33 @@ export const sync = async (
       // The blocking send hook must not serialize 32 cold Git/status probes.
       // Post-turn observation supplies the backstop; this is not a clean verdict.
       if (opts?.probe === "defer" && baseline) {
-        return { structural: false, red: false, tokens: 0, details: { version: baseline.version, cold: true, deferred: true } };
+        return {
+          structural: false,
+          red: false,
+          tokens: 0,
+          details: { version: baseline.version, cold: true, deferred: true },
+        };
       }
       if (baseline && !params.files?.length && !(await coldDrift(root, baseline))) {
-        return { structural: false, red: false, tokens: 0, details: { version: baseline.version, cold: true } };
+        return {
+          structural: false,
+          red: false,
+          tokens: 0,
+          details: { version: baseline.version, cold: true },
+        };
       }
       if (!isCurrent()) return cancelled();
       if (!getInflight(root)) {
         const kick = ensureStateBackground(root);
         // Restored roots receive their new baseline even if their graph is
         // paged out before the next hook. No 32-root rebuild carousel.
-        if (!baseline && opts?.current) void kick.promise.then(async built => {
-          const fresh = await snapshot(built);
-          if (isCurrent() && !baselines.has(root)) commitBaseline(fresh);
-        }).catch(() => {});
+        if (!baseline && opts?.current)
+          void kick.promise
+            .then(async (built) => {
+              const fresh = await snapshot(built);
+              if (isCurrent() && !baselines.has(root)) commitBaseline(fresh);
+            })
+            .catch(() => {});
       }
       return { structural: false, red: false, tokens: 0, details: { indexing: true } };
     }
@@ -414,7 +520,12 @@ export const sync = async (
         const due = Date.now() - (lastProbe.get(root) ?? 0) >= PROBE_TTL_MS;
         if (due && (await gitDriftSince(root, prev.shas))) {
           lastProbe.set(root, Date.now());
-          return { structural: true, red: false, tokens: 0, details: { version: warm.version, deferred: true } };
+          return {
+            structural: true,
+            red: false,
+            tokens: 0,
+            details: { version: warm.version, deferred: true },
+          };
         }
         if (due) lastProbe.set(root, Date.now());
         return { structural: false, red: false, tokens: 0, details: { version: warm.version } };
@@ -432,8 +543,14 @@ export const sync = async (
   if (!prev) {
     commitBaseline(await snapshot(state));
     return {
-      structural: true, red: false, tokens: 0,
-      details: { version: state.version, baseline: "established", anchors: state.graph.anchors.length },
+      structural: true,
+      red: false,
+      tokens: 0,
+      details: {
+        version: state.version,
+        baseline: "established",
+        anchors: state.graph.anchors.length,
+      },
     };
   }
 
@@ -442,11 +559,23 @@ export const sync = async (
   // fire a loud, useless steer on every switch, so the baseline just follows
   // the ref (details.baseline keeps the hooks' ack-clean notify silent too).
   // Heat memory belongs to the old ref's field and does not cross over.
-  if (state.checkout || (prev.gitKind === "git" && prev.head !== state.head && (await gitReflogAction(root))?.startsWith("checkout:"))) {
+  if (
+    state.checkout ||
+    (prev.gitKind === "git" &&
+      prev.head !== state.head &&
+      (await gitReflogAction(root))?.startsWith("checkout:"))
+  ) {
     commitBaseline(await snapshot(state));
     return {
-      structural: true, red: false, tokens: 0,
-      details: { version: state.version, checkout: true, baseline: "established", anchors: state.graph.anchors.length },
+      structural: true,
+      red: false,
+      tokens: 0,
+      details: {
+        version: state.version,
+        checkout: true,
+        baseline: "established",
+        anchors: state.graph.anchors.length,
+      },
     };
   }
 
@@ -496,17 +625,24 @@ export const sync = async (
     (file) => !(file in state.facts) && !existsSync(join(state.root, file)),
   );
   const deleted = allDeleted.filter(relevantFile);
-  const ignoredFiles = [...new Set([
-    ...allChanged.filter((file) => !relevantFile(file)),
-    ...allDeleted.filter((file) => !relevantFile(file)),
-  ])].sort();
+  const ignoredFiles = [
+    ...new Set([
+      ...allChanged.filter((file) => !relevantFile(file)),
+      ...allDeleted.filter((file) => !relevantFile(file)),
+    ]),
+  ].sort();
   const files = [...new Set([...semanticChanged, ...hinted])];
 
   // Coverage enrollment is not authored task drift. Adopt sibling-directory
   // changes silently so the broad umbrella graph stays current without
   // waking this session or replaying the same change on its next turn.
-  const outsideAttentionOnly = scopedSync && ignoredFiles.length > 0 &&
-    changed.length === 0 && deleted.length === 0 && added.length === 0 && removed.length === 0;
+  const outsideAttentionOnly =
+    scopedSync &&
+    ignoredFiles.length > 0 &&
+    changed.length === 0 &&
+    deleted.length === 0 &&
+    added.length === 0 &&
+    removed.length === 0;
   if (outsideAttentionOnly) {
     warmCache.delete(root);
     commitBaseline({
@@ -516,7 +652,9 @@ export const sync = async (
       pushed: prev.pushed,
     });
     return {
-      structural: true, red: false, tokens: 0,
+      structural: true,
+      red: false,
+      tokens: 0,
       details: {
         version: state.version,
         outsideAttention: true,
@@ -531,13 +669,13 @@ export const sync = async (
 
   const provenance: SyncProvenance | undefined = params.sessionId
     ? await attributeChanges(root, params.sessionId, prev.capturedAt, [
-      ...changed.map((file) => ({
-        file,
-        beforeSha: prev.shas.get(file),
-        afterSha: state.facts[file]!.sha1,
-      })),
-      ...deleted.map((file) => ({ file, beforeSha: prev.shas.get(file), afterSha: undefined })),
-    ])
+        ...changed.map((file) => ({
+          file,
+          beforeSha: prev.shas.get(file),
+          afterSha: state.facts[file]!.sha1,
+        })),
+        ...deleted.map((file) => ({ file, beforeSha: prev.shas.get(file), afterSha: undefined })),
+      ])
     : undefined;
 
   let warmReasons: Record<string, string[]> = {};
@@ -562,11 +700,22 @@ export const sync = async (
       // No prepared verdict and real drift on the send path: never run the
       // impact cascade under the TUI's finger. Leave the baseline untouched
       // so turn_end's full sync (the cheap backstop) reports and steers it.
-      return { structural: true, red: false, tokens: 0, details: { version: state.version, deferred: true } };
+      return {
+        structural: true,
+        red: false,
+        tokens: 0,
+        details: { version: state.version, deferred: true },
+      };
     } else {
-      const result = await impact(root, { files, includeUncommitted: false, budget: params.budget });
+      const result = await impact(root, {
+        files,
+        includeUncommitted: false,
+        budget: params.budget,
+      });
       warmReasons = (result.details.warmedReasons as Record<string, string[]> | undefined) ?? {};
-      warmNodes = (result.details.warmedNodes as Record<string, { file: string; m: number; r: string[] }> | undefined) ?? {};
+      warmNodes =
+        (result.details.warmedNodes as
+          Record<string, { file: string; m: number; r: string[] }> | undefined) ?? {};
     }
   }
 
@@ -618,7 +767,8 @@ export const sync = async (
   const suspectAdded = added.filter((id) => !evidence.has(currentCarrier.get(id) ?? ""));
   const evidentialAdded = added.filter((id) => !suspectAdded.includes(id));
   const evidentialRemoved = removed.filter((id) => !suspectRemoved.includes(id));
-  const structuralRed = (evidentialAdded.length - newlyImplicit.length) > 0 ||
+  const structuralRed =
+    evidentialAdded.length - newlyImplicit.length > 0 ||
     (evidentialRemoved.length > 0 && !degraded) ||
     deleted.some((file) => !isTestScope(file));
   const prevArmed = prev.warmthArmed !== false;
@@ -626,7 +776,9 @@ export const sync = async (
   const red = structuralRed || warmthFire;
   // Hysteresis: a red sync discloses its whole cascade, so the latch disarms
   // until total surprise drops into the re-arm fraction of the threshold.
-  const warmthArmed = red ? false : prevArmed || surpriseTotal <= params.steerThreshold * REARM_FRACTION;
+  const warmthArmed = red
+    ? false
+    : prevArmed || surpriseTotal <= params.steerThreshold * REARM_FRACTION;
   // Absorb on disclosure: every warmed file the message covers charges the
   // memory at its current adjusted mass, displayed or not.
   if (red) {
@@ -637,7 +789,12 @@ export const sync = async (
     }
   }
   const orderedWarm = [...surprise.entries()]
-    .sort((a, b) => b[1] - a[1] || Number(isTestScope(a[0])) - Number(isTestScope(b[0])) || a[0].localeCompare(b[0]))
+    .sort(
+      (a, b) =>
+        b[1] - a[1] ||
+        Number(isTestScope(a[0])) - Number(isTestScope(b[0])) ||
+        a[0].localeCompare(b[0]),
+    )
     .map(([file]) => file);
   commitBaseline({
     ...(preparedBaseline ?? (await snapshot(state))),
@@ -647,7 +804,9 @@ export const sync = async (
   });
   if (!red) {
     return {
-      structural: true, red: false, tokens: 0,
+      structural: true,
+      red: false,
+      tokens: 0,
       details: {
         version: state.version,
         anchorsDelta: added.length - removed.length,
@@ -671,20 +830,23 @@ export const sync = async (
     : deleted.length
       ? `deleted ${deleted.slice(0, 4).join(", ")}${deleted.length > 4 ? ` (+${deleted.length - 4} more)` : ""}`
       : "route structure";
-  const origin = provenance?.kind === "current-session"
-    ? "current session"
-    : provenance?.kind === "other-session"
-      ? "another Fovea-enabled session"
-      : provenance?.kind === "mixed"
-        ? "mixed sessions or mutation paths"
-        : "unattributed mutation path";
+  const origin =
+    provenance?.kind === "current-session"
+      ? "current session"
+      : provenance?.kind === "other-session"
+        ? "another Fovea-enabled session"
+        : provenance?.kind === "mixed"
+          ? "mixed sessions or mutation paths"
+          : "unattributed mutation path";
   const delivery = provenance?.kind === "other-session" ? "next-prompt" : "steer";
   const lines: string[] = [
     "Repository structure changed.",
     `Changed: ${changedSummary}`,
     ...(provenance ? [`Origin: ${origin}.`] : []),
   ];
-  for (const id of evidentialAdded.filter((anchor) => !newlyImplicit.includes(anchor)).slice(0, 6)) {
+  for (const id of evidentialAdded
+    .filter((anchor) => !newlyImplicit.includes(anchor))
+    .slice(0, 6)) {
     lines.push(`Route added: ${id}`);
   }
   // Degraded or carrier-less removals are suspect (extraction gaps look like
@@ -702,13 +864,15 @@ export const sync = async (
   // once per baseline chain. Route targets keep the advisory pending route
   // fuzzy-match quality, and the no-target case stays verdict-only. Pull
   // mode renders the advisory unconditionally.
-  const focusTarget = evidentialAdded.find((id) => !newlyImplicit.includes(id))?.replace(/^\w+\s+(?=\/)/, "")
-    ?? files[0]
-    ?? orderedWarm[0];
+  const focusTarget =
+    evidentialAdded.find((id) => !newlyImplicit.includes(id))?.replace(/^\w+\s+(?=\/)/, "") ??
+    files[0] ??
+    orderedWarm[0];
   const pushFocus = params.pushFocus !== false;
-  const actionLine = delivery === "next-prompt"
-    ? "Notice: review this concurrent update on the next prompt if it affects the task."
-    : "Steer: account for this update before continuing.";
+  const actionLine =
+    delivery === "next-prompt"
+      ? "Notice: review this concurrent update on the next prompt if it affects the task."
+      : "Steer: account for this update before continuing.";
   let embedded = false;
   if (pushFocus && focusTarget && focusTarget in state.facts && !pushed.has(focusTarget)) {
     const detailBudget = params.budget - Math.ceil([...lines, actionLine].join("\n").length / 4);
@@ -729,9 +893,11 @@ export const sync = async (
     }
   }
   if (!embedded && (!pushFocus || focusTarget)) {
-    lines.push(focusTarget
-      ? `Next: fovea_focus ${JSON.stringify(focusTarget)} to see what it now connects to.`
-      : "Next: fovea_sketch for the updated silhouette.");
+    lines.push(
+      focusTarget
+        ? `Next: fovea_focus ${JSON.stringify(focusTarget)} to see what it now connects to.`
+        : "Next: fovea_sketch for the updated silhouette.",
+    );
   }
   lines.push(actionLine);
   while (lines.length > 3 && Math.ceil(lines.join("\n").length / 4) > params.budget) {
@@ -739,7 +905,11 @@ export const sync = async (
   }
   const text = lines.join("\n");
   return {
-    structural: true, red: true, text, delivery, tokens: Math.ceil(text.length / 4),
+    structural: true,
+    red: true,
+    text,
+    delivery,
+    tokens: Math.ceil(text.length / 4),
     details: {
       version: state.version,
       added,

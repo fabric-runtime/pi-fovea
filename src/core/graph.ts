@@ -5,7 +5,15 @@ import { isTestFile, supportsImportExtraction } from "./extract.js";
 import { buildJoinIndex, type JoinIndex } from "./join.js";
 import type { AnchorDraft } from "./anchors.js";
 import type { FileFacts } from "./build.js";
-import type { Edge, EdgeEvidence, Graph, ImportCoverage, ImportSite, LiteralSite, NodeRec } from "./types.js";
+import type {
+  Edge,
+  EdgeEvidence,
+  Graph,
+  ImportCoverage,
+  ImportSite,
+  LiteralSite,
+  NodeRec,
+} from "./types.js";
 
 const CODE_EXTS_BY_LANGFAMILY: Record<string, string[]> = {
   ts: [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
@@ -90,10 +98,16 @@ const resolveImportToFile = (
 ): ImportResolution | undefined => {
   const { fileSet } = index;
   const fam = langFamily(fromFile);
-  const exact = (candidates: string[], strategy: EdgeEvidence["strategy"]): ImportResolution | undefined => {
+  const exact = (
+    candidates: string[],
+    strategy: EdgeEvidence["strategy"],
+  ): ImportResolution | undefined => {
     const hits = [...new Set(candidates)].filter((candidate) => fileSet.has(candidate));
     return hits.length
-      ? { file: hits[0]!, evidence: { strategy, rule: "import-resolve", source: spec, candidates: hits.length } }
+      ? {
+          file: hits[0]!,
+          evidence: { strategy, rule: "import-resolve", source: spec, candidates: hits.length },
+        }
       : undefined;
   };
   if (fam === "bend") {
@@ -132,7 +146,12 @@ const resolveImportToFile = (
         if (inDir.length) {
           return {
             file: inDir[0]!,
-            evidence: { strategy: "go-module-suffix", rule: "go-package-representative", source: spec, candidates: inDir.length },
+            evidence: {
+              strategy: "go-module-suffix",
+              rule: "go-package-representative",
+              source: spec,
+              candidates: inDir.length,
+            },
           };
         }
       }
@@ -145,10 +164,21 @@ const resolveImportToFile = (
     if (direct) return direct;
     const baseName = basename(modPath);
     const hits = (index.rsByBase.get(baseName) ?? []).filter(
-      (file) => file === `${baseName}.rs` || file.endsWith(`/${baseName}.rs`) || file.endsWith(`/${baseName}/mod.rs`),
+      (file) =>
+        file === `${baseName}.rs` ||
+        file.endsWith(`/${baseName}.rs`) ||
+        file.endsWith(`/${baseName}/mod.rs`),
     );
     return hits.length === 1
-      ? { file: hits[0]!, evidence: { strategy: "rust-module", rule: "import-resolve", source: spec, candidates: hits.length } }
+      ? {
+          file: hits[0]!,
+          evidence: {
+            strategy: "rust-module",
+            rule: "import-resolve",
+            source: spec,
+            candidates: hits.length,
+          },
+        }
       : undefined;
   }
   // TS bare specifier: node_modules or aliased; try a tail match.
@@ -158,11 +188,23 @@ const resolveImportToFile = (
     (file) => file.endsWith(`/${tail}.ts`) || file.endsWith(`/${tail}/index.ts`),
   );
   return hits.length === 1
-    ? { file: hits[0]!, evidence: { strategy: "typescript-tail", rule: "import-resolve", source: spec, candidates: hits.length } }
+    ? {
+        file: hits[0]!,
+        evidence: {
+          strategy: "typescript-tail",
+          rule: "import-resolve",
+          source: spec,
+          candidates: hits.length,
+        },
+      }
     : undefined;
 };
 
-interface ImportFamily { files: string[]; reason?: string; capped?: boolean }
+interface ImportFamily {
+  files: string[];
+  reason?: string;
+  capped?: boolean;
+}
 
 // Resolve only an in-scope literal path family, not arbitrary runtime values.
 // Refuse broad families rather than emitting an unexplained partial target set.
@@ -171,9 +213,16 @@ const importFamilyResolver = (files: string[]) => {
   const cache = new Map<string, ImportFamily>();
   return (site: ImportSite): ImportFamily => {
     const bounds = site.dynamic;
-    if (langFamily(site.file) !== "ts" || bounds?.prefix === undefined || bounds.suffix === undefined ||
-      (!bounds.prefix.startsWith("./") && !bounds.prefix.startsWith("../"))) {
-      return { files: [], reason: "computed target is not a bounded relative literal-prefix/suffix expression" };
+    if (
+      langFamily(site.file) !== "ts" ||
+      bounds?.prefix === undefined ||
+      bounds.suffix === undefined ||
+      (!bounds.prefix.startsWith("./") && !bounds.prefix.startsWith("../"))
+    ) {
+      return {
+        files: [],
+        reason: "computed target is not a bounded relative literal-prefix/suffix expression",
+      };
     }
     const joined = posix.join(posix.dirname(site.file), bounds.prefix);
     const prefix = joined === "." || joined === "./" ? "" : joined;
@@ -183,30 +232,45 @@ const importFamilyResolver = (files: string[]) => {
     const key = JSON.stringify([prefix, bounds.suffix]);
     const cached = cache.get(key);
     if (cached) return cached;
-    let lo = 0, hi = sorted.length;
+    let lo = 0,
+      hi = sorted.length;
     while (lo < hi) {
       const mid = (lo + hi) >>> 1;
-      if (sorted[mid]! < prefix) lo = mid + 1; else hi = mid;
+      if (sorted[mid]! < prefix) lo = mid + 1;
+      else hi = mid;
     }
     const hits: string[] = [];
     let examined = 0;
     for (let at = lo; at < sorted.length && sorted[at]!.startsWith(prefix); at++) {
       if (++examined > 4096) {
-        const result = { files: [], capped: true, reason: "computed family scan exceeded 4096 files; no possible edges emitted" };
+        const result = {
+          files: [],
+          capped: true,
+          reason: "computed family scan exceeded 4096 files; no possible edges emitted",
+        };
         cache.set(key, result);
         return result;
       }
       const file = sorted[at]!;
-      const runtime = file.replace(/\.tsx?$/, ".js").replace(/\.mts$/, ".mjs").replace(/\.cts$/, ".cjs");
+      const runtime = file
+        .replace(/\.tsx?$/, ".js")
+        .replace(/\.mts$/, ".mjs")
+        .replace(/\.cts$/, ".cjs");
       if (!file.endsWith(bounds.suffix) && !runtime.endsWith(bounds.suffix)) continue;
       hits.push(file);
       if (hits.length > 32) {
-        const result = { files: [], capped: true, reason: "computed family exceeds 32 possible targets; no possible edges emitted" };
+        const result = {
+          files: [],
+          capped: true,
+          reason: "computed family exceeds 32 possible targets; no possible edges emitted",
+        };
         cache.set(key, result);
         return result;
       }
     }
-    const result = hits.length ? { files: hits } : { files: [], reason: "no matching targets in the selected graph" };
+    const result = hits.length
+      ? { files: hits }
+      : { files: [], reason: "no matching targets in the selected graph" };
     cache.set(key, result);
     return result;
   };
@@ -221,7 +285,10 @@ const addNode = (nodes: NodeRec[], seen: Map<string, number>, rec: NodeRec): num
   return idx;
 };
 
-export interface GraphAssembly { graph: Graph; joinIndex: JoinIndex }
+export interface GraphAssembly {
+  graph: Graph;
+  joinIndex: JoinIndex;
+}
 
 export const assembleGraphWithIndex = async (
   root: string,
@@ -238,7 +305,13 @@ export const assembleGraphWithIndex = async (
   const byFile = new Map<string, number[]>();
   const fileIdx = new Map<string, number>();
 
-  const pushEdge = (a: number, b: number, kind: Edge["kind"], w: number, evidence: EdgeEvidence): void => {
+  const pushEdge = (
+    a: number,
+    b: number,
+    kind: Edge["kind"],
+    w: number,
+    evidence: EdgeEvidence,
+  ): void => {
     if (a === b) return;
     edges.push({ a, b, kind, w, evidence });
   };
@@ -246,8 +319,13 @@ export const assembleGraphWithIndex = async (
   // File nodes first (stable for enclosing fallback + sketch grouping).
   for (const rel of files) {
     const idx = addNode(nodes, seen, {
-      id: `file:${rel}`, name: posix.basename(rel), kind: "file", file: rel, line: 0,
-      sig: rel, lang: LANG_BY_EXT[rel.split(".").pop()?.toLowerCase() ?? ""] ?? "config",
+      id: `file:${rel}`,
+      name: posix.basename(rel),
+      kind: "file",
+      file: rel,
+      line: 0,
+      sig: rel,
+      lang: LANG_BY_EXT[rel.split(".").pop()?.toLowerCase() ?? ""] ?? "config",
     });
     fileIdx.set(rel, idx);
     (byFile.get(rel) ?? byFile.set(rel, []).get(rel)!).push(idx);
@@ -261,7 +339,11 @@ export const assembleGraphWithIndex = async (
     for (const s of f.symbols) {
       const idx = addNode(nodes, seen, { id: `${s.name}@${s.file}`, ...s });
       (byFile.get(rel) ?? byFile.set(rel, []).get(rel)!).push(idx);
-      pushEdge(fileIdx.get(rel)!, idx, "contains", 1.0, { strategy: "file-membership", rule: "symbol-contained-by-file", source: rel });
+      pushEdge(fileIdx.get(rel)!, idx, "contains", 1.0, {
+        strategy: "file-membership",
+        rule: "symbol-contained-by-file",
+        source: rel,
+      });
       const key = `${rel}:${s.line}`;
       if (!symIdxByFileLine.has(key)) symIdxByFileLine.set(key, idx);
     }
@@ -298,14 +380,36 @@ export const assembleGraphWithIndex = async (
   const importIndex = buildImportIndex(files);
   const resolveFamily = importFamilyResolver(files);
   const importCoverage: ImportCoverage = {
-    sites: 0, resolved: 0, possible: 0, unresolved: 0, capped: 0,
-    unsupportedLanguages: [...new Set(files.map((file) => LANG_BY_EXT[file.split(".").pop()?.toLowerCase() ?? ""])
-      .filter((language): language is string => !!language && !supportsImportExtraction(language)))].sort(),
-    examples: [], examplesOmitted: 0,
+    sites: 0,
+    resolved: 0,
+    possible: 0,
+    unresolved: 0,
+    capped: 0,
+    unsupportedLanguages: [
+      ...new Set(
+        files
+          .map((file) => LANG_BY_EXT[file.split(".").pop()?.toLowerCase() ?? ""])
+          .filter(
+            (language): language is string => !!language && !supportsImportExtraction(language),
+          ),
+      ),
+    ].sort(),
+    examples: [],
+    examplesOmitted: 0,
   };
-  const noteImport = (site: ImportSite, status: ImportCoverage["examples"][number]["status"], reason: string): void => {
+  const noteImport = (
+    site: ImportSite,
+    status: ImportCoverage["examples"][number]["status"],
+    reason: string,
+  ): void => {
     if (importCoverage.examples.length < 20) {
-      importCoverage.examples.push({ file: site.file, line: site.line, spec: site.spec.slice(0, 160), status, reason });
+      importCoverage.examples.push({
+        file: site.file,
+        line: site.line,
+        spec: site.spec.slice(0, 160),
+        status,
+        reason,
+      });
     } else importCoverage.examplesOmitted++;
   };
 
@@ -325,11 +429,18 @@ export const assembleGraphWithIndex = async (
           continue;
         }
         importCoverage.possible++;
-        noteImport(imp, "possible", `${family.files.length} literal-prefix/suffix targets; runtime values are not evaluated`);
+        noteImport(
+          imp,
+          "possible",
+          `${family.files.length} literal-prefix/suffix targets; runtime values are not evaluated`,
+        );
         for (const file of family.files) {
           pushEdge(fileIdx.get(rel)!, fileIdx.get(file)!, "imports", 0.15 / family.files.length, {
-            strategy: "computed-import-family", rule: "literal-prefix-suffix", source: imp.spec,
-            candidates: family.files.length, possible: true,
+            strategy: "computed-import-family",
+            rule: "literal-prefix-suffix",
+            source: imp.spec,
+            candidates: family.files.length,
+            possible: true,
           });
         }
         // Possible targets must not become exact call-resolution or test edges.
@@ -338,13 +449,20 @@ export const assembleGraphWithIndex = async (
       const target = resolveImportToFile(imp.spec, rel, importIndex);
       if (!target) {
         importCoverage.unresolved++;
-        noteImport(imp, "unresolved", "not resolved within the selected graph; may be external or outside the modeled import forms");
+        noteImport(
+          imp,
+          "unresolved",
+          "not resolved within the selected graph; may be external or outside the modeled import forms",
+        );
         continue;
       }
       importCoverage.resolved++;
       if (target.file === rel) continue;
       pushEdge(fileIdx.get(rel)!, fileIdx.get(target.file)!, "imports", 0.3, target.evidence);
-      (importTargets.get(rel) ?? importTargets.set(rel, []).get(rel)!).push({ ...target, alias: imp.alias });
+      (importTargets.get(rel) ?? importTargets.set(rel, []).get(rel)!).push({
+        ...target,
+        alias: imp.alias,
+      });
     }
     if (isTestFile(rel)) {
       for (const target of importTargets.get(rel) ?? []) {
@@ -368,12 +486,19 @@ export const assembleGraphWithIndex = async (
     const targets = importTargets.get(rel) ?? [];
     const imported = new Set(targets.map((target) => target.file));
     const bend = langFamily(rel) === "bend";
-    const aliases = bend ? targets.filter((target) => target.alias).sort((a, b) => b.alias!.length - a.alias!.length) : [];
+    const aliases = bend
+      ? targets.filter((target) => target.alias).sort((a, b) => b.alias!.length - a.alias!.length)
+      : [];
     for (const call of f.calls) {
       const alias = aliases.find((target) => call.callee.startsWith(`${target.alias}.`));
       const name = alias ? call.callee.slice(alias.alias!.length + 1) : call.callee;
-      const cands = (byName.get(name.toLowerCase()) ?? []).filter((i) => !bend ||
-        (nodes[i]!.lang === "Bend" && nodes[i]!.name === name && nodes[i]!.file === (alias?.file ?? rel)));
+      const cands = (byName.get(name.toLowerCase()) ?? []).filter(
+        (i) =>
+          !bend ||
+          (nodes[i]!.lang === "Bend" &&
+            nodes[i]!.name === name &&
+            nodes[i]!.file === (alias?.file ?? rel)),
+      );
       if (!cands.length || cands.length > 48) continue;
       let strategy: EdgeEvidence["strategy"] = "same-file-symbol";
       let chosen: number[] = cands.filter((i) => nodes[i]!.file === rel);
@@ -389,7 +514,12 @@ export const assembleGraphWithIndex = async (
       const w = cands.length <= 8 ? 0.7 : cands.length <= 24 ? 0.45 : 0.25;
       const from = enclosingIdx(rel, call.line);
       for (const to of chosen) {
-        pushEdge(from, to, "invokes", w, { strategy, rule: "call-target-resolution", source: call.callee, candidates: cands.length });
+        pushEdge(from, to, "invokes", w, {
+          strategy,
+          rule: "call-target-resolution",
+          source: call.callee,
+          candidates: cands.length,
+        });
       }
     }
   });
@@ -401,7 +531,10 @@ export const assembleGraphWithIndex = async (
       const candidates = byName.get(match[1]!.toLowerCase()) ?? [];
       for (const to of candidates) {
         pushEdge(i, to, "inherits", 0.9, {
-          strategy: "signature-extends", rule: "extends-clause", source: match[1]!, candidates: candidates.length,
+          strategy: "signature-extends",
+          rule: "extends-clause",
+          source: match[1]!,
+          candidates: candidates.length,
         });
       }
     }
@@ -412,7 +545,10 @@ export const assembleGraphWithIndex = async (
         const candidates = byName.get(name.toLowerCase()) ?? [];
         for (const to of candidates) {
           pushEdge(i, to, "inherits", 0.9, {
-            strategy: "signature-implements", rule: "implements-clause", source: name, candidates: candidates.length,
+            strategy: "signature-implements",
+            rule: "implements-clause",
+            source: name,
+            candidates: candidates.length,
           });
         }
       }
@@ -441,7 +577,9 @@ export const assembleGraphWithIndex = async (
   for (const [label, sites] of draftsByLabel) {
     const first = sites[0]!;
     const filesOf = [...new Set(sites.map((site) => site.file))];
-    const sources = [...new Set(sites.map((site) => site.ruleId).filter((source): source is string => !!source))].sort();
+    const sources = [
+      ...new Set(sites.map((site) => site.ruleId).filter((source): source is string => !!source)),
+    ].sort();
     // A hub is implicit only when EVERY site came from a discovered rule — a
     // match by any declared rule upgrades it back to first-class instantly.
     const hubImplicit = sites.every((site) => site.implicit === true);
@@ -456,8 +594,13 @@ export const assembleGraphWithIndex = async (
       ...(hubImplicit ? { implicit: true } : {}),
     });
     const idx = addNode(nodes, seen, {
-      id: `anchor:${label}`, name: label, kind: "anchor", file: first.file, line: first.line,
-      sig: `${hubImplicit ? "(△ discovered) " : ""}${sites.length > 1 ? `${label} (${sites.length} sites)` : label}`, lang: "anchor",
+      id: `anchor:${label}`,
+      name: label,
+      kind: "anchor",
+      file: first.file,
+      line: first.line,
+      sig: `${hubImplicit ? "(△ discovered) " : ""}${sites.length > 1 ? `${label} (${sites.length} sites)` : label}`,
+      lang: "anchor",
     });
     (byFile.get(first.file) ?? byFile.set(first.file, []).get(first.file)!).push(idx);
     const w = (hubImplicit ? 0.5 : 1) / Math.sqrt(sites.length);
@@ -487,5 +630,8 @@ export const assembleGraphWithIndex = async (
     }
   }
 
-  return { graph: { nodes, edges, byName, byFile, anchors, files, importCoverage }, joinIndex: joinIdx };
+  return {
+    graph: { nodes, edges, byName, byFile, anchors, files, importCoverage },
+    joinIndex: joinIdx,
+  };
 };

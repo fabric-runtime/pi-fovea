@@ -4,6 +4,8 @@
 // time and (b) yield inside irreversibly synchronous CPU sweeps so input and
 // rendering keep flowing.
 
+import { capacityPlan, semaphoreStep } from "../verified/generated/control.js";
+
 export const envInt = (name: string, dflt: number, min: number, max: number): number => {
   const raw = Number(process.env[name]);
   if (!Number.isFinite(raw) || raw <= 0) return dflt;
@@ -23,6 +25,16 @@ export const OBSERVED_ROOT_LIMIT = envInt("FOVEA_MAX_ROOTS", 32, 1, 32);
 /** Heavy graphs, fact stores, and numerical vectors remain a small hot cache. */
 export const ROOT_CACHE_LIMIT = envInt("FOVEA_CACHE_ROOTS", 2, 1, 32);
 
+/** Retain at most limit entries, evicting oldest first through the proved cap. */
+export const trimMap = <K, V>(map: Map<K, V>, limit: number, onEvict?: (key: K) => void): void => {
+  const keep = capacityPlan(map.size, limit + 1).keep;
+  while (map.size > keep) {
+    const oldest = map.keys().next().value!;
+    map.delete(oldest);
+    onEvict?.(oldest);
+  }
+};
+
 /** Run fn over items with a global concurrency cap, preserving input order. */
 export const mapLimit = async <T, R>(
   items: readonly T[],
@@ -31,16 +43,13 @@ export const mapLimit = async <T, R>(
 ): Promise<R[]> => {
   const out = new Array<R>(items.length);
   let next = 0;
-  const workers = Array.from(
-    { length: Math.max(1, Math.min(limit, items.length)) },
-    async () => {
-      for (;;) {
-        const i = next++;
-        if (i >= items.length) return;
-        out[i] = await fn(items[i]!, i);
-      }
-    },
-  );
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]!, i);
+    }
+  });
   await Promise.all(workers);
   return out;
 };
@@ -51,15 +60,19 @@ class Semaphore {
   private readonly waiters: Array<() => void> = [];
   constructor(private readonly limit: number) {}
   async run<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.active >= this.limit) {
+    const entry = semaphoreStep(this.active, this.waiters.length, this.limit, false);
+    this.active = entry.active;
+    if (!entry.admit) {
       await new Promise<void>((resolve) => this.waiters.push(resolve));
     }
-    this.active++;
     try {
       return await fn();
     } finally {
-      this.active--;
-      this.waiters.shift()?.();
+      const exit = semaphoreStep(this.active, this.waiters.length, this.limit, true);
+      this.active = exit.active;
+      // A wake transfers the occupied slot. It never becomes available to a
+      // newcomer between resolving this waiter and its microtask resumption.
+      if (exit.wake) this.waiters.shift()!();
     }
   }
 }
@@ -67,8 +80,7 @@ class Semaphore {
 export const spawnGate = new Semaphore(SPAWN_CONCURRENCY);
 
 /** Yield one macrotask; lets the TUI repaint and drain input mid-sweep. */
-export const yieldToLoop = (): Promise<void> =>
-  new Promise((resolve) => setImmediate(resolve));
+export const yieldToLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 /**
  * Yielding loop helper for long synchronous sweeps. Returns a promise; call

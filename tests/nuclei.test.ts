@@ -3,11 +3,7 @@ import { mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  diffHunks,
-  MAX_DIFF_HUNKS_PER_FILE,
-  parseZeroContextDiff,
-} from "../src/core/git.js";
+import { diffHunks, MAX_DIFF_HUNKS_PER_FILE, parseZeroContextDiff } from "../src/core/git.js";
 import { buildCsr, chebyshevVectors, chooseOrder, heatField } from "../src/core/heat.js";
 import { impact, type OpResult } from "../src/core/ops.js";
 import type { RepoState } from "../src/core/state.js";
@@ -43,25 +39,31 @@ const makeSeedProbeHarness = (root: string, specs: SourceSpec[]): SeedProbeHarne
   };
 
   for (const spec of specs) {
-    addSource({
-      id: `file:${spec.file}`,
-      name: basename(spec.file),
-      kind: "file",
-      file: spec.file,
-      line: 0,
-      sig: spec.file,
-      lang: "TypeScript",
-    }, keyFor(spec.file));
-    for (const symbol of spec.symbols) {
-      addSource({
-        id: `${symbol.name}@${spec.file}`,
-        name: symbol.name,
-        kind: "function",
+    addSource(
+      {
+        id: `file:${spec.file}`,
+        name: basename(spec.file),
+        kind: "file",
         file: spec.file,
-        line: symbol.line,
-        sig: `function ${symbol.name}()`,
+        line: 0,
+        sig: spec.file,
         lang: "TypeScript",
-      }, keyFor(spec.file, symbol.name));
+      },
+      keyFor(spec.file),
+    );
+    for (const symbol of spec.symbols) {
+      addSource(
+        {
+          id: `${symbol.name}@${spec.file}`,
+          name: symbol.name,
+          kind: "function",
+          file: spec.file,
+          line: symbol.line,
+          sig: `function ${symbol.name}()`,
+          lang: "TypeScript",
+        },
+        keyFor(spec.file, symbol.name),
+      );
     }
   }
 
@@ -118,12 +120,25 @@ const makeSeedProbeHarness = (root: string, specs: SourceSpec[]): SeedProbeHarne
     facts: {},
     extraction: { failed: [], unreadable: [], oversized: [], generated: [] },
     discovery: {
-      source: "git", recording: "complete", maxFiles: graph.files.length || 1,
-      candidateFilesSeen: graph.files.length, supportedFilesSeen: graph.files.length,
-      indexedFiles: graph.files.length, unsupportedFilesSeen: 0, excludedEntriesSeen: 0,
-      closedBoundariesSeen: 0, unreadableDirectoriesSeen: 0, unavailableFilesSeen: 0,
-      capped: false, omittedSupported: 0, unsupportedExamples: [], excludedExamples: [],
-      closedBoundaries: [], unreadableDirectories: [], unavailableFiles: [], excludedPolicies: [],
+      source: "git",
+      recording: "complete",
+      maxFiles: graph.files.length || 1,
+      candidateFilesSeen: graph.files.length,
+      supportedFilesSeen: graph.files.length,
+      indexedFiles: graph.files.length,
+      unsupportedFilesSeen: 0,
+      excludedEntriesSeen: 0,
+      closedBoundariesSeen: 0,
+      unreadableDirectoriesSeen: 0,
+      unavailableFilesSeen: 0,
+      capped: false,
+      omittedSupported: 0,
+      unsupportedExamples: [],
+      excludedExamples: [],
+      closedBoundaries: [],
+      unreadableDirectories: [],
+      unavailableFiles: [],
+      excludedPolicies: [],
     },
     adjacency,
     store: {} as RepoState["store"],
@@ -168,18 +183,19 @@ const repoWith = (files: Record<string, string>): string => {
   return root;
 };
 
-const moduleText = (alpha: string, betaLine: string, betaReturn = "  return value;"): string => [
-  "// module",
-  "function alpha() {",
-  `  return \"${alpha}\";`,
-  "}",
-  "",
-  "function beta() {",
-  `  const value = \"${betaLine}\";`,
-  betaReturn,
-  "}",
-  "",
-].join("\n");
+const moduleText = (alpha: string, betaLine: string, betaReturn = "  return value;"): string =>
+  [
+    "// module",
+    "function alpha() {",
+    `  return \"${alpha}\";`,
+    "}",
+    "",
+    "function beta() {",
+    `  const value = \"${betaLine}\";`,
+    betaReturn,
+    "}",
+    "",
+  ].join("\n");
 
 describe("mass-conserving impact hunk nuclei", () => {
   it("concentrates a single-line edit on its enclosing symbol", async () => {
@@ -193,10 +209,15 @@ describe("mass-conserving impact hunk nuclei", () => {
         fallback: false,
       });
 
-      const harness = makeSeedProbeHarness(root, [{
-        file,
-        symbols: [{ name: "alpha", line: 2 }, { name: "beta", line: 6 }],
-      }]);
+      const harness = makeSeedProbeHarness(root, [
+        {
+          file,
+          symbols: [
+            { name: "alpha", line: 2 },
+            { name: "beta", line: 6 },
+          ],
+        },
+      ]);
       const result = await impact(root, { files: [file], budget: 4000 }, harness.state);
       const fileMass = harness.normalizedMass(result, file);
       const alphaMass = harness.normalizedMass(result, file, "alpha");
@@ -220,20 +241,40 @@ describe("mass-conserving impact hunk nuclei", () => {
       [second]: moduleText("gamma-before", "delta"),
     });
     try {
-      writeFileSync(join(root, first), moduleText("alpha-after", "beta-after", "  return value + \"!\";"), "utf8");
+      writeFileSync(
+        join(root, first),
+        moduleText("alpha-after", "beta-after", '  return value + "!";'),
+        "utf8",
+      );
       writeFileSync(join(root, second), moduleText("gamma-after", "delta"), "utf8");
       const parsed = await diffHunks(root);
       expect(parsed?.get(first)?.fallback).toBe(false);
       expect(parsed?.get(first)?.hunks.map((hunk) => hunk.newLines)).toEqual([1, 2]);
 
       const harness = makeSeedProbeHarness(root, [
-        { file: first, symbols: [{ name: "alpha", line: 2 }, { name: "beta", line: 6 }] },
-        { file: second, symbols: [{ name: "gamma", line: 2 }, { name: "delta", line: 6 }] },
+        {
+          file: first,
+          symbols: [
+            { name: "alpha", line: 2 },
+            { name: "beta", line: 6 },
+          ],
+        },
+        {
+          file: second,
+          symbols: [
+            { name: "gamma", line: 2 },
+            { name: "delta", line: 6 },
+          ],
+        },
       ]);
-      const result = await impact(root, {
-        files: [first, second],
-        budget: 4000,
-      }, harness.state);
+      const result = await impact(
+        root,
+        {
+          files: [first, second],
+          budget: 4000,
+        },
+        harness.state,
+      );
 
       const alphaMass = harness.normalizedMass(result, first, "alpha");
       const betaMass = harness.normalizedMass(result, first, "beta");
@@ -241,7 +282,7 @@ describe("mass-conserving impact hunk nuclei", () => {
       const sqrtTwo = Math.sqrt(2);
       expect(firstFileMass).toBeCloseTo(0.2, 5);
       expect(alphaMass).toBeCloseTo(0.8 / (1 + sqrtTwo), 5);
-      expect(betaMass).toBeCloseTo(0.8 * sqrtTwo / (1 + sqrtTwo), 5);
+      expect(betaMass).toBeCloseTo((0.8 * sqrtTwo) / (1 + sqrtTwo), 5);
       expect(firstFileMass + alphaMass + betaMass).toBeCloseTo(1, 5);
 
       const secondFileMass = harness.normalizedMass(result, second);
@@ -262,19 +303,32 @@ describe("mass-conserving impact hunk nuclei", () => {
     const root = repoWith({ [oldFile]: moduleText("alpha", "beta") });
     try {
       renameSync(join(root, oldFile), join(root, movedFile));
-      writeFileSync(join(root, movedFile), `// shifted\n// shifted again\n${moduleText("alpha", "beta")}`, "utf8");
+      writeFileSync(
+        join(root, movedFile),
+        `// shifted\n// shifted again\n${moduleText("alpha", "beta")}`,
+        "utf8",
+      );
       git(root, ["add", "-A"]); // staged rename; unstaged targets are untracked and intentionally coarse
       const parsed = await diffHunks(root);
       expect(parsed?.get(movedFile)?.fallback).toBe(true);
 
-      const harness = makeSeedProbeHarness(root, [{
-        file: movedFile,
-        symbols: [{ name: "alpha", line: 4 }, { name: "beta", line: 8 }],
-      }]);
-      const result = await impact(root, {
-        files: [movedFile],
-        budget: 4000,
-      }, harness.state);
+      const harness = makeSeedProbeHarness(root, [
+        {
+          file: movedFile,
+          symbols: [
+            { name: "alpha", line: 4 },
+            { name: "beta", line: 8 },
+          ],
+        },
+      ]);
+      const result = await impact(
+        root,
+        {
+          files: [movedFile],
+          budget: 4000,
+        },
+        harness.state,
+      );
       expect(harness.normalizedMass(result, movedFile)).toBeCloseTo(1, 5);
       expect(harness.normalizedMass(result, movedFile, "alpha")).toBe(0);
       expect(harness.normalizedMass(result, movedFile, "beta")).toBe(0);
@@ -285,19 +339,25 @@ describe("mass-conserving impact hunk nuclei", () => {
 
   it("bounds oversized per-file diffs and falls back without partial symbol seeds", async () => {
     const file = "large.ts";
-    const before = Array.from({ length: 2 * MAX_DIFF_HUNKS_PER_FILE + 3 }, (_, i) => `line-${i}: before`).join("\n");
+    const before = Array.from(
+      { length: 2 * MAX_DIFF_HUNKS_PER_FILE + 3 },
+      (_, i) => `line-${i}: before`,
+    ).join("\n");
     const after = Array.from({ length: 2 * MAX_DIFF_HUNKS_PER_FILE + 3 }, (_, i) =>
-      i % 2 === 0 ? `line-${i}: after` : `line-${i}: before`).join("\n");
+      i % 2 === 0 ? `line-${i}: after` : `line-${i}: before`,
+    ).join("\n");
     const root = repoWith({ [file]: before });
     try {
       writeFileSync(join(root, file), after, "utf8");
       const parsed = await diffHunks(root);
       expect(parsed?.get(file)).toEqual({ hunks: [], fallback: true });
 
-      const harness = makeSeedProbeHarness(root, [{
-        file,
-        symbols: [{ name: "wholeFileSymbol", line: 1 }],
-      }]);
+      const harness = makeSeedProbeHarness(root, [
+        {
+          file,
+          symbols: [{ name: "wholeFileSymbol", line: 1 }],
+        },
+      ]);
       const result = await impact(root, { files: [file], budget: 4000 }, harness.state);
       expect(harness.normalizedMass(result, file)).toBeCloseTo(1, 5);
       expect(harness.normalizedMass(result, file, "wholeFileSymbol")).toBe(0);

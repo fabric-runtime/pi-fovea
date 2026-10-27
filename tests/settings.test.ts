@@ -7,7 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 import { FoveaSettingsComponent, openFoveaSettings } from "../src/ui/settings.js";
 
 const keybindings = {
-  matches: (data: string, keybinding: string) => keybinding === "app.editor.external" && data === "\x07",
+  matches: (data: string, keybinding: string) =>
+    keybinding === "app.editor.external" && data === "\x07",
   getKeys: () => ["ctrl+g"],
 } as unknown as Pick<KeybindingsManager, "matches" | "getKeys">;
 
@@ -28,18 +29,16 @@ describe("Fovea settings", () => {
       isProjectTrusted: () => true,
       ui: {
         notify,
-        custom: async (factory: (...args: any[]) => any) => new Promise<void>((resolve) => {
-          const component = factory(
-            { requestRender: () => {} },
-            theme,
-            keybindings,
-            () => resolve(),
-          );
-          expect(component.render(100).join("\n")).toContain("Grep integration");
-          for (let index = 0; index < 6; index++) component.handleInput("\u001b[B");
-          component.handleInput("\r");
-          component.handleInput("\u001b");
-        }),
+        custom: async (factory: (...args: any[]) => any) =>
+          new Promise<void>((resolve) => {
+            const component = factory({ requestRender: () => {} }, theme, keybindings, () =>
+              resolve(),
+            );
+            expect(component.render(100).join("\n")).toContain("Grep integration");
+            for (let index = 0; index < 6; index++) component.handleInput("\u001b[B");
+            component.handleInput("\r");
+            component.handleInput("\u001b");
+          }),
       },
     } as unknown as ExtensionContext;
 
@@ -195,14 +194,22 @@ describe("FoveaSettingsComponent save scope", () => {
 
   it("toggles save scope with Ctrl+G from the root and active submenus", () => {
     const scopes: string[] = [];
-    const component = new FoveaSettingsComponent(theme, buildItems(), () => {}, () => {}, {
-      keybindings,
-      initialSaveScope: "project",
-      projectScopeAvailable: true,
-      onSaveScopeChange: (scope) => scopes.push(scope),
-    });
+    const component = new FoveaSettingsComponent(
+      theme,
+      buildItems(),
+      () => {},
+      () => {},
+      {
+        keybindings,
+        initialSaveScope: "project",
+        projectScopeAvailable: true,
+        onSaveScopeChange: (scope) => scopes.push(scope),
+      },
+    );
 
-    expect(component.render(100).join("\n")).toContain("Editing: Project overrides (.pi/fovea.json)");
+    expect(component.render(100).join("\n")).toContain(
+      "Editing: Project overrides (.pi/fovea.json)",
+    );
 
     component.handleInput("\x07");
     expect(component.render(100).join("\n")).toContain(
@@ -215,18 +222,26 @@ describe("FoveaSettingsComponent save scope", () => {
     component.handleInput("\x07");
 
     expect(list.submenuComponent).not.toBeNull();
-    expect(component.render(100).join("\n")).toContain("Editing: Project overrides (.pi/fovea.json)");
+    expect(component.render(100).join("\n")).toContain(
+      "Editing: Project overrides (.pi/fovea.json)",
+    );
     expect(scopes).toEqual(["global", "project"]);
   });
 
   it("keeps untrusted projects global-only", () => {
     const onSaveScopeChange = vi.fn();
-    const component = new FoveaSettingsComponent(theme, buildItems(), () => {}, () => {}, {
-      keybindings,
-      initialSaveScope: "global",
-      projectScopeAvailable: false,
-      onSaveScopeChange,
-    });
+    const component = new FoveaSettingsComponent(
+      theme,
+      buildItems(),
+      () => {},
+      () => {},
+      {
+        keybindings,
+        initialSaveScope: "global",
+        projectScopeAvailable: false,
+        onSaveScopeChange,
+      },
+    );
 
     component.handleInput("\x07");
 

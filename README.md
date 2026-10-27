@@ -53,13 +53,13 @@ and test commands in your loop. CI has the final say.
 
 ## What the model gets
 
-| Command | Ask | Answer |
-|---|---|---|
-| `fovea_sketch` | where is everything? | production-first silhouette plus explicit discovery/extraction coverage; test and fixture architecture stays collapsed |
-| `fovea_focus` | what is this? | exact symbols/routes/protocol ids, evidenced relationships, path-gap reasons, suggested reads, scopes, and deterministic `fresh` views |
-| `fovea_dwell` | what else? | widens the current focus, or expires safely when its graph generation changed |
-| `fovea_impact` | what does this touch? | hunk-precise seeds, evidenced impact paths, co-change companions, and conserved diffusion heat |
-| `grep` *(default hybrid)* | graph or text? | bare identifiers, qualified symbols, repo paths, and routes use Fovea; search options and obvious regex retain native grep |
+| Command                   | Ask                   | Answer                                                                                                                                 |
+| ------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `fovea_sketch`            | where is everything?  | production-first silhouette plus explicit discovery/extraction coverage; test and fixture architecture stays collapsed                 |
+| `fovea_focus`             | what is this?         | exact symbols/routes/protocol ids, evidenced relationships, path-gap reasons, suggested reads, scopes, and deterministic `fresh` views |
+| `fovea_dwell`             | what else?            | widens the current focus, or expires safely when its graph generation changed                                                          |
+| `fovea_impact`            | what does this touch? | hunk-precise seeds, evidenced impact paths, co-change companions, and conserved diffusion heat                                         |
+| `grep` _(default hybrid)_ | graph or text?        | bare identifiers, qualified symbols, repo paths, and routes use Fovea; search options and obvious regex retain native grep             |
 
 Focus normalizes camelCase and common inflections. An approximate name such as
 `switchServer` can still resolve `switchingServers`. A query with no certain
@@ -162,10 +162,10 @@ root package version. See [CLI usage](docs/cli.md) and [release checks and publi
 
 Choose the skill for the interface your agent uses:
 
-| Skill | Use it for |
-| --- | --- |
-| [pi-fovea](skills/pi-fovea/SKILL.md) | Pi extension tools, persistent focus/dwell, turn sync, and Fabric integration. |
-| [fovea](skills/fovea/SKILL.md) | Standalone shell/CI commands, explicit repository roots, and stateless navigation. |
+| Skill                                | Use it for                                                                         |
+| ------------------------------------ | ---------------------------------------------------------------------------------- |
+| [pi-fovea](skills/pi-fovea/SKILL.md) | Pi extension tools, persistent focus/dwell, turn sync, and Fabric integration.     |
+| [fovea](skills/fovea/SKILL.md)       | Standalone shell/CI commands, explicit repository roots, and stateless navigation. |
 
 The Pi package exposes both skills. The standalone `@monotykamary/fovea` package
 ships only `skills/fovea/SKILL.md`; register that directory with your agent's skill
@@ -189,7 +189,11 @@ explicit observation gap, never a clean verdict. Re-entry baselines anew.
 ```ts
 await pi.read({ path: "/projects/service/src/handler.ts", offset: 1, limit: 40 });
 // Access alone enrolls the project; an unrooted call still answers about cwd.
-await extensions.fovea_focus({ root: "/projects/service", query: "src/handler.ts", maxTokens: 1024 });
+await extensions.fovea_focus({
+  root: "/projects/service",
+  query: "src/handler.ts",
+  maxTokens: 1024,
+});
 // An explicit root selects any exact directory, including umbrella scopes.
 await extensions.fovea_focus({ root: "../other", query: "entry", maxTokens: 512 });
 ```
@@ -228,7 +232,7 @@ await extensions.fovea_focus({ root: "../other", query: "entry", maxTokens: 512 
   blocking before-agent hook. Numerical paging retains logical focus/attention.
 - Branch-local bounded root snapshots survive compaction, reload, resume, fork,
   and tree navigation. Semantic baselines and trust are not restored. `/fovea
-  reset` clears the ring; `/fovea status` reports the ring, capacity, and the manual default. The CLI
+reset` clears the ring; `/fovea status` reports the ring, capacity, and the manual default. The CLI
   stays stateless. Fovea and Contour exchange session-qualified target hints,
   not heat, source content, trust, or mutation authorship.
 
@@ -241,17 +245,17 @@ just because unrelated projects share a parent directory. Cold extraction keeps
 streamed JSONL caches, 64-file batches, adaptive ast-grep chunk splitting, and
 bounded I/O/process concurrency.
 
-| Variable | Default | Meaning |
-| --- | :---: | --- |
-| `FOVEA_MAX_ROOTS` | `32` | observed recency ring, clamped to 1–32 |
-| `FOVEA_CACHE_ROOTS` | `2` | hot graph/fact/vector cache residency, separate from observation |
-| `FOVEA_MAX_FILES` | `8000` | maximum indexed files in one graph |
-| `FOVEA_MAX_FILE_BYTES` | `1048576` | maximum bytes extracted from one source file |
-| `FOVEA_SPAWN_CONCURRENCY` | `3` | concurrent ast-grep/Git subprocesses |
-| `FOVEA_IO_CONCURRENCY` | `32` | concurrent file stat/read operations |
-| `FOVEA_MEMORY_HALF_LIFE_HOURS` | `48` | wall-clock half-life of charged cascade memory |
-| `FOVEA_GIT_UNTRACKED_CACHE` | enabled | set `0` to disable Git's native untracked-directory cache |
-| `FOVEA_MAX_SUBMODULE_DEPTH` | `4` | recursion cap for nested submodules |
+| Variable                       |  Default  | Meaning                                                          |
+| ------------------------------ | :-------: | ---------------------------------------------------------------- |
+| `FOVEA_MAX_ROOTS`              |   `32`    | observed recency ring, clamped to 1–32                           |
+| `FOVEA_CACHE_ROOTS`            |    `2`    | hot graph/fact/vector cache residency, separate from observation |
+| `FOVEA_MAX_FILES`              |  `8000`   | maximum indexed files in one graph                               |
+| `FOVEA_MAX_FILE_BYTES`         | `1048576` | maximum bytes extracted from one source file                     |
+| `FOVEA_SPAWN_CONCURRENCY`      |    `3`    | concurrent ast-grep/Git subprocesses                             |
+| `FOVEA_IO_CONCURRENCY`         |   `32`    | concurrent file stat/read operations                             |
+| `FOVEA_MEMORY_HALF_LIFE_HOURS` |   `48`    | wall-clock half-life of charged cascade memory                   |
+| `FOVEA_GIT_UNTRACKED_CACHE`    |  enabled  | set `0` to disable Git's native untracked-directory cache        |
+| `FOVEA_MAX_SUBMODULE_DEPTH`    |    `4`    | recursion cap for nested submodules                              |
 
 Root-discovery metadata is coalesced and TTL-cached; it never certifies source
 freshness. Git status/content hashes and bounded manifest/boundary sweeps remain
@@ -355,17 +359,17 @@ with `fabric.json`. In `/fovea settings`, the configured external-editor key
 between project overrides and global defaults. A project override can remain
 effective while its global default is being edited.
 
-| Key | Default | Meaning |
-| --- | :-----: | ------- |
-| `sync.mode` | `"enabled"` | `"enabled"` shows model-visible sync messages, `"hidden"` keeps them model-visible but out of the transcript, and `"disabled"` turns sync off. Legacy `sync.enabled` booleans still parse. |
-| `sync.scope` | `"session"` | `"session"` steers only for top-level directories/root files this conversation entered while indexing the whole root; `"repository"` restores root-wide steering. |
-| `sync.budget` | `512` | token cap for proactive steering context |
-| `sync.ackClean` | `false` | toast after clean structural turns |
-| `sync.steerThreshold` | `0.15` | total surprise (channel-weighted heat above the session sync memory) that justifies proactive model steering |
-| `sync.pushFocus` | `true` | embed a budgeted focus preview of the top drift target in red syncs |
-| `tools.defaultBudget` | `512` | fallback maxTokens for the fovea_* tools |
-| `tools.grepMode` | `"augment"` | `"augment"\u0020keeps native grep and appends a Fovea graph section to symbol-query results (works with `pi.grep` inside fabric_exec too); `"replace"` keeps the legacy takeover where bare symbol queries navigate the graph instead of returning lines; `"off"` is native grep only. The legacy boolean `tools.replaceGrep` still parses (`true`\u2192`"replace"`, `false`\u2192`"off"`) and loses to an explicit `grepMode`. |
-| `tools.grepAugmentBudget` | `512` | token cap for the appended graph section |
+| Key                       |   Default   | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------- | :---------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sync.mode`               | `"enabled"` | `"enabled"` shows model-visible sync messages, `"hidden"` keeps them model-visible but out of the transcript, and `"disabled"` turns sync off. Legacy `sync.enabled` booleans still parse.                                                                                                                                                                                                                                |
+| `sync.scope`              | `"session"` | `"session"` steers only for top-level directories/root files this conversation entered while indexing the whole root; `"repository"` restores root-wide steering.                                                                                                                                                                                                                                                         |
+| `sync.budget`             |    `512`    | token cap for proactive steering context                                                                                                                                                                                                                                                                                                                                                                                  |
+| `sync.ackClean`           |   `false`   | toast after clean structural turns                                                                                                                                                                                                                                                                                                                                                                                        |
+| `sync.steerThreshold`     |   `0.15`    | total surprise (channel-weighted heat above the session sync memory) that justifies proactive model steering                                                                                                                                                                                                                                                                                                              |
+| `sync.pushFocus`          |   `true`    | embed a budgeted focus preview of the top drift target in red syncs                                                                                                                                                                                                                                                                                                                                                       |
+| `tools.defaultBudget`     |    `512`    | fallback maxTokens for the fovea_* tools                                                                                                                                                                                                                                                                                                                                                                                  |
+| `tools.grepMode`          | `"augment"` | `"augment"\u0020keeps native grep and appends a Fovea graph section to symbol-query results (works with `pi.grep`inside fabric_exec too);`"replace"`keeps the legacy takeover where bare symbol queries navigate the graph instead of returning lines;`"off"`is native grep only. The legacy boolean`tools.replaceGrep` still parses (`true`\u2192`"replace"`, `false`\u2192`"off"`) and loses to an explicit `grepMode`. |
+| `tools.grepAugmentBudget` |    `512`    | token cap for the appended graph section                                                                                                                                                                                                                                                                                                                                                                                  |
 
 Budgets cap the rendered view, not the map. Focus and dwell keep every eligible candidate recoverable beyond both the token budget and the 400-candidate display cap. Their `details.lit` counts the full eligible set, while `details.candidateOmitted` counts display-cap exclusions. Whenever a view truncates, the full list spills to `$TMPDIR/pi-fovea-<op>-<hash>.txt` if writable, and the footer names the path. Read or grep that artifact for the remainder; a failed write never produces a false path. Scope filters, already-disclosed nodes, and nodes below the heat cutoff are not added to overflow. `fovea_dwell` remains the semantic widen.
 
@@ -374,13 +378,13 @@ Budgets cap the rendered view, not the map. Focus and dwell keep every eligible 
 Route anchors come from five port shapes. Together they cover most of the
 ecosystem:
 
-| Port shape | Examples |
-|---|---|
-| `recv.verb("path", handlers…)` | express, koa, fastify, hono, gin, echo, chi, net/http |
+| Port shape                         | Examples                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `recv.verb("path", handlers…)`     | express, koa, fastify, hono, gin, echo, chi, net/http                                             |
 | annotation + optional class prefix | NestJS `@Controller + @Get`, Flask and FastAPI decorators, Spring `@RequestMapping + @GetMapping` |
-| verb embedded in the path | Go 1.22 `mux.HandleFunc("GET /x", h)` |
-| verb as first string argument | chi `r.Method("GET", path, h)`, aiohttp `router.add_route("GET", path, h)` |
-| receiver-less DSL macros | Rails `routes.rb`, Phoenix `router.ex`, Django `path()`, Ktor `routing { get("/x") {} }` |
+| verb embedded in the path          | Go 1.22 `mux.HandleFunc("GET /x", h)`                                                             |
+| verb as first string argument      | chi `r.Method("GET", path, h)`, aiohttp `router.add_route("GET", path, h)`                        |
+| receiver-less DSL macros           | Rails `routes.rb`, Phoenix `router.ex`, Django `path()`, Ktor `routing { get("/x") {} }`          |
 
 File-convention routers keep their paths in the file tree. Next.js App Router,
 Pages Router, SvelteKit, Nuxt, and Astro work this way. Fovea derives their
@@ -408,7 +412,13 @@ fovea rules <root> --adopt          # persist promotions into .fovea/rules.json
 ```json
 {
   "rules": [
-    { "id": "fiber", "langs": ["Go"], "pattern": "$R.$M(\"$P\", $$H)", "methods": "^(get|post)$", "kind": "route" }
+    {
+      "id": "fiber",
+      "langs": ["Go"],
+      "pattern": "$R.$M(\"$P\", $$H)",
+      "methods": "^(get|post)$",
+      "kind": "route"
+    }
   ]
 }
 ```
@@ -446,7 +456,6 @@ anchors with zero keyword false-positives, and a 1.2 MB GitHub schema parses
 through the raised protocol byte cap.
 
 Canonical ids can be focused directly:
-
 
 ```text
 RPC users.v1.Users/GetUser
@@ -566,21 +575,49 @@ calls and proof checking are not modeled; Bend 1/HVM syntax is not supported.
 
 ```sh
 bun install
-bun run check:fast   # Bend laws + artifact parity + typecheck + affected tests
+bun run format       # readable authored source; excludes generated code and fixtures
+bun run format:check # non-mutating formatting check
+bun run check:fast   # gdp-wired laws + artifact parity + typecheck + affected tests
 bun run test:smoke   # curated scan-to-render floor, seconds
 bun run bench        # rate–distortion and refresh bench against ../pi-fabric
 bun run bench tests/fixtures/mini  # self-contained smoke run
 ```
 
-Development checks require **Bend 2.0.26** (`bend guide`). See [laws, proofs, and
-which tests they can replace](docs/proofs.md). Bend is development-only; the
-extension and published CLI need no Bend installation or generation step.
-Production executes the committed Bend-compiled disclosure, prefix-accounting,
-and heat-basis command kernels. After changing their sources or adapters, run
+Authored proofs, runtime adapters, and proof checkers are TypeScript and included in
+strict typechecking. Development proof commands use `tsx`; generated runtime modules
+remain standalone JavaScript with declarations. Small Node packaging and corpus scripts
+stay `.mjs`. Formatting is pinned with Prettier; generated modules are formatted by
+`proofs:generate`, never edited directly. Semantic test fixtures are left unchanged.
+
+For direct interval-based diffusion, use `solveDiffusion` from `pi-fovea/substrate`.
+It runs the shared u32-limb Poisson core without the Float64 candidate solver;
+check `withinTolerance` before using its result. The existing fast and candidate-
+verification APIs remain compatible. See [the exact sparse heat core](docs/exact-heat.md).
+
+Development checks use **gdp-wired 0.30.1**, pinned in devDependencies. See
+[laws, proof boundaries, and numerical certificates](docs/proofs.md). No Bend
+compiler is required. Production executes committed JavaScript generated from
+checked disclosure, accounting, basis, semaphore, capacity, lease, focus, and
+prefix-selection policies. Arithmetic digit streams are generated from checked
+machines; `bun run check:series` checks a constructive rational Cauchy model
+for scalar tails. `bun run check:completion` checks shrinking rational enclosures,
+finite continuity bounds and rational separation witnesses.
+`bun run check:operator-identity` checks the composed finite-rational argument:
+coefficient cancellation, indexed evaluation, Cauchy-product reindexing,
+all-later-prefix bounds and constructive completion. Lean is an optional
+independent audit of the stronger abstract real-algebra theorems, not a required
+development or release gate. `bun run check:operators` checks unbounded signed
+coefficients and normalized path trees. `bun run check:transport` adds exact
+indexed L1 bounds through arbitrary transport rounds. `bun run check:focus`
+checks the complementary infinity-norm model, and `bun run check:enclosures`
+checks exact rational interval policies. `bun run check:normalization` checks
+raw-row ratios, unit mass and zero-row identity without Lean. The certificate
+path now normalizes exact dyadic weights before rounding probabilities. See the proof boundary before treating these
+as a proof of the complete matrix-exponential evaluator. After changing proofs or adapters, run
 `bun run proofs:generate`; `bun run proofs:artifact` checks the receipt without
-Bend. CLI builds check that receipt; publishing also proves and reproduces the
-artifact. The Float64 heat solver still relies on numerical tests, not a proof
-of its approximation or rounding errors.
+loading the prover. The extension remains buildless and the CLI self-contained.
+Scalar heat primitives have exact interval certificates; a full Float64
+matrix-exponential error theorem is not claimed.
 
 The [warm-path performance report](docs/performance.md) compares the coverage-complete implementation with the optimized version. `bun run corpus:performance <coverage-work> <before-source> <after-source> [rounds]` runs alternating, isolated comparisons with a shared extraction snapshot, independent Git indexes, and exact graph, focus/dwell/sketch, and overflow-content checks. It does not trade fewer candidates or weaker freshness checks for speed. For Node, run `NODE_OPTIONS='--import tsx' node scripts/performance-corpus.mjs ...`; development dependencies are required.
 
@@ -618,12 +655,12 @@ activity—not extension registration or idle lifecycle hooks. Sweeps are coales
 and throttled to once per five minutes per process. No background timer is kept.
 Policies apply across roots in the OS `tmpdir()` (`$TMPDIR` where supported):
 
-| Artifacts | Retention |
-| --- | --- |
-| Facts + cochange (`pi-fovea-<16hex>.json`, `pi-fovea-cochange-<16hex>.json`) | Combined 128 MiB / 128 files; expire after 7 days; oldest modification first; 5-minute fresh-write grace |
-| Focus/dwell/impact/sketch spills (`pi-fovea-<op>-<8hex>.txt`) | Combined 32 MiB / 128 files; expire after 24 hours; oldest modification first; 1-hour grace for reading advertised paths |
-| Provenance journals (`pi-fovea-provenance-<16hex>-<16hex>.json`) | Only the existing 7-day record TTL; **never pressure-evict fresh attribution** |
-| Partial atomic writes (`<recognized-name>.tmp-<PID>-<UUID>`) and new scan rules (`pi-fovea-scan-<PID>-<UUID>.yml`) | Clean in `finally`; recover abandoned files only after 1 hour and only when their PID is definitely dead |
+| Artifacts                                                                                                          | Retention                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Facts + cochange (`pi-fovea-<16hex>.json`, `pi-fovea-cochange-<16hex>.json`)                                       | Combined 128 MiB / 128 files; expire after 7 days; oldest modification first; 5-minute fresh-write grace                 |
+| Focus/dwell/impact/sketch spills (`pi-fovea-<op>-<8hex>.txt`)                                                      | Combined 32 MiB / 128 files; expire after 24 hours; oldest modification first; 1-hour grace for reading advertised paths |
+| Provenance journals (`pi-fovea-provenance-<16hex>-<16hex>.json`)                                                   | Only the existing 7-day record TTL; **never pressure-evict fresh attribution**                                           |
+| Partial atomic writes (`<recognized-name>.tmp-<PID>-<UUID>`) and new scan rules (`pi-fovea-scan-<PID>-<UUID>.yml`) | Clean in `finally`; recover abandoned files only after 1 hour and only when their PID is definitely dead                 |
 
 These are best-effort, eventual limits, not global quotas: grace periods, active
 writers, concurrent processes, permission failures, and no subsequent activity can

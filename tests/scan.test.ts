@@ -17,18 +17,24 @@ import { anchorScanPlan } from "../src/core/anchors.js";
 describe("scan rule hygiene", () => {
   it("drops constraints whose metavar the pattern never defines", () => {
     // The flask regression: the method is pinned in the pattern, no $M anywhere.
-    expect(liveConstraints("$R.add_url_rule($P, $$$H)", { M: { regex: "^add_url_rule$" } })).toBeUndefined();
+    expect(
+      liveConstraints("$R.add_url_rule($P, $$$H)", { M: { regex: "^add_url_rule$" } }),
+    ).toBeUndefined();
     // Dead keys go, live keys stay.
-    expect(liveConstraints("$O.$M($$$)", { M: { regex: "^x$" }, F: { regex: "^y$" } }))
-      .toEqual({ M: { regex: "^x$" } });
-    expect(liveConstraints("$R.$M($P, $$$H)", { M: { regex: "^x$" }, R: { regex: "^y$" } }))
-      .toEqual({ M: { regex: "^x$" }, R: { regex: "^y$" } });
+    expect(liveConstraints("$O.$M($$$)", { M: { regex: "^x$" }, F: { regex: "^y$" } })).toEqual({
+      M: { regex: "^x$" },
+    });
+    expect(
+      liveConstraints("$R.$M($P, $$$H)", { M: { regex: "^x$" }, R: { regex: "^y$" } }),
+    ).toEqual({ M: { regex: "^x$" }, R: { regex: "^y$" } });
     // $M2 does not read as defining $M; named ($$A) and multi ($$$S) captures do satisfy their keys.
     expect(liveConstraints("$M2($P)", { M: { regex: "^x$" } })).toBeUndefined();
-    expect(liveConstraints("foo($$A, $B)", { A: { regex: "^a$" }, C: { regex: "^c$" } }))
-      .toEqual({ A: { regex: "^a$" } });
-    expect(liveConstraints("import $$$S from $M", { S: { regex: "^s$" } }))
-      .toEqual({ S: { regex: "^s$" } });
+    expect(liveConstraints("foo($$A, $B)", { A: { regex: "^a$" }, C: { regex: "^c$" } })).toEqual({
+      A: { regex: "^a$" },
+    });
+    expect(liveConstraints("import $$$S from $M", { S: { regex: "^s$" } })).toEqual({
+      S: { regex: "^s$" },
+    });
   });
 });
 
@@ -49,7 +55,9 @@ describe.skipIf(!hasAstGrep())("consolidated scan (ast-grep present)", () => {
       expect(flask.length).toBeGreaterThan(0);
       // $P captures the full string-literal node, quotes included; anchor
       // processing strips them later, so compare on the stripped text.
-      expect(flask.some((m) => (m.single.P ?? "").replace(/"/g, "") === "/users/<int:id>")).toBe(true);
+      expect(flask.some((m) => (m.single.P ?? "").replace(/"/g, "") === "/users/<int:id>")).toBe(
+        true,
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -59,8 +67,14 @@ describe.skipIf(!hasAstGrep())("consolidated scan (ast-grep present)", () => {
     const dir = mkdtempSync(join(tmpdir(), "fovea-scan-mix-"));
     try {
       writeFileSync(join(dir, "app.py"), 'app.add_url_rule("/u/<int:id>", "detail", get_user)\n');
-      writeFileSync(join(dir, "api.ts"), 'const r = express.Router();\nr.get("/health", handler);\nexport { r };\n');
-      writeFileSync(join(dir, "routes.rb"), 'Rails.application.routes.draw do\n  get "users/:id", to: "users#show"\nend\n');
+      writeFileSync(
+        join(dir, "api.ts"),
+        'const r = express.Router();\nr.get("/health", handler);\nexport { r };\n',
+      );
+      writeFileSync(
+        join(dir, "routes.rb"),
+        'Rails.application.routes.draw do\n  get "users/:id", to: "users#show"\nend\n',
+      );
       const files = ["app.py", "api.ts", "routes.rb"];
       const plan = anchorScanPlan(files);
       const scanned = await scanRules(plan.rules, files, dir);

@@ -1,4 +1,3 @@
-
 // Generated-source skip: minified bundles must never reach ast-grep pattern
 // extraction (a single `$F($$$A)` run over duckdb's 800 KB worker took ~46 s
 // and emitted 7.5 GB of match JSON).
@@ -24,7 +23,9 @@ afterEach(() => {
 
 describe("isGeneratedSource", () => {
   it("flags single-line minified bundles by content", () => {
-    expect(isGeneratedSource("duckdb-browser-eh.worker.js", "var a=1;\n" + "x".repeat(5_000) + "\n")).toBe(true);
+    expect(
+      isGeneratedSource("duckdb-browser-eh.worker.js", "var a=1;\n" + "x".repeat(5_000) + "\n"),
+    ).toBe(true);
     expect(isGeneratedSource("app.js", "var a=" + "1,".repeat(3_000))).toBe(true);
   });
 
@@ -34,8 +35,12 @@ describe("isGeneratedSource", () => {
   });
 
   it("passes ordinary source through", () => {
-    expect(isGeneratedSource("worker.js", "export function onMessage(e) {\n  return e.data;\n}\n")).toBe(false);
-    expect(isGeneratedSource("table.ts", "export const t = [\n" + "1, 2, 3,\n".repeat(200) + "];\n")).toBe(false);
+    expect(
+      isGeneratedSource("worker.js", "export function onMessage(e) {\n  return e.data;\n}\n"),
+    ).toBe(false);
+    expect(
+      isGeneratedSource("table.ts", "export const t = [\n" + "1, 2, 3,\n".repeat(200) + "];\n"),
+    ).toBe(false);
     expect(isGeneratedSource("tiny.min.js", "")).toBe(true);
   });
 });

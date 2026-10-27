@@ -5,21 +5,53 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { revealFoveated, revealGroups, tokenEstimate, type GroupLine } from "../src/core/render.js";
+import {
+  fitPrefix,
+  revealFoveated,
+  revealGroups,
+  tokenEstimate,
+  type GroupLine,
+} from "../src/core/render.js";
 import { buildCsr, heatAt } from "../src/core/heat.js";
 import type { Graph, NodeRec } from "../src/core/types.js";
 
 // One hub symbol fanning out to many files: after diffusion the hub is hot,
 // a handful of neighbours warm, and the long tail collapses to glow lines.
 const fanGraph = (files: number): Graph => {
-  const nodes: NodeRec[] = [{ id: "hub@src/hub.ts", name: "hub", kind: "function", file: "src/hub.ts", line: 1, sig: "export function hub()", lang: "TypeScript" }];
+  const nodes: NodeRec[] = [
+    {
+      id: "hub@src/hub.ts",
+      name: "hub",
+      kind: "function",
+      file: "src/hub.ts",
+      line: 1,
+      sig: "export function hub()",
+      lang: "TypeScript",
+    },
+  ];
   const edges: Graph["edges"] = [];
   for (let f = 0; f < files; f++) {
     const file = `src/mod${f}.ts`;
-    nodes.push({ id: `file:${file}`, name: `mod${f}.ts`, kind: "file", file, line: 0, sig: file, lang: "TypeScript" });
+    nodes.push({
+      id: `file:${file}`,
+      name: `mod${f}.ts`,
+      kind: "file",
+      file,
+      line: 0,
+      sig: file,
+      lang: "TypeScript",
+    });
     for (let s = 0; s < 3; s++) {
       const idx = nodes.length;
-      nodes.push({ id: `helper${s}@${file}`, name: `helper${s}Mod${f}`, kind: "function", file, line: 3 + s, sig: `function helper${s}Mod${f}() { ... }`, lang: "TypeScript" });
+      nodes.push({
+        id: `helper${s}@${file}`,
+        name: `helper${s}Mod${f}`,
+        kind: "function",
+        file,
+        line: 3 + s,
+        sig: `function helper${s}Mod${f}() { ... }`,
+        lang: "TypeScript",
+      });
       edges.push({ a: 0, b: idx, kind: "invokes", w: f < 3 ? 0.8 : 0.25 });
     }
   }
@@ -52,12 +84,35 @@ describe("revealFoveated", () => {
     expect(fit.revealedIds).toContain("hub@src/hub.ts");
   });
 
-
   it("labels direct graph relationships from the focus", () => {
     const nodes: NodeRec[] = [
-      { id: "focus@src/focus.ts", name: "focus", kind: "function", file: "src/focus.ts", line: 5, sig: "function focus()", lang: "TypeScript" },
-      { id: "callee@src/callee.ts", name: "callee", kind: "function", file: "src/callee.ts", line: 10, sig: "function callee()", lang: "TypeScript" },
-      { id: "caller@src/caller.ts", name: "caller", kind: "function", file: "src/caller.ts", line: 20, sig: "function caller()", lang: "TypeScript" },
+      {
+        id: "focus@src/focus.ts",
+        name: "focus",
+        kind: "function",
+        file: "src/focus.ts",
+        line: 5,
+        sig: "function focus()",
+        lang: "TypeScript",
+      },
+      {
+        id: "callee@src/callee.ts",
+        name: "callee",
+        kind: "function",
+        file: "src/callee.ts",
+        line: 10,
+        sig: "function callee()",
+        lang: "TypeScript",
+      },
+      {
+        id: "caller@src/caller.ts",
+        name: "caller",
+        kind: "function",
+        file: "src/caller.ts",
+        line: 20,
+        sig: "function caller()",
+        lang: "TypeScript",
+      },
     ];
     const g: Graph = {
       nodes,
@@ -79,12 +134,35 @@ describe("revealFoveated", () => {
     expect(fit.text).toContain("← caller  caller");
   });
 
-
   it("keeps a structured focus nucleus while suppressing seen periphery", () => {
     const nodes: NodeRec[] = [
-      { id: "focus@src/a.ts", name: "focus", kind: "function", file: "src/a.ts", line: 1, sig: "focus()", lang: "TypeScript" },
-      { id: "caller@src/b.ts", name: "caller", kind: "function", file: "src/b.ts", line: 2, sig: "caller()", lang: "TypeScript" },
-      { id: "warm@src/c.ts", name: "warm", kind: "function", file: "src/c.ts", line: 3, sig: "warm()", lang: "TypeScript" },
+      {
+        id: "focus@src/a.ts",
+        name: "focus",
+        kind: "function",
+        file: "src/a.ts",
+        line: 1,
+        sig: "focus()",
+        lang: "TypeScript",
+      },
+      {
+        id: "caller@src/b.ts",
+        name: "caller",
+        kind: "function",
+        file: "src/b.ts",
+        line: 2,
+        sig: "caller()",
+        lang: "TypeScript",
+      },
+      {
+        id: "warm@src/c.ts",
+        name: "warm",
+        kind: "function",
+        file: "src/c.ts",
+        line: 3,
+        sig: "warm()",
+        lang: "TypeScript",
+      },
     ];
     const g: Graph = {
       nodes,
@@ -95,7 +173,12 @@ describe("revealFoveated", () => {
       files: [],
     };
     const field = new Float64Array([1, 0.1, 0.1]);
-    const first = revealFoveated(g, field, { header: "t", budget: 1000, seeds: [0], repeatNucleus: true });
+    const first = revealFoveated(g, field, {
+      header: "t",
+      budget: 1000,
+      seeds: [0],
+      repeatNucleus: true,
+    });
     const second = revealFoveated(g, field, {
       header: "t",
       budget: 1000,
@@ -116,12 +199,35 @@ describe("revealFoveated", () => {
 
   it("collapses anonymous warm siblings instead of flooding one file", () => {
     const nodes: NodeRec[] = [
-      { id: "focus@src/large.ts", name: "focus", kind: "method", file: "src/large.ts", line: 10, sig: "focus()", lang: "TypeScript" },
+      {
+        id: "focus@src/large.ts",
+        name: "focus",
+        kind: "method",
+        file: "src/large.ts",
+        line: 10,
+        sig: "focus()",
+        lang: "TypeScript",
+      },
     ];
     for (let i = 0; i < 10; i++) {
-      nodes.push({ id: `sibling${i}@src/large.ts`, name: `sibling${i}`, kind: "method", file: "src/large.ts", line: 20 + i, sig: `sibling${i}()`, lang: "TypeScript" });
+      nodes.push({
+        id: `sibling${i}@src/large.ts`,
+        name: `sibling${i}`,
+        kind: "method",
+        file: "src/large.ts",
+        line: 20 + i,
+        sig: `sibling${i}()`,
+        lang: "TypeScript",
+      });
     }
-    const g: Graph = { nodes, edges: [], byName: new Map(), byFile: new Map(), anchors: [], files: [] };
+    const g: Graph = {
+      nodes,
+      edges: [],
+      byName: new Map(),
+      byFile: new Map(),
+      anchors: [],
+      files: [],
+    };
     const fit = revealFoveated(g, new Float64Array([1, ...Array(10).fill(0.1)]), {
       header: "t",
       budget: 2000,
@@ -142,7 +248,14 @@ describe("revealFoveated", () => {
       sig: "method Client.connect",
       lang: "TypeScript",
     };
-    const g: Graph = { nodes: [node], edges: [], byName: new Map(), byFile: new Map(), anchors: [], files: [] };
+    const g: Graph = {
+      nodes: [node],
+      edges: [],
+      byName: new Map(),
+      byFile: new Map(),
+      anchors: [],
+      files: [],
+    };
     const fit = revealFoveated(g, new Float64Array([1]), { header: "t", budget: 500, seeds: [0] });
     expect(fit.text).toContain("src/client.ts (member line unavailable)");
     expect(fit.text).not.toContain("src/client.ts:86");
@@ -155,7 +268,11 @@ describe("revealFoveated", () => {
     s[0] = 1;
     const field = heatAt(csr, s, 2);
     const first = revealFoveated(g, field, { header: "t", budget: 4000 });
-    const second = revealFoveated(g, field, { header: "t", budget: 4000, disclosed: new Set(first.revealedIds) });
+    const second = revealFoveated(g, field, {
+      header: "t",
+      budget: 4000,
+      disclosed: new Set(first.revealedIds),
+    });
     expect(second.suppressed).toBe(first.revealedIds.length);
     for (const id of first.revealedIds) expect(second.revealedIds).not.toContain(id);
   });
@@ -190,7 +307,9 @@ describe("overflow artifacts", () => {
   it("reports cap loss even without a writable artifact, including a zero display cap", () => {
     const g = fanGraph(3);
     const fit = revealFoveated(g, new Float64Array(g.nodes.length).fill(1), {
-      header: "all", budget: 256, maxCandidates: 0,
+      header: "all",
+      budget: 256,
+      maxCandidates: 0,
       overflowTo: join(tmpdir(), "pi-fovea-no-such-directory", "overflow.txt"),
     });
     expect(fit.litTotal).toBe(g.nodes.length);
@@ -209,15 +328,19 @@ describe("overflow artifacts", () => {
     const disclosed = g.nodes[3]!.id;
     const path = join(tmpdir(), "pi-fovea-test-filtered-cap.txt");
     const fit = revealFoveated(g, new Float64Array(g.nodes.length).fill(1), {
-      header: "filtered", budget: 256, maxCandidates: 1, overflowTo: path,
-      include, exclude: new Set([excluded]), disclosed: new Set([disclosed]),
+      header: "filtered",
+      budget: 256,
+      maxCandidates: 1,
+      overflowTo: path,
+      include,
+      exclude: new Set([excluded]),
+      disclosed: new Set([disclosed]),
     });
     expect(fit.litTotal).toBe(6);
     expect(fit.candidateOmitted).toBe(5);
     expect(readFileSync(path, "utf8").trimEnd().split("\n")).toHaveLength(7);
     expect(fit.suppressed).toBe(1);
   });
-
 
   it("spills the full foveated list to a tmp file and names it in the footer", () => {
     const g = fanGraph(90);
@@ -256,7 +379,7 @@ describe("overflow artifacts", () => {
     const artifact = readFileSync(path, "utf8");
     expect(artifact).toContain("d59");
     expect(fit.text).not.toContain("d59");
-    const displayed = fit.text.split("\n").filter(line => /^d[0-9]+ /.test(line)).length;
+    const displayed = fit.text.split("\n").filter((line) => /^d[0-9]+ /.test(line)).length;
     expect(fit.shown).toBe(displayed);
     expect(fit.shown).toBeLessThan(groups.length);
     expect(fit.text).toContain(`${groups.length - fit.shown} more groups omitted`);
@@ -268,14 +391,46 @@ describe("overflow artifacts", () => {
     // budget untouched, so only the footer knows anything was omitted — and
     // the artifact must exist and hold those nodes as real entries.
     const nodes: NodeRec[] = [
-      { id: "hub@src/hub.ts", name: "hub", kind: "function", file: "src/hub.ts", line: 1, sig: "export function hub()", lang: "TypeScript" },
-      { id: "mid@src/mid.ts", name: "mid", kind: "function", file: "src/mid.ts", line: 1, sig: "export function mid()", lang: "TypeScript" },
-      { id: "file:src/big.ts", name: "big.ts", kind: "file", file: "src/big.ts", line: 0, sig: "src/big.ts", lang: "TypeScript" },
+      {
+        id: "hub@src/hub.ts",
+        name: "hub",
+        kind: "function",
+        file: "src/hub.ts",
+        line: 1,
+        sig: "export function hub()",
+        lang: "TypeScript",
+      },
+      {
+        id: "mid@src/mid.ts",
+        name: "mid",
+        kind: "function",
+        file: "src/mid.ts",
+        line: 1,
+        sig: "export function mid()",
+        lang: "TypeScript",
+      },
+      {
+        id: "file:src/big.ts",
+        name: "big.ts",
+        kind: "file",
+        file: "src/big.ts",
+        line: 0,
+        sig: "src/big.ts",
+        lang: "TypeScript",
+      },
     ];
     const edges: Graph["edges"] = [{ a: 0, b: 1, kind: "invokes", w: 0.9 }];
     for (let j = 0; j < 10; j++) {
       const idx = nodes.length;
-      nodes.push({ id: `helper${j}@src/big.ts`, name: `helper${j}`, kind: "function", file: "src/big.ts", line: 3 + j, sig: `function helper${j}() {}`, lang: "TypeScript" });
+      nodes.push({
+        id: `helper${j}@src/big.ts`,
+        name: `helper${j}`,
+        kind: "function",
+        file: "src/big.ts",
+        line: 3 + j,
+        sig: `function helper${j}() {}`,
+        lang: "TypeScript",
+      });
       edges.push({ a: 1, b: idx, kind: "invokes", w: 0.9 });
     }
     const g: Graph = { nodes, edges, byName: new Map(), byFile: new Map(), anchors: [], files: [] };
@@ -284,7 +439,11 @@ describe("overflow artifacts", () => {
     s[0] = 1;
     const path = join(tmpdir(), "pi-fovea-test-collapsed-overflow.txt");
 
-    const fit = revealFoveated(g, heatAt(csr, s, 2), { header: "t", budget: 4000, overflowTo: path });
+    const fit = revealFoveated(g, heatAt(csr, s, 2), {
+      header: "t",
+      budget: 4000,
+      overflowTo: path,
+    });
 
     expect(fit.text).toContain(`full list saved to ${path}`);
     expect(fit.truncated).toBe(true);
@@ -301,10 +460,39 @@ describe("overflow artifacts", () => {
     s[0] = 1;
     const path = join(tmpdir(), "pi-fovea-test-nooverflow.txt");
 
-    const fit = revealFoveated(g, heatAt(csr, s, 2), { header: "t", budget: 4000, overflowTo: path });
+    const fit = revealFoveated(g, heatAt(csr, s, 2), {
+      header: "t",
+      budget: 4000,
+      overflowTo: path,
+    });
 
     expect(fit.truncated).toBe(false);
     expect(fit.overflowPath).toBeUndefined();
     expect(fit.text).not.toContain("full list saved");
+  });
+});
+
+describe("exact prefix cost selection", () => {
+  it("finds the largest fit across nonmonotone footer costs", () => {
+    expect(fitPrefix([30, 40, 10, 60, 20], 20)).toBe(4);
+    expect(fitPrefix([30, 40, 10, 60], 20)).toBe(2);
+    expect(fitPrefix([30, 40], 20)).toBe(-1);
+    expect(fitPrefix([], 20)).toBe(-1);
+  });
+  it("bounds empty and header-only outputs at tiny budgets", () => {
+    for (const budget of [0, 1, 2, 10]) {
+      const groups = revealGroups([{ label: "a", mass: 1, detail: "a".repeat(500) }], {
+        header: "h".repeat(500),
+        budget,
+      });
+      expect(groups.tokens).toBeLessThanOrEqual(budget);
+      const g = fanGraph(0);
+      const empty = revealFoveated(g, new Float64Array(g.nodes.length), {
+        header: "h".repeat(500),
+        budget,
+      });
+      expect(empty.tokens).toBe(tokenEstimate(empty.text));
+      expect(empty.tokens).toBeLessThanOrEqual(budget);
+    }
   });
 });

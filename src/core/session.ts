@@ -4,7 +4,8 @@
 // vectors keep dwell cheap across wider timescales within that focus.
 
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { ROOT_CACHE_LIMIT, OBSERVED_ROOT_LIMIT } from "./asyncutil.js";
+import { ROOT_CACHE_LIMIT, OBSERVED_ROOT_LIMIT, trimMap } from "./asyncutil.js";
+import { capacityPlan } from "../verified/generated/control.js";
 import type { NodeKind } from "./types.js";
 
 interface FocusScope {
@@ -54,17 +55,15 @@ export const getSession = (root: string): FoveaSession => {
     tkKey: "",
   };
   sessions.set(root, s);
-  while (sessions.size > OBSERVED_ROOT_LIMIT) {
-    const oldest = sessions.keys().next().value!;
-    sessions.delete(oldest);
-  }
+  trimMap(sessions, OBSERVED_ROOT_LIMIT);
   return s;
 };
 
 const repoRelativePath = (root: string, input: string): string | undefined => {
   const raw = input.startsWith("@") ? input.slice(1) : input;
   const rel = relative(resolve(root), resolve(root, raw));
-  if (!rel || rel === "." || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) return undefined;
+  if (!rel || rel === "." || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel))
+    return undefined;
   return rel.split(sep).join("/");
 };
 
@@ -82,7 +81,10 @@ export const syncScopeForPath = (root: string, input: string): string | undefine
 export const observeSessionPaths = (root: string, paths: readonly string[]): string[] => {
   const session = getSession(root);
   for (const path of paths) {
-    if (path === ".") { session.syncScopes.add("."); continue; }
+    if (path === ".") {
+      session.syncScopes.add(".");
+      continue;
+    }
     const scope = syncScopeForPath(root, path);
     if (scope) session.syncScopes.add(scope);
   }
@@ -104,13 +106,19 @@ export const clearSessionFocus = (session: FoveaSession): void => {
 
 /** Reserve a hot vector slot without discarding cold attention/disclosure. */
 export const retainSessionVectors = (root: string): void => {
-  const others = [...sessions.values()].reverse().filter(s => s.root !== root && s.tk.length);
-  for (const session of others.slice(Math.max(0, ROOT_CACHE_LIMIT - 1))) { session.tk = []; session.tkKey = ""; }
+  const others = [...sessions.values()].reverse().filter((s) => s.root !== root && s.tk.length);
+  for (const session of others.slice(capacityPlan(others.length, ROOT_CACHE_LIMIT).keep)) {
+    session.tk = [];
+    session.tkKey = "";
+  }
 };
 
 // `/new` and friends: same repo, fresh eyes.
 export const resetSessions = (root?: string): void => {
-  if (root !== undefined) { sessions.delete(root); return; }
+  if (root !== undefined) {
+    sessions.delete(root);
+    return;
+  }
   // A fresh conversation cannot reuse disclosure or Chebyshev vectors; drop
   // the entries outright so large Float64Array stacks become collectible.
   sessions.clear();

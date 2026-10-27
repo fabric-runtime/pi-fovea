@@ -13,7 +13,24 @@ const NAME = "[A-Za-z_][A-Za-z0-9_.]*";
 const DECL = new RegExp(`^(?:@unsafe\\s+)?(def|law|type)\\s+(${NAME})(?=[\\s(<:]|$)`);
 const CONSTRUCTOR = new RegExp(`^\\s+(${NAME})\\s*\\{`);
 const CALL = new RegExp(`\\b(${NAME})\\s*!?\\s*\\(`, "g");
-const CALL_KEYWORDS = new Set(["def", "type", "law", "match", "case", "do", "return", "for", "exs", "where", "is", "import", "Type", "Data", "Kind", "Quant"]);
+const CALL_KEYWORDS = new Set([
+  "def",
+  "type",
+  "law",
+  "match",
+  "case",
+  "do",
+  "return",
+  "for",
+  "exs",
+  "where",
+  "is",
+  "import",
+  "Type",
+  "Data",
+  "Kind",
+  "Quant",
+]);
 const IMPORT = new RegExp(`^import\\s+(\\S+?)(?:\\s+as\\s+(${NAME}))?\\s*$`);
 
 export const extractBend = (file: string, text: string): BendFacts => {
@@ -41,13 +58,16 @@ export const extractBend = (file: string, text: string): BendFacts => {
         visible += ch;
         if (ch === "\\" && i + 1 < raw.length) {
           const escaped = raw[++i]!;
-          value += ({ n: "\n", r: "\r", t: "\t", "0": "\0" } as Record<string, string>)[escaped] ?? escaped;
+          value +=
+            ({ n: "\n", r: "\r", t: "\t", "0": "\0" } as Record<string, string>)[escaped] ??
+            escaped;
           code += " ";
           visible += escaped;
         } else if (ch === quote) {
           if (quote === '"') {
             strings.push({ start, text: value });
-            if (value.length >= 2 && value.length <= 200) facts.literals.push({ file, line: literalLine, text: value });
+            if (value.length >= 2 && value.length <= 200)
+              facts.literals.push({ file, line: literalLine, text: value });
           }
           quote = "";
         } else value += ch;
@@ -71,7 +91,14 @@ export const extractBend = (file: string, text: string): BendFacts => {
     if (decl) {
       const kind = decl[1] === "def" ? "function" : decl[1] === "type" ? "type" : "decl";
       const sig = visible.trim();
-      facts.symbols.push({ file, line, name: decl[2]!, kind, sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig, lang: "Bend" });
+      facts.symbols.push({
+        file,
+        line,
+        name: decl[2]!,
+        kind,
+        sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig,
+        lang: "Bend",
+      });
       inType = decl[1] === "type";
       header = true;
       brackets = [];
@@ -84,7 +111,11 @@ export const extractBend = (file: string, text: string): BendFacts => {
         const ch = code[i]!;
         if ("(<{[".includes(ch)) brackets.push(ch);
         else if (")>}]".includes(ch) && !(ch === ">" && code[i - 1] === "-")) {
-          if (brackets.at(-1) === ({ ")": "(", ">": "<", "}": "{", "]": "[" } as Record<string, string>)[ch]) brackets.pop();
+          if (
+            brackets.at(-1) ===
+            ({ ")": "(", ">": "<", "}": "{", "]": "[" } as Record<string, string>)[ch]
+          )
+            brackets.pop();
         } else if (ch === ":" && brackets.length === 0) {
           header = false;
           code = " ".repeat(i + 1) + code.slice(i + 1);
@@ -99,13 +130,23 @@ export const extractBend = (file: string, text: string): BendFacts => {
       continue;
     }
     if (/^\s+import\s+/.test(code)) {
-      const path = strings.find((s) => s.start >= 0 && /^\s+import\s+$/.test(code.slice(0, s.start)));
+      const path = strings.find(
+        (s) => s.start >= 0 && /^\s+import\s+$/.test(code.slice(0, s.start)),
+      );
       if (path) facts.imports.push({ file, line, spec: path.text });
       continue;
     }
     if (inType) {
       const ctor = CONSTRUCTOR.exec(code);
-      if (ctor) facts.symbols.push({ file, line, name: ctor[1]!, kind: "decl", sig: visible.trim().slice(0, 140), lang: "Bend" });
+      if (ctor)
+        facts.symbols.push({
+          file,
+          line,
+          name: ctor[1]!,
+          kind: "decl",
+          sig: visible.trim().slice(0, 140),
+          lang: "Bend",
+        });
       continue;
     }
     CALL.lastIndex = 0;

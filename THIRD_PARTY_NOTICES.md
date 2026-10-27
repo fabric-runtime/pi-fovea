@@ -1,12 +1,11 @@
 # Third-party notices
 
-## Bend 2.0.26
+## gdp-wired 0.30.1
 
-The generated policy kernel contains Bend's emitted JavaScript trampoline and
-compiled Base primitives from [Bend 2.0.26](https://github.com/bendlang/bend/tree/v2.0.26),
-Copyright 2026 HigherOrderCO, licensed under Apache-2.0. Pi Fovea removes the
-CLI invocations, adds library exports, and tree-shakes/minifies unused runtime
-code using the bridge pattern developed in Pi Fabric.
+The generated policy kernels contain runtime helpers emitted by
+[gdp-wired](https://github.com/monotykamary/gdp-wired),
+Copyright (c) 2026 Tom X Nguyen, licensed under the MIT License.
+The complete notice is included in [docs/licenses/gdp-wired-mit.txt](docs/licenses/gdp-wired-mit.txt).
 
-The complete license is distributed at
-[docs/licenses/bend-apache-2.0.txt](docs/licenses/bend-apache-2.0.txt).
+Fovea generates standalone JavaScript from checked machines and bundles those
+helpers; it does not ship or load the prover at runtime.

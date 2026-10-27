@@ -13,10 +13,7 @@ import type { CoChangeHistory, CoChangePartner } from "../src/core/cochange.js";
 const DAY = 86_400_000;
 const NOW = 1_700_000_000_000;
 
-const partner = (
-  file: string,
-  overrides: Partial<CoChangePartner> = {},
-): CoChangePartner => ({
+const partner = (file: string, overrides: Partial<CoChangePartner> = {}): CoChangePartner => ({
   partner: file,
   w: 0.4,
   lastTs: NOW,
@@ -33,17 +30,10 @@ const historyOf = (entries: Array<[string, CoChangePartner[]]>): CoChangeHistory
 describe("unmet-companion expectation residuals", () => {
   it("returns a strong historical companion that is absent from the change", () => {
     const history = historyOf([
-      ["src/a.ts", [
-        partner("src/companion.ts"),
-        partner("src/already-changed.ts"),
-      ]],
+      ["src/a.ts", [partner("src/companion.ts"), partner("src/already-changed.ts")]],
     ]);
 
-    const residuals = expectationResiduals(
-      ["src/a.ts", "src/already-changed.ts"],
-      history,
-      NOW,
-    );
+    const residuals = expectationResiduals(["src/a.ts", "src/already-changed.ts"], history, NOW);
 
     expect([...residuals.keys()]).toEqual(["src/companion.ts"]);
     expect(residuals.get("src/companion.ts")).toBeGreaterThan(0.45);
@@ -52,12 +42,17 @@ describe("unmet-companion expectation residuals", () => {
 
   it("rejects a weak pair whose conservative conditional rate does not beat its base rate", () => {
     const history = historyOf([
-      ["src/a.ts", [partner("src/common.ts", {
-        n_ij: 3,
-        n_i: 20,
-        n_j: 10,
-        N: 100,
-      })]],
+      [
+        "src/a.ts",
+        [
+          partner("src/common.ts", {
+            n_ij: 3,
+            n_i: 20,
+            n_j: 10,
+            N: 100,
+          }),
+        ],
+      ],
     ]);
 
     expect(expectationResiduals(["src/a.ts"], history, NOW).size).toBe(0);
@@ -65,12 +60,15 @@ describe("unmet-companion expectation residuals", () => {
 
   it("applies the existing half-life decay at use time", () => {
     const history = historyOf([
-      ["src/a.ts", [
-        partner("src/fresh.ts"),
-        partner("src/old.ts", {
-          lastTs: NOW - COCHANGE_HALF_LIFE_DAYS * DAY,
-        }),
-      ]],
+      [
+        "src/a.ts",
+        [
+          partner("src/fresh.ts"),
+          partner("src/old.ts", {
+            lastTs: NOW - COCHANGE_HALF_LIFE_DAYS * DAY,
+          }),
+        ],
+      ],
     ]);
 
     const residuals = expectationResiduals(["src/a.ts"], history, NOW);
@@ -79,12 +77,17 @@ describe("unmet-companion expectation residuals", () => {
 
   it("requires at least three joint commits", () => {
     const history = historyOf([
-      ["src/a.ts", [partner("src/two-hit.ts", {
-        n_ij: 2,
-        n_i: 3,
-        n_j: 2,
-        N: 100,
-      })]],
+      [
+        "src/a.ts",
+        [
+          partner("src/two-hit.ts", {
+            n_ij: 2,
+            n_i: 3,
+            n_j: 2,
+            N: 100,
+          }),
+        ],
+      ],
     ]);
 
     expect(expectationResiduals(["src/a.ts"], history, NOW).has("src/two-hit.ts")).toBe(false);
@@ -108,11 +111,14 @@ describe("unmet-companion expectation residuals", () => {
 
   it("is deterministic and orders equal weights by path", () => {
     const history = historyOf([
-      ["src/source.ts", [
-        partner("src/zeta.ts"),
-        partner("src/beta.ts", { n_ij: 10, n_i: 20, n_j: 10 }),
-        partner("src/alpha.ts"),
-      ]],
+      [
+        "src/source.ts",
+        [
+          partner("src/zeta.ts"),
+          partner("src/beta.ts", { n_ij: 10, n_i: 20, n_j: 10 }),
+          partner("src/alpha.ts"),
+        ],
+      ],
     ]);
 
     const first = expectationResiduals(["src/source.ts", "src/source.ts"], history, NOW);

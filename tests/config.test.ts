@@ -27,7 +27,11 @@ const setup = (stored: unknown) => {
 
 describe("fovea config", () => {
   it("defaults sync to visible and every budget knob to 512", () => {
-    expect(DEFAULT_FOVEA_CONFIG.sync).toMatchObject({ mode: "enabled", scope: "session", budget: 512 });
+    expect(DEFAULT_FOVEA_CONFIG.sync).toMatchObject({
+      mode: "enabled",
+      scope: "session",
+      budget: 512,
+    });
     expect(DEFAULT_FOVEA_CONFIG.tools).toMatchObject({
       defaultBudget: 512,
       grepMode: "augment",
@@ -50,7 +54,10 @@ describe("fovea config", () => {
   });
 
   it("migrates legacy sync enabled booleans and prefers an explicit mode", () => {
-    for (const [enabled, mode] of [[true, "enabled"], [false, "disabled"]] as const) {
+    for (const [enabled, mode] of [
+      [true, "enabled"],
+      [false, "disabled"],
+    ] as const) {
       const { root, agentDir, cwd } = setup({ sync: { enabled } });
       try {
         expect(loadFoveaConfig({ cwd, agentDir, projectTrusted: false }).sync.mode).toBe(mode);
@@ -68,7 +75,10 @@ describe("fovea config", () => {
   });
 
   it("migrates legacy replaceGrep booleans to grep modes", () => {
-    for (const [legacy, mode] of [[true, "replace"], [false, "off"]] as const) {
+    for (const [legacy, mode] of [
+      [true, "replace"],
+      [false, "off"],
+    ] as const) {
       const { root, agentDir, cwd } = setup({ tools: { replaceGrep: legacy } });
       try {
         expect(loadFoveaConfig({ cwd, agentDir, projectTrusted: false }).tools.grepMode).toBe(mode);
@@ -81,7 +91,9 @@ describe("fovea config", () => {
   it("prefers an explicit grepMode over the legacy key", () => {
     const { root, agentDir, cwd } = setup({ tools: { replaceGrep: true, grepMode: "augment" } });
     try {
-      expect(loadFoveaConfig({ cwd, agentDir, projectTrusted: false }).tools.grepMode).toBe("augment");
+      expect(loadFoveaConfig({ cwd, agentDir, projectTrusted: false }).tools.grepMode).toBe(
+        "augment",
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -90,7 +102,9 @@ describe("fovea config", () => {
   it("loads repository-wide sync explicitly", () => {
     const { root, agentDir, cwd } = setup({ sync: { scope: "repository" } });
     try {
-      expect(loadFoveaConfig({ cwd, agentDir, projectTrusted: false }).sync.scope).toBe("repository");
+      expect(loadFoveaConfig({ cwd, agentDir, projectTrusted: false }).sync.scope).toBe(
+        "repository",
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
