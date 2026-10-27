@@ -20,4 +20,43 @@ The resulting `Graph` retains nodes, typed relationship evidence, file/name inde
 
 `diffuseMass` accepts a graph, a finite nonnegative source vector matching the node count, and finite times in [0,64]. Results are `{ time, mass: Float64Array }` in requested order. It shares Chebyshev recurrence vectors across times and applies the forward random-walk conjugation of the symmetric heat kernel. Isolates retain their original mass. Floating-point conservation is approximate; tests cover it against existing solver paths, whose independent reference tests remain in the core suite.
 
+## Opt-in interval verification
+
+```ts
+import { certifyDiffusion } from "pi-fovea/substrate";
+
+const certificate = await certifyDiffusion(graph, source, 8, {
+  absoluteTolerance: 1e-8,
+  maxWork: 100_000,
+});
+if (!certificate.withinTolerance) {
+  throw new Error(`Diffusion error bound: ${certificate.maxAbsoluteError}`);
+}
+// certificate.value is the actual diffuseMass output.
+// certificate.lower/upper enclose the independent exact-edge-normalized target.
+```
+
+This computes a separate u32-interval Poisson expansion; it does not compare two
+Float64 approximations or replace the production Chebyshev result. It includes
+normalization, coefficient, recurrence, summation and pruning disagreement in
+one final bound. Isolates retain their source values in the reference target.
+`poissonOrder`, `remainderBound`, `work`, and `assumptions` expose the evidence.
+
+This is a **conditional runtime certificate**, not an unconditional formal
+matrix-exponential theorem. The interval/limb implementation, JS arithmetic,
+and correspondence to the analytic model remain assumptions. The separate
+Lean proofs establish the Poisson identity and stochastic norm bounds. A
+separate gdp-wired model now proves constructive scalar-tail convergence, not that
+the TypeScript evaluator implements those definitions; see
+[the exact proof boundary](proofs.md#lean-numerical-models-28-checked-theorems). Rounded
+CSR degrees are not assumed exact: the reference recomputes normalization from
+the exact binary edge weights. Source/candidate snapshots are taken before the
+lazy verifier is loaded; callers still own graph immutability during each call.
+
+Finite times remain in [0,64]. Work counts normalization/operator visits, not
+wall-clock time or the fast candidate computation. At most 512 Poisson iterations
+and 1,000,000 reference visits are allowed. Invalid inputs, insufficient precision,
+or exhausted work reject the promise; an excessive candidate error returns
+`withinTolerance: false`. Normal `diffuseMass` calls do not load this verifier.
+
 No session, disclosure, snapshot cache, or quality policy is implied by this API. Consumers such as pi-contour supply immutable Git/index snapshots, analysis-specific projections, source evidence, and their own bounded caches.

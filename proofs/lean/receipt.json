@@ -1,0 +1,299 @@
+{
+  "version": 1,
+  "toolchain": {
+    "version": 1,
+    "lean": "4.19.0",
+    "elanToolchain": "leanprover/lean4:v4.19.0",
+    "mathlib": "c44e0c8ee63ca166450922a373c7409c5d26b00b",
+    "modules": [
+      "Arithmetic",
+      "Analysis",
+      "Intervals"
+    ]
+  },
+  "correspondence": "not-proved",
+  "inputs": {
+    "scripts/check-lean.mjs": "1d270c56e45ec204fb7571936da3e0e352015408777d44c1b5f0a6443a1ef191",
+    "proofs/lean/toolchain.json": "f3e1796c8f7339b968f990e98fa50985af12acce4e67d1d9f321ba12e57afbf0",
+    "proofs/lean/ledger.json": "20f6b61be230dbbfe830373a6ddb0f4f5ec4b8ae4b44a8ad1ec3e14a9c0c1399",
+    "proofs/lean/Fovea/Arithmetic.lean": "76562d4939387bc50f08541d5c22b9c85c4a98cce27041f1816cdcc914bd4c78",
+    "proofs/lean/Fovea/Analysis.lean": "29045cd87ac45d1e4ac366185c2b5d506951f530f9147f789b1ab0629fc1e244",
+    "proofs/lean/Fovea/Intervals.lean": "b89d5d891a04bb128e80c2e0963b7e36dd1e00eb29c23c77dc2d0a48a37d4e5e"
+  },
+  "theorems": [
+    {
+      "name": "Fovea.value_addDigits",
+      "module": "Arithmetic",
+      "scope": "algorithm-model"
+    },
+    {
+      "name": "Fovea.value_scaleDigits",
+      "module": "Arithmetic",
+      "scope": "algorithm-model"
+    },
+    {
+      "name": "Fovea.value_multiplyDigits",
+      "module": "Arithmetic",
+      "scope": "algorithm-model"
+    },
+    {
+      "name": "Fovea.value_shiftDigits",
+      "module": "Arithmetic",
+      "scope": "algorithm-model"
+    },
+    {
+      "name": "Fovea.divideDigits_length",
+      "module": "Arithmetic",
+      "scope": "algorithm-model"
+    },
+    {
+      "name": "Fovea.divideDigits_reconstructs",
+      "module": "Arithmetic",
+      "scope": "algorithm-model"
+    },
+    {
+      "name": "Fovea.divideDigits_remainder_lt",
+      "module": "Arithmetic",
+      "scope": "algorithm-model"
+    },
+    {
+      "name": "Fovea.exp_scalar_one",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.poisson_identity",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.geometric_norm_bound",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.scalar_exp_nonneg",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.poissonCoefficient_nonneg",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.poissonCoefficient_succ",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.poisson_majorant",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.poisson_tail_bound",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.weighted_bound",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.column_l1_bound",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.normalizedRow_nonneg",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.normalizedRow_sum",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.row_iterate_bound",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.column_iterate_l1_bound",
+      "module": "Analysis",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.floorDiv_bounds",
+      "module": "Intervals",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.ceilDiv_bounds",
+      "module": "Intervals",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.add_enclosure",
+      "module": "Intervals",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.multiply_enclosure",
+      "module": "Intervals",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.divide_enclosure",
+      "module": "Intervals",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.signed_enclosure",
+      "module": "Intervals",
+      "scope": "mathematics"
+    },
+    {
+      "name": "Fovea.certificate_error_bound",
+      "module": "Intervals",
+      "scope": "mathematics"
+    }
+  ],
+  "axioms": {
+    "Fovea.value_addDigits": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.value_scaleDigits": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.value_multiplyDigits": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.value_shiftDigits": [
+      "propext"
+    ],
+    "Fovea.divideDigits_length": [],
+    "Fovea.divideDigits_reconstructs": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.divideDigits_remainder_lt": [
+      "propext"
+    ],
+    "Fovea.exp_scalar_one": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.poisson_identity": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.geometric_norm_bound": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.scalar_exp_nonneg": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.poissonCoefficient_nonneg": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.poissonCoefficient_succ": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.poisson_majorant": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.poisson_tail_bound": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.weighted_bound": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.column_l1_bound": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.normalizedRow_nonneg": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.normalizedRow_sum": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.row_iterate_bound": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.column_iterate_l1_bound": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.floorDiv_bounds": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.ceilDiv_bounds": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.add_enclosure": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.multiply_enclosure": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.divide_enclosure": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.signed_enclosure": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ],
+    "Fovea.certificate_error_bound": [
+      "Classical.choice",
+      "Quot.sound",
+      "propext"
+    ]
+  }
+}

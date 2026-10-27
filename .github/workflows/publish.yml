@@ -84,17 +84,16 @@ jobs:
         if: steps.release.outputs.mode != 'skip'
         run: bun install --frozen-lockfile
 
-      - name: Install the pinned Bend proof compiler
-        if: steps.release.outputs.mode != 'skip'
-        run: |
-          curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/bend.tar.gz" https://github.com/bendlang/bend/releases/download/v2.0.26/bend-2.0.26-linux-x64.tar.gz
-          echo "5edcc8e5c12d525655431ab02659ddf88e362aafbe7c7bb7f783a1ffaeb6165c  $RUNNER_TEMP/bend.tar.gz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/bend.tar.gz" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/bend/bin" >> "$GITHUB_PATH"
-
       - name: Check
         if: steps.release.outputs.mode != 'skip'
         run: bun run typecheck
+
+      - uses: ./.github/actions/setup-lean
+        if: steps.release.outputs.mode != 'skip'
+
+      - name: Full Lean kernel check and axiom audit
+        if: steps.release.outputs.mode != 'skip'
+        run: bun run check:lean
 
       - name: Pack
         if: steps.release.outputs.mode != 'skip'

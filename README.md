@@ -566,21 +566,30 @@ calls and proof checking are not modeled; Bend 1/HVM syntax is not supported.
 
 ```sh
 bun install
-bun run check:fast   # Bend laws + artifact parity + typecheck + affected tests
+bun run check:fast   # gdp-wired laws + artifact parity + typecheck + affected tests
 bun run test:smoke   # curated scan-to-render floor, seconds
 bun run bench        # rate–distortion and refresh bench against ../pi-fabric
 bun run bench tests/fixtures/mini  # self-contained smoke run
 ```
 
-Development checks require **Bend 2.0.26** (`bend guide`). See [laws, proofs, and
-which tests they can replace](docs/proofs.md). Bend is development-only; the
-extension and published CLI need no Bend installation or generation step.
-Production executes the committed Bend-compiled disclosure, prefix-accounting,
-and heat-basis command kernels. After changing their sources or adapters, run
+Development checks use **gdp-wired 0.30.1**, pinned in devDependencies. See
+[laws, proof boundaries, and numerical certificates](docs/proofs.md). No Bend
+compiler is required. Production executes committed JavaScript generated from
+checked disclosure, accounting, basis, semaphore, capacity, lease, focus, and
+prefix-selection policies. Arithmetic digit streams are generated from checked
+machines; `bun run check:series` checks a constructive rational Cauchy model
+for scalar tails, and `bun run check:operators` checks unbounded signed
+coefficients and normalized path trees. `bun run check:transport` adds exact
+indexed L1 bounds through arbitrary transport rounds. `bun run check:focus`
+checks the complementary infinity-norm model, and `bun run check:enclosures`
+checks exact rational interval policies. `bun run check:normalization` checks
+raw-row ratios, unit mass and zero-row identity without Lean. The certificate
+path now normalizes exact dyadic weights before rounding probabilities. See the proof boundary before treating these
+as a proof of the complete matrix-exponential evaluator. After changing proofs or adapters, run
 `bun run proofs:generate`; `bun run proofs:artifact` checks the receipt without
-Bend. CLI builds check that receipt; publishing also proves and reproduces the
-artifact. The Float64 heat solver still relies on numerical tests, not a proof
-of its approximation or rounding errors.
+loading the prover. The extension remains buildless and the CLI self-contained.
+Scalar heat primitives have exact interval certificates; a full Float64
+matrix-exponential error theorem is not claimed.
 
 The [warm-path performance report](docs/performance.md) compares the coverage-complete implementation with the optimized version. `bun run corpus:performance <coverage-work> <before-source> <after-source> [rounds]` runs alternating, isolated comparisons with a shared extraction snapshot, independent Git indexes, and exact graph, focus/dwell/sketch, and overflow-content checks. It does not trade fewer candidates or weaker freshness checks for speed. For Node, run `NODE_OPTIONS='--import tsx' node scripts/performance-corpus.mjs ...`; development dependencies are required.
 

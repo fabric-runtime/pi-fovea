@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { revealFoveated, revealGroups, tokenEstimate, type GroupLine } from "../src/core/render.js";
+import { fitPrefix, revealFoveated, revealGroups, tokenEstimate, type GroupLine } from "../src/core/render.js";
 import { buildCsr, heatAt } from "../src/core/heat.js";
 import type { Graph, NodeRec } from "../src/core/types.js";
 
@@ -306,5 +306,24 @@ describe("overflow artifacts", () => {
     expect(fit.truncated).toBe(false);
     expect(fit.overflowPath).toBeUndefined();
     expect(fit.text).not.toContain("full list saved");
+  });
+});
+
+describe('exact prefix cost selection', () => {
+  it('finds the largest fit across nonmonotone footer costs', () => {
+    expect(fitPrefix([30, 40, 10, 60, 20], 20)).toBe(4);
+    expect(fitPrefix([30, 40, 10, 60], 20)).toBe(2);
+    expect(fitPrefix([30, 40], 20)).toBe(-1);
+    expect(fitPrefix([], 20)).toBe(-1);
+  });
+  it('bounds empty and header-only outputs at tiny budgets', () => {
+    for (const budget of [0, 1, 2, 10]) {
+      const groups = revealGroups([{label:'a',mass:1,detail:'a'.repeat(500)}], {header:'h'.repeat(500),budget});
+      expect(groups.tokens).toBeLessThanOrEqual(budget);
+      const g = fanGraph(0);
+      const empty = revealFoveated(g, new Float64Array(g.nodes.length), {header:'h'.repeat(500),budget});
+      expect(empty.tokens).toBe(tokenEstimate(empty.text));
+      expect(empty.tokens).toBeLessThanOrEqual(budget);
+    }
   });
 });

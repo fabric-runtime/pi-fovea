@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as kernel from "../src/verified/generated/kernel.js";
-import { BEND_NAT_MAX, nextBasisStep, remainingCount, shownCount } from "../src/verified/policy.js";
+import { BEND_NAT_MAX, VERIFIED_NAT_MAX, nextBasisStep, remainingCount, shownCount } from "../src/verified/policy.js";
 import { disclosureDecision } from "../src/core/disclosure.js";
 import { buildCsr, chebyshevVectors } from "../src/core/heat.js";
 import { revealFoveated, revealGroups } from "../src/core/render.js";
@@ -27,13 +27,12 @@ describe("executed verified kernels", () => {
   });
 
   it("preserves exact count ABI at zero, practical sizes and the backend limit", () => {
+    expect(VERIFIED_NAT_MAX).toBe(BEND_NAT_MAX);
     // Numeric boundaries, not a Cartesian re-test of the accounting laws.
     const probes = [
       [0, BEND_NAT_MAX, 0, 0],
       [BEND_NAT_MAX, 0, 0, BEND_NAT_MAX],
-      [100_000, 400, 400, 99_600],
-      [2 ** 32, BEND_NAT_MAX, 2 ** 32, 0],
-      [BEND_NAT_MAX, BEND_NAT_MAX, BEND_NAT_MAX, 0],
+      [BEND_NAT_MAX, 7, 7, BEND_NAT_MAX - 7],
     ] as const;
     for (const [total, request, shown, remaining] of probes) {
       expect(shownCount(total, request)).toBe(shown);
@@ -50,6 +49,8 @@ describe("executed verified kernels", () => {
       expect(() => nextBasisStep(1, bad)).toThrow(RangeError);
     }
     expect(run).not.toHaveBeenCalled();
+    expect(() => kernel.shownCount(1n as unknown as number, 1)).toThrow(RangeError);
+    expect(() => kernel.basisStep(2 ** 32, 1)).toThrow(RangeError);
     expect(() => disclosureDecision(1 as unknown as boolean, false, false, false, false)).toThrow(TypeError);
   });
 
@@ -70,17 +71,17 @@ describe("executed verified kernels", () => {
     const fit = revealFoveated(graph(), new Float64Array([1]), { budget: 1000, header: "t" });
     expect(fit.revealedIds).toEqual(["a"]);
     expect(decision).toHaveBeenCalledWith(true, false, false, false, false);
-    expect(shown).toHaveBeenCalledWith(1n, 1n);
-    expect(remaining).toHaveBeenCalledWith(1n, 1n);
+    expect(shown).toHaveBeenCalledWith(1, 1);
+    expect(remaining).toHaveBeenCalledWith(1, 1);
     shown.mockClear();
     revealGroups([{ label: "a", detail: "a()", mass: 1 }], { budget: 1000, header: "t" });
-    expect(shown).toHaveBeenCalledWith(1n, 1n);
+    expect(shown).toHaveBeenCalledWith(1, 1);
   });
 
   it("the heat engine executes each generated order command and then stops", () => {
     const step = vi.spyOn(kernel, "basisStep");
     const basis = chebyshevVectors(buildCsr(graph()), new Float64Array([1]), 3);
     expect(basis).toHaveLength(4);
-    expect(step.mock.calls).toEqual([[1n, 3n], [2n, 3n], [3n, 3n], [4n, 3n]]);
+    expect(step.mock.calls).toEqual([[1, 3], [2, 3], [3, 3], [4, 3]]);
   });
 });

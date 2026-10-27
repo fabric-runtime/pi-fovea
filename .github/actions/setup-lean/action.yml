@@ -1,0 +1,30 @@
+name: Pinned Lean and mathlib
+description: Prepare the independent numerical-model proof checker
+runs:
+  using: composite
+  steps:
+    - name: Install the Lean toolchain manager
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y elan zstd
+        echo "FOVEA_MATHLIB_ROOT=$RUNNER_TEMP/pi-fovea-mathlib" >> "$GITHUB_ENV"
+    - uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/pi-fovea-mathlib
+        key: ${{ runner.os }}-fovea-mathlib-${{ hashFiles('proofs/lean/toolchain.json') }}
+    - name: Fetch pinned Lean and cached mathematical dependencies
+      shell: bash
+      run: |
+        toolchain=$(node -p "require('./proofs/lean/toolchain.json').elanToolchain")
+        version=$(node -p "require('./proofs/lean/toolchain.json').lean")
+        revision=$(node -p "require('./proofs/lean/toolchain.json').mathlib")
+        timeout -s KILL 300s elan toolchain install "$toolchain"
+        if [ ! -d "$FOVEA_MATHLIB_ROOT/.git" ]; then
+          timeout -s KILL 120s git clone --depth 1 --branch "v$version" \
+            https://github.com/leanprover-community/mathlib4.git "$FOVEA_MATHLIB_ROOT"
+        fi
+        test "$(git -C "$FOVEA_MATHLIB_ROOT" rev-parse HEAD)" = "$revision"
+        cd "$FOVEA_MATHLIB_ROOT"
+        ELAN_TOOLCHAIN="$toolchain" timeout -s KILL 420s lake exe cache get \
+          Mathlib/Tactic.lean Mathlib/Analysis/Normed/Algebra/Exponential.lean

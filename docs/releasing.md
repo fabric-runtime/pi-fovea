@@ -8,7 +8,7 @@ There is no second version to maintain and no extension build step.
 ## Prepare and check
 
 Use the project's normal versioning process to set the root package version.
-Both packages use that version. With development dependencies and Bend 2.0.26
+Both packages use that version. With development dependencies (including pinned gdp-wired)
 installed, run:
 
 ```sh
@@ -30,7 +30,13 @@ parser dependency, licenses, and auditable proof receipt inputs/outputs.
 With an archive, it checks that exact artifact without rebuilding it. Checks
 cover metadata, proof hashes, license files, compiler-free execution, and an
 offline npm global install in a disposable prefix (optional parsers omitted).
-CI checks both distributions. Neither check publishes anything.
+CI checks both distributions. Neither check publishes anything. CI and the
+publish workflow also run the full independent Lean model check with the pinned
+mathlib checkout. Local packaging checks its source-bound receipt without
+requiring Lean; after changing a Lean input, follow the
+[model-proof regeneration sequence](proofs.md#lean-numerical-models-28-checked-theorems)
+before packing. Both archives retain the model sources, ledger and receipt;
+neither installs Lean or mathlib.
 
 ## Publish the checked artifacts
 

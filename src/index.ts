@@ -10,10 +10,12 @@ import { canonicalPath, ExecutionRoots, ProjectDiscovery, accessedPaths, WORKSPA
 import { resolveAgentDir } from "./core/agent-dir.js";
 import { loadFoveaConfig, type FoveaConfig } from "./core/config.js";
 import { hasAstGrep } from "./core/astgrep.js";
-import { OBSERVED_ROOT_LIMIT } from "./core/asyncutil.js";
+import { OBSERVED_ROOT_LIMIT, trimMap } from "./core/asyncutil.js";
 import { observeSessionPaths, resetSessions } from "./core/session.js";
 import type { MutationCapture } from "./core/provenance.js";
 import type { NodeKind } from "./core/types.js";
+
+import { leaseValid } from "./verified/generated/control.js";
 
 type Runtime = typeof import("./core/extension-runtime.js");
 let runtime: Runtime | undefined;
@@ -137,12 +139,16 @@ export default function fovea(pi: ExtensionAPI) {
     }
     const cfg = loadFoveaConfig({ cwd: root, agentDir: agentDir ?? resolveAgentDir(), projectTrusted: trusted });
     configs.set(key, cfg);
-    while (configs.size > OBSERVED_ROOT_LIMIT) configs.delete(configs.keys().next().value!);
+    trimMap(configs, OBSERVED_ROOT_LIMIT);
     return cfg;
   };
 
   // Serialize successful enrollment; failed or replaced sessions cannot bind late.
   let bindingTail: Promise<unknown> = Promise.resolve();
+  const currentLease = (root: string, epoch: number, lease: number | undefined): boolean => {
+    const current = roots.lease(root);
+    return leaseValid(lifecycleEpoch, epoch, current ?? 0, lease ?? 0, current !== undefined && lease !== undefined);
+  };
   // Manual calls answer "what am I in?", never "what did I last touch?": an
   // omitted root is the session cwd's own project (nearest Git marker or
   // manifest), else the canonical cwd, so an umbrella/coordinator directory
@@ -172,7 +178,7 @@ export default function fovea(pi: ExtensionAPI) {
       if (change.fresh) { resetSessions(root); resetSyncBaselines(root); }
       persistRoots();
       const lease = roots.lease(root);
-      const current = () => epoch === lifecycleEpoch && roots.lease(root) === lease;
+      const current = () => currentLease(root, epoch, lease);
       if (!peer) pi.events?.emit(WORKSPACE_ACCESS_EVENT, { version: 1, source: "fovea", root, sessionId: ctx.sessionManager.getSessionId() });
       const cfg = targetConfig(root, ctx);
       if (syncRuns(cfg) && !runtime?.syncBaselineStore().has(root)) {
@@ -427,7 +433,7 @@ export default function fovea(pi: ExtensionAPI) {
       const at = (start + i) % targets.length, root = targets[at]!;
       pollCursor = (at + 1) % targets.length;
       const lease = roots.lease(root);
-      const current = () => epoch === lifecycleEpoch && roots.lease(root) === lease;
+      const current = () => currentLease(root, epoch, lease);
       try {
         const cfg = targetConfig(root, ctx);
         if (!syncRuns(cfg)) continue;
@@ -499,7 +505,7 @@ export default function fovea(pi: ExtensionAPI) {
         const lease = roots.lease(root), epoch = lifecycleEpoch;
         onUpdate?.({ content: [text("Surveying production architecture…")], details: { phase: "sketch" } });
         const r = await sketch(root, params.maxTokens ?? targetConfig(root, ctx).tools.defaultBudget);
-        if (epoch !== lifecycleEpoch || roots.lease(root) !== lease) throw new Error("Fovea root retired during analysis; retry with an explicit root");
+        if (!currentLease(root, epoch, lease)) throw new Error("Fovea root retired during analysis; retry with an explicit root");
         return { content: [text(r.text)], details: { ...r.details, root, observedRoots: roots.list(), workspace: roots.details(), agentOrigin: ctx.cwd } };
       } catch (error) {
         return rethrowOrDegrade(error);
@@ -547,7 +553,7 @@ export default function fovea(pi: ExtensionAPI) {
             fresh: params.fresh,
           },
         );
-        if (epoch !== lifecycleEpoch || roots.lease(root) !== lease) throw new Error("Fovea root retired during analysis; retry with an explicit root");
+        if (!currentLease(root, epoch, lease)) throw new Error("Fovea root retired during analysis; retry with an explicit root");
         return { content: [text(r.text)], details: { ...r.details, root, observedRoots: roots.list(), workspace: roots.details(), agentOrigin: ctx.cwd } };
       } catch (error) {
         return rethrowOrDegrade(error);
@@ -575,7 +581,7 @@ export default function fovea(pi: ExtensionAPI) {
         const lease = roots.lease(root), epoch = lifecycleEpoch;
         onUpdate?.({ content: [text("Widening the current graph context…")], details: { phase: "diffuse" } });
         const r = await dwell(root, params.factor, params.maxTokens ?? targetConfig(root, ctx).tools.defaultBudget);
-        if (epoch !== lifecycleEpoch || roots.lease(root) !== lease) throw new Error("Fovea root retired during analysis; retry with an explicit root");
+        if (!currentLease(root, epoch, lease)) throw new Error("Fovea root retired during analysis; retry with an explicit root");
         return { content: [text(r.text)], details: { ...r.details, root, observedRoots: roots.list(), workspace: roots.details(), agentOrigin: ctx.cwd } };
       } catch (error) {
         return rethrowOrDegrade(error);
@@ -615,7 +621,7 @@ export default function fovea(pi: ExtensionAPI) {
           base: params.base,
           budget: params.maxTokens ?? targetConfig(root, ctx).tools.defaultBudget,
         });
-        if (epoch !== lifecycleEpoch || roots.lease(root) !== lease) throw new Error("Fovea root retired during analysis; retry with an explicit root");
+        if (!currentLease(root, epoch, lease)) throw new Error("Fovea root retired during analysis; retry with an explicit root");
         return { content: [text(r.text)], details: { ...r.details, root, observedRoots: roots.list(), workspace: roots.details(), agentOrigin: ctx.cwd } };
       } catch (error) {
         return rethrowOrDegrade(error);

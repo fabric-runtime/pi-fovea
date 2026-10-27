@@ -14,7 +14,7 @@ import {
 import type { DiscoveryReport, ExtractionReport, FactStore, FileFacts } from "./build.js";
 import { assembleGraphWithIndex } from "./graph.js";
 import { gitOut, gitProbe, gitReflogAction } from "./git.js";
-import { ROOT_CACHE_LIMIT, envInt, yieldToLoop } from "./asyncutil.js";
+import { ROOT_CACHE_LIMIT, envInt, trimMap, yieldToLoop } from "./asyncutil.js";
 import { loadRepoRules } from "./anchors.js";
 import { buildCsr, type Csr } from "./heat.js";
 import type { JoinIndex } from "./join.js";
@@ -83,12 +83,10 @@ const touch = (root: string): RepoState | undefined => {
 };
 
 const evictLru = (): void => {
-  while (states.size > ROOT_CACHE_LIMIT) {
-    const oldest = states.keys().next().value!;
-    states.delete(oldest);
+  trimMap(states, ROOT_CACHE_LIMIT, oldest => {
     inflight.delete(oldest);
     clearPersistTimer(oldest);
-  }
+  });
 };
 
 /** Warm state if present (does not block). */

@@ -4,6 +4,8 @@
 // time and (b) yield inside irreversibly synchronous CPU sweeps so input and
 // rendering keep flowing.
 
+import { capacityPlan, semaphoreStep } from "../verified/generated/control.js";
+
 export const envInt = (name: string, dflt: number, min: number, max: number): number => {
   const raw = Number(process.env[name]);
   if (!Number.isFinite(raw) || raw <= 0) return dflt;
@@ -22,6 +24,16 @@ export const IO_CONCURRENCY = envInt("FOVEA_IO_CONCURRENCY", 32, 4, 512);
 export const OBSERVED_ROOT_LIMIT = envInt("FOVEA_MAX_ROOTS", 32, 1, 32);
 /** Heavy graphs, fact stores, and numerical vectors remain a small hot cache. */
 export const ROOT_CACHE_LIMIT = envInt("FOVEA_CACHE_ROOTS", 2, 1, 32);
+
+/** Retain at most limit entries, evicting oldest first through the proved cap. */
+export const trimMap = <K, V>(map: Map<K, V>, limit: number, onEvict?: (key: K) => void): void => {
+  const keep = capacityPlan(map.size, limit + 1).keep;
+  while (map.size > keep) {
+    const oldest = map.keys().next().value!;
+    map.delete(oldest);
+    onEvict?.(oldest);
+  }
+};
 
 /** Run fn over items with a global concurrency cap, preserving input order. */
 export const mapLimit = async <T, R>(
@@ -51,15 +63,19 @@ class Semaphore {
   private readonly waiters: Array<() => void> = [];
   constructor(private readonly limit: number) {}
   async run<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.active >= this.limit) {
+    const entry = semaphoreStep(this.active, this.waiters.length, this.limit, false);
+    this.active = entry.active;
+    if (!entry.admit) {
       await new Promise<void>((resolve) => this.waiters.push(resolve));
     }
-    this.active++;
     try {
       return await fn();
     } finally {
-      this.active--;
-      this.waiters.shift()?.();
+      const exit = semaphoreStep(this.active, this.waiters.length, this.limit, true);
+      this.active = exit.active;
+      // A wake transfers the occupied slot. It never becomes available to a
+      // newcomer between resolving this waiter and its microtask resumption.
+      if (exit.wake) this.waiters.shift()!();
     }
   }
 }

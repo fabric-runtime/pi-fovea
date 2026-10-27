@@ -4,7 +4,8 @@
 // vectors keep dwell cheap across wider timescales within that focus.
 
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { ROOT_CACHE_LIMIT, OBSERVED_ROOT_LIMIT } from "./asyncutil.js";
+import { ROOT_CACHE_LIMIT, OBSERVED_ROOT_LIMIT, trimMap } from "./asyncutil.js";
+import { capacityPlan } from "../verified/generated/control.js";
 import type { NodeKind } from "./types.js";
 
 interface FocusScope {
@@ -54,10 +55,7 @@ export const getSession = (root: string): FoveaSession => {
     tkKey: "",
   };
   sessions.set(root, s);
-  while (sessions.size > OBSERVED_ROOT_LIMIT) {
-    const oldest = sessions.keys().next().value!;
-    sessions.delete(oldest);
-  }
+  trimMap(sessions, OBSERVED_ROOT_LIMIT);
   return s;
 };
 
@@ -105,7 +103,7 @@ export const clearSessionFocus = (session: FoveaSession): void => {
 /** Reserve a hot vector slot without discarding cold attention/disclosure. */
 export const retainSessionVectors = (root: string): void => {
   const others = [...sessions.values()].reverse().filter(s => s.root !== root && s.tk.length);
-  for (const session of others.slice(Math.max(0, ROOT_CACHE_LIMIT - 1))) { session.tk = []; session.tkKey = ""; }
+  for (const session of others.slice(capacityPlan(others.length, ROOT_CACHE_LIMIT).keep)) { session.tk = []; session.tkKey = ""; }
 };
 
 // `/new` and friends: same repo, fresh eyes.

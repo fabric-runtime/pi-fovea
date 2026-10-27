@@ -58,7 +58,7 @@ try {
   assert(!existsSync(join(unpacked, "node_modules")), "archive must not ship installed dependencies");
   for (const path of [
     ...Object.values(pkg.bin), ...Object.values(pkg.exports ?? {}), ...(pkg.pi?.extensions ?? []),
-    ...(pkg.pi?.skills ?? []), "LICENSE", "THIRD_PARTY_NOTICES.md", "docs/licenses/bend-apache-2.0.txt",
+    ...(pkg.pi?.skills ?? []), "LICENSE", "THIRD_PARTY_NOTICES.md", "docs/licenses/gdp-wired-mit.txt",
   ]) assert(existsSync(join(unpacked, path)), `missing package entry: ${path}`);
 
   const receiptPath = "src/verified/generated/manifest.json";
@@ -73,7 +73,9 @@ try {
   mkdirSync(fixture);
   writeFileSync(join(fixture, "entry.bend"), "def packagedProbe() -> Nat:\n  1n\n");
   const env = { ...process.env, NODE_PATH: "", NODE_OPTIONS: "", BEND: join(temp, "missing-bend"),
-    FOVEA_AST_GREP: join(temp, "missing-ast-grep") };
+    FOVEA_AST_GREP: join(temp, "missing-ast-grep"), FOVEA_MATHLIB_ROOT: join(temp, "missing-mathlib") };
+  const lean = run(process.execPath, [join(unpacked, "scripts/check-lean.mjs"), "--artifact"], { cwd: temp, env });
+  assert.match(lean, /Lean theorem receipts match/);
   const sketch = run(process.execPath, [bin, "sketch", fixture, "512"], { cwd: temp, env });
   assert.match(sketch, /fovea sketch/);
   assert.match(sketch, /packagedProbe/);
@@ -83,8 +85,9 @@ try {
 import assert from "node:assert/strict";
 import * as kernel from ${JSON.stringify(kernelUrl)};
 assert.deepEqual(Object.keys(kernel).sort(), ${JSON.stringify(Object.keys(abi).sort())});
-assert.equal(kernel.shownCount(3n, 2n), 2n);
-assert.deepEqual(kernel.basisStep(2n, 3n), {$: "Next", at: 2n, previous: 1n, older: 0n});
+assert.equal(kernel.shownCount(3, 2), 2);
+assert.deepEqual(kernel.disclosure(true, false, false, false, false), {$: "Reveal"});
+assert.deepEqual(kernel.basisStep(2, 3), {$: "Next", at: 2, previous: 1, older: 0});
 `], { cwd: temp, env });
   if (cliOnly) {
     // Exercise npm's actual global bin link in a disposable prefix, offline and

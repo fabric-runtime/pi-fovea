@@ -1,15 +1,31 @@
 // The foveated renderer. The diffusion field assigns every node a heat;
 // heat relative to the focus maximum sets the acuity tier (hot = full
 // signature, warm = one-line mention, glow = collapsed per-file count).
-// Budget conformance is a prefix fit: candidates sorted by heat, binary search
-// on prefix length — aider's render-and-count loop generalized to a field.
+// Prefix fitting checks actual costs, including discontinuous omission footers.
 
+import { fitStep } from "../verified/generated/control.js";
 import { writeSpill } from "./temp-storage.js";
 import { disclosureDecision } from "./disclosure.js";
 import { shownCount, remainingCount } from "../verified/policy.js";
 import type { Edge, EdgeEvidence, EdgeKind, Graph, NodeRec } from "./types.js";
 
 export const tokenEstimate = (text: string): number => Math.ceil(text.length / 4);
+
+/** Largest fitting prefix, even when footer costs make the sequence nonmonotone. */
+export const fitPrefix = (costs: readonly number[], budget: number): number => {
+  if (!Number.isFinite(budget)) throw new RangeError("Expected finite token budget");
+  const limit = Math.max(0, Math.floor(budget));
+  let selected = 0, selectedCost = 0;
+  for (let index = 0; index < costs.length; index++) {
+    const next = fitStep(limit, index, costs[index]!, selected, selectedCost);
+    selected = next.selected; selectedCost = next.cost;
+  }
+  return selected - 1;
+};
+const clipBudget = (text: string, budget: number): string => {
+  if (!Number.isFinite(budget)) throw new RangeError("Expected finite token budget");
+  return text.slice(0, Math.max(0, Math.floor(budget)) * 4);
+};
 
 const HOT_TIER = 0.3;
 const WARM_TIER = 0.02;
@@ -142,7 +158,8 @@ export const revealFoveated = (
   let vmax = 0;
   for (let i = 0; i < field.length; i++) if (field[i]! > vmax) vmax = field[i]!;
   if (vmax <= 0) {
-    return { text: `${opts.header ?? "fovea"}\n(nothing matched the current graph)`, tokens: 0, shown: 0, suppressed: 0, litTotal: 0, candidateOmitted: 0, truncated: false, revealedIds: [], revealed: [] };
+    const text = clipBudget(`${opts.header ?? "fovea"}\n(nothing matched the current graph)`, opts.budget);
+    return { text, tokens: tokenEstimate(text), shown: 0, suppressed: 0, litTotal: 0, candidateOmitted: 0, truncated: false, revealedIds: [], revealed: [] };
   }
   const seedSet = new Set(opts.seeds ?? []);
   const relations = directRelations(g, seedSet);
@@ -175,8 +192,8 @@ export const revealFoveated = (
 
   // Individual lines first (hot signatures, warm one-liners), then the cheap
   // glow periphery collapsed per file. The prefix is over BOTH lists so the
-  // budget can shrink the periphery too; appending is byte-monotone, hence the
-  // binary search is exact and the output can never exceed the budget.
+  // budget can shrink the periphery too. Actual prefix costs include every
+  // footer change; no byte-monotonicity assumption is needed.
   const glowCounts = new Map<string, number>();
   const warmPerFile = new Map<string, number>();
   const lines: string[] = [];
@@ -265,19 +282,8 @@ export const revealFoveated = (
     return header + "\n" + items.slice(0, k).join("\n") + footer;
   };
 
-  const fits = (k: number): boolean => tokenEstimate(renderK(k)) <= opts.budget;
-  let k = items.length;
-  if (!fits(k)) {
-    let lo = 0;
-    let hi = items.length - 1;
-    k = 0;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (fits(mid)) { k = mid; lo = mid + 1; } else { hi = mid - 1; }
-    }
-    if (!fits(0)) k = -1; // extreme budgets: header + footer only
-  }
-  let text = k >= 0 ? renderK(k) : header;
+  const k = fitPrefix(Array.from({ length: items.length + 1 }, (_, i) => tokenEstimate(renderK(i))), opts.budget);
+  let text = k >= 0 ? renderK(k) : clipBudget(header, opts.budget);
   const shown = shownCount(individual, k >= 0 ? k : 0);
   // The footer appears whenever anything was omitted — a collapsed glow
   // periphery counts even when the rendered prefix fit — so the artifact
@@ -291,7 +297,7 @@ export const revealFoveated = (
     } catch {
       // An unwritable artifact drops the footer pointer; that only shortens
       // the text, so the budget still holds.
-      text = k >= 0 ? renderK(k, "") : header;
+      text = k >= 0 ? renderK(k, "") : clipBudget(header, opts.budget);
     }
   }
   const tokens = tokenEstimate(text);
@@ -325,39 +331,34 @@ export const revealGroups = (
     const footer = rest > 0 ? [`\n… ${rest} more groups omitted${note} — use fovea_focus for detail`] : [];
     return [opts.header, ...body, ...footer].join("\n");
   };
-  let hi = ordered.length;
-  let kBest = ordered.length;
-  if (tokenEstimate(renderK(hi)) > opts.budget) {
-    let lo = 0;
-    kBest = 0;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (tokenEstimate(renderK(mid)) <= opts.budget) {
-        kBest = mid;
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
+  // Linear-time cost enumeration: each prefix has an independently priced footer.
+  let chars = opts.header.length;
+  const costs: number[] = [];
+  for (let i = 0; i <= ordered.length; i++) {
+    if (i > 0) { const gl = ordered[i - 1]!; chars += 1 + `${gl.label.padEnd(2)} ${gl.detail}`.length; }
+    const rest = remainingCount(ordered.length, i);
+    const footer = rest > 0 ? `\n\n… ${rest} more groups omitted${artifactNote} — use fovea_focus for detail` : "";
+    costs.push(Math.ceil((chars + footer.length) / 4));
   }
-  let text = renderK(kBest);
+  const kBest = fitPrefix(costs, opts.budget);
+  let text = kBest >= 0 ? renderK(kBest) : clipBudget(opts.header, opts.budget);
   let overflowPath: string | undefined;
   if (kBest < ordered.length && opts.overflowTo) {
     try {
       writeSpill(opts.overflowTo, [opts.header, ...ordered.map((gl) => `${gl.label.padEnd(2)} ${gl.detail}`)].join("\n") + "\n");
       overflowPath = opts.overflowTo;
     } catch {
-      text = renderK(kBest, "");
+      text = kBest >= 0 ? renderK(kBest, "") : clipBudget(opts.header, opts.budget);
     }
   }
   return {
     text,
     tokens: tokenEstimate(text),
-    shown: shownCount(ordered.length, kBest),
+    shown: shownCount(ordered.length, Math.max(0, kBest)),
     suppressed: 0,
     litTotal: ordered.length,
     candidateOmitted: 0,
-    truncated: remainingCount(ordered.length, kBest) > 0,
+    truncated: remainingCount(ordered.length, Math.max(0, kBest)) > 0,
     overflowPath,
   };
 };

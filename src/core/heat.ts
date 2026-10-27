@@ -22,6 +22,7 @@
 // serves sketch (t large), focus (t small), and dwell (any new t) by
 // recombining coefficients. The operator is the index.
 
+import { besselBounds, certifiedSqrt, scaledBesselBounds } from "./numerics.js";
 import type { Graph } from "./types.js";
 import { nextBasisStep } from "../verified/policy.js";
 
@@ -67,7 +68,7 @@ export const buildCsr = (g: Graph): Csr => {
 
 const inverseDegrees = ({ n, deg }: Csr): Float64Array => {
   const out = new Float64Array(n);
-  for (let i = 0; i < n; i++) out[i] = deg[i]! > 0 ? 1 / Math.sqrt(deg[i]!) : 0;
+  for (let i = 0; i < n; i++) out[i] = deg[i]! > 0 ? 1 / certifiedSqrt(deg[i]!) : 0;
   return out;
 };
 
@@ -85,47 +86,14 @@ const applyNegP = (csr: Csr, x: Float64Array, invSqrt = inverseDegrees(csr)): Fl
   return y;
 };
 
-// Modified Bessel function I_k(t) via log-space series. Valid for the t range
-// we use (sketch at t<=64); terms are summed until the tail is negligible.
-export const besselI = (k: number, t: number): number => {
-  if (t === 0) return k === 0 ? 1 : 0;
-  if (t < 1e-8) return k === 0 ? 1 : 0;
-  const logHalf = Math.log(t / 2);
-  let logSum = Number.NEGATIVE_INFINITY;
-  const logGamma = gammaLn;
-  for (let m = 0; m < 400; m++) {
-    const logTerm = (2 * m + k) * logHalf - logGamma(m + 1) - logGamma(m + k + 1);
-    if (logTerm < logSum - 40 && m > k) break;
-    logSum = logAddExp(logSum, logTerm);
-  }
-  return Math.exp(logSum);
-};
-
-const logAddExp = (a: number, b: number): number => {
-  if (a === Number.NEGATIVE_INFINITY) return b;
-  if (b === Number.NEGATIVE_INFINITY) return a;
-  const hi = Math.max(a, b);
-  return hi + Math.log(Math.exp(a - hi) + Math.exp(b - hi));
-};
-
-// Stirling-series log-gamma (Lanczos-free, plenty here).
-const gammaLn = (x: number): number => {
-  const c = [0.9999999999998099, 676.5203681218851, -1259.1392167224028, 771.3234287776531,
-    -176.6150291621406, 12.507343278686905, -0.13857109526572012, 9.984369578019572e-6,
-    1.5056327351493116e-7];
-  if (x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - gammaLn(1 - x);
-  const z = x - 1;
-  let acc = c[0]!;
-  for (let i = 1; i < c.length; i++) acc += c[i]! / (z + i);
-  const t = z + 7.5;
-  return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(acc);
-};
+/** Modified Bessel I_k with an exact fixed-point enclosure; no log-gamma approximation. */
+export const besselI = (k: number, t: number): number => besselBounds(k, t).value;
 
 export const chooseOrder = (t: number): number => Math.min(90, Math.ceil(2.2 * t) + 16);
 
 // Chebyshev coefficient c_k(t) of e^{-tL} under M = L - I.
 const heatCoeff = (k: number, t: number): number => {
-  const base = Math.exp(-t) * besselI(k, t);
+  const base = scaledBesselBounds(k, t).value;
   if (k === 0) return base;
   return 2 * (k % 2 === 0 ? 1 : -1) * base;
 };
@@ -185,7 +153,7 @@ export const forwardHeat = (csr: Csr, a: Float64Array, t: number): Float64Array 
   const seed = new Float64Array(csr.n);
   for (let i = 0; i < csr.n; i++) {
     const d = csr.deg[i]!;
-    if (d > 0) seed[i] = (a[i] ?? 0) / Math.sqrt(d);
+    if (d > 0) seed[i] = (a[i] ?? 0) / certifiedSqrt(d);
   }
   const v = heatField(chebyshevVectors(csr, seed, chooseOrder(t)), t, csr.n);
   const p = new Float64Array(csr.n);
@@ -193,7 +161,7 @@ export const forwardHeat = (csr: Csr, a: Float64Array, t: number): Float64Array 
     const d = csr.deg[i]!;
     // D^{±1/2} is undefined at degree zero. An isolated node is a singleton
     // component, so its random walk is the identity rather than e^{-t}.
-    p[i] = d > 0 ? Math.sqrt(d) * v[i]! : (a[i] ?? 0);
+    p[i] = d > 0 ? certifiedSqrt(d) * v[i]! : (a[i] ?? 0);
   }
   return p;
 };
@@ -204,13 +172,13 @@ export const focusField = (csr: Csr, a: Float64Array, t: number): Float64Array =
   const seed = new Float64Array(csr.n);
   for (let i = 0; i < csr.n; i++) {
     const d = csr.deg[i]!;
-    if (d > 0) seed[i] = Math.sqrt(d) * (a[i] ?? 0);
+    if (d > 0) seed[i] = certifiedSqrt(d) * (a[i] ?? 0);
   }
   const v = heatField(chebyshevVectors(csr, seed, chooseOrder(t)), t, csr.n);
   const f = new Float64Array(csr.n);
   for (let i = 0; i < csr.n; i++) {
     const d = csr.deg[i]!;
-    f[i] = d > 0 ? v[i]! / Math.sqrt(d) : (a[i] ?? 0);
+    f[i] = d > 0 ? v[i]! / certifiedSqrt(d) : (a[i] ?? 0);
   }
   return f;
 };

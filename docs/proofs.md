@@ -1,256 +1,633 @@
-# Laws, proofs, and the runtime boundary
+# Proofs, executable policies, and numerical certificates
 
-Use **Bend 2.0.26**. Start with `bend guide`; check with `bend version`.
-CI downloads that release and verifies its SHA-256. Versioned archives are at
-<https://github.com/bendlang/bend/releases/tag/v2.0.26>.
-`BEND=/path/to/bend` selects the executable for the proof gate.
+Fovea uses **gdp-wired 0.30.1**, an exact-pinned development dependency.
+There is no Bend compiler dependency. Bend-language extraction remains supported.
+An independent development checks numerical models with Lean 4.19.0 and pinned
+mathlib. These model proofs do not imply that the TypeScript implements them.
 
 ```sh
-bend PROOF.bend --check-only  # all 19 laws, no open claims
-bun run check:proofs         # safety audit + proofs + byte-for-byte regeneration
-bun run proofs:generate     # intentional update: prove, compile, write artifacts
-bun run proofs:artifact     # compiler-free source/bridge/artifact receipt check
-bun run check:fast          # proof gate + types + affected tests, no full suite
+bun run check:proofs       # all required laws checked, then byte-for-byte generation
+bun run proofs:generate   # deliberate regeneration after proofs pass
+bun run proofs:artifact   # source/bridge/output receipts, without loading the prover
+bun run check:streams       # 98 arithmetic stream claims; no Lean needed
+bun run check:series        # 23 constructive-series claims; no Lean needed
+bun run check:operators     # 24 coefficient/path claims; no Lean needed
+bun run check:transport     # 14 indexed-transport claims; no Lean needed
+bun run check:focus         # 19 indexed focus/row-gather claims; no Lean needed
+bun run check:enclosures    # 7 exact quotient/interval claims; no Lean needed
+bun run check:normalization # 17 raw-row and rescaling claims; no Lean needed
+bun run check:ports         # scoped inventory of all 28 retained Lean claims
+bun run check:lean:artifact # model receipt freshness; no Lean loaded
+bun run check:lean          # full Lean check; requires FOVEA_MATHLIB_ROOT
+bun run check:fast         # gdp proofs, Lean receipts, types, affected tests
 ```
 
-`LAWS.bend` contains the independently reviewed specifications. Change the
-implementation or proof, not the claim, when a proof fails. No holes, axioms,
-unsafe definitions, or sampled inputs establish these proofs. Normal checks
-never rewrite artifacts; only `proofs:generate` does. Development remains
-buildless for the extension, and installed Fovea needs no Bend executable.
+## What executes
 
-## Coverage ledger
+`proofs/kernel.mjs`, `proofs/controls.mjs`, and `proofs/limbs.mjs` define
+symbolic functions. Independent specifications are in `proofs/laws.mjs` and
+`limbLaws` in `proofs/limbs.mjs`. The exact functions
+being proved are passed to gdp-wired's `compileJs`; no handwritten alternate
+implementation supplies the policy result. Every proof must be both `proven`
+and `checked`. The gate rejects unexpected assumptions and checks the complete
+required law inventory against `proofs/ledger.json`.
 
-| Laws | Production connection |
-| --- | --- |
-| 6 disclosure laws | Executed compiled `disclosure` export, consumed by the renderer. |
-| 5 accounting laws | Executed compiled `shownCount` / `remainingCount` exports, consumed by both renderers. |
-| 4 heat-basis laws | Executed compiled `basisStep` export, interpreted by basis extension. |
-| 4 rational heat-algebra laws | Model only; not a proof of the Float64 solver. |
+The generator emits four standalone modules:
 
-**15 production-linked laws, four model-only laws.** Linking a law does not
-prove every caller, codec, compiler transformation, or numerical operation.
+- `src/verified/generated/kernel.js`: disclosure, prefix accounting, basis commands.
+- `src/verified/generated/control.js`: semaphore admission/handoff, capacity,
+  lease validity, focus invalidation, prefix selection.
+- `src/verified/generated/limbs.js`: audited arithmetic cells and executed rounding/work decisions.
+- `src/verified/generated/streams.js`: executed comparison, addition, subtraction,
+  multiply-add rows and short-division certificates.
 
-## From proofs to executed code
+The adjacent declarations retain the four kernel export names. Their numeric
+ABI is now **number-valued u32 (0..2^32-1)**, not BigInt; out-of-range inputs
+and outputs throw rather than wrapping. `VERIFIED_NAT_MAX` is `0xffffffff`.
+`BEND_NAT_MAX` is a deprecated name for that new limit, not the old 48-bit limit.
+This deliberately changes direct internal-kernel callers; normal renderer and
+heat APIs already use numbers. Abstract policy laws still quantify over
+mathematical naturals; checked codecs restrict executed values to u32.
 
-This follows Pi Fabric's compiler-to-library pattern:
+The manifest binds proof sources, required-law inventory, ABI, codecs, scalar
+numerical source, generator, toolchain versions and generated bytes with SHA-256.
+Checking never rewrites; explicit generation writes only after proofs and code
+generation succeed. CLI packaging verifies these same source/output receipts.
+Neither the installed extension nor the bundled CLI needs gdp-wired or a compiler.
 
-1. `LAWS.bend` names the actual exports in `proofs/kernel.bend`, not independent
-   lookalikes. `PROOF.bend` proves those claims with `--check-only`.
-2. `scripts/compile-bend.mjs` invokes Bend's JS backend on that same kernel.
-   It checks export names and compiled arities against `proofs/kernel-abi.json`,
-   parses the JS, and accepts only the pinned CLI footer before removing its
-   two invocation statements. It exposes the existing definitions through
-   Bend's own `run_lib` trampoline. No algorithm is translated into handwritten JS.
-3. Esbuild eliminates unused CLI/IO code. Remaining imports and known host-effect
-   primitives are rejected. The pure library and ABI declarations are committed
-   as `src/verified/generated/kernel.js` and `kernel.d.ts`.
-4. `src/core/disclosure.ts` and `src/verified/policy.ts` are small, fail-closed
-   Boolean/tag and number/BigInt codecs. `render.ts` and `heat.ts` execute their
-   returned decisions and commands; there is no optional assertion or fallback
-   implementation beside the verified path.
-5. `manifest.json` binds the transitive proof sources, bridge, ABI, codecs,
-   toolchain versions, and artifact bytes using SHA-256. `check:proofs` proves
-   and reproduces everything byte-for-byte. `proofs:artifact` checks the receipt
-   with development dependencies but **without invoking Bend**. It is a freshness
-   receipt, not a cryptographic certificate or replacement for proof checking.
+## Coverage ledger: 265 checked claims
 
-`build:cli` checks the receipt before bundling and rejects remaining imports
-except Node built-ins. `prepack` additionally runs the full proof gate, not the
-test suite. `bun run check:package` packs with Bun, extracts outside the checkout,
-checks shipped receipt hashes, entry points and licenses, and runs the CLI and
-compiled kernel with no installed dependencies or Bend. Pass an existing tarball
-to check that exact archive before `bun publish path/to/package.tgz`. CI checks proofs, generation, and negative
-bridge fixtures. Published packages include the proof sources, receipt, and
-[Bend runtime notice](../THIRD_PARTY_NOTICES.md). No loader, generation step, or
-analysis import is added to idle extension startup.
+| Family | Laws | Production connection |
+|---|---:|---|
+| Disclosure | 6 | Executed generated decisions in both focus/dwell rendering paths. |
+| Prefix accounting | 5 | Executed shown/remaining counts in both renderers. |
+| Basis commands | 4 | Executed commands control Chebyshev vector extension. |
+| Semaphore | 7 | Executed acquisition/release decisions, including reserved handoffs. |
+| Capacity | 3 | Executed root admission and shared cache trimming. |
+| Leases | 4 | Executed epoch/lease/presence checks before late results are accepted. |
+| Focus lifecycle | 4 | Executed fresh/key/generation reset decisions and stale dwell rejection. |
+| Prefix selection | 4 | Executed admission for every actual rendered-prefix cost. |
+| u32 arithmetic cells | 11 | Retained generated primitive contracts; production multiword operations now use the stronger streams below. |
+| Arithmetic streams | 98 | Executed digit machines, all-prefix reconstruction, completion, intermediate bounds, termination and checked ghost erasure. |
+| Rounding decisions | 7 | Executed floor, directed ceiling and nearest-even choices in limb shifts and Float64 conversion. |
+| Certificate work | 3 | Executed admission of normalization and operator visits; refusal leaves the budget unchanged. |
+| Exact heat algebra | 4 | Mathematical fold model; not the Float64 matrix implementation. |
+| Signed error envelope | 1 | Conditional rational model; local numerical bounds are premises. |
+| Constructive series | 23 | Exact rational Cauchy model: finite-tail bounds, nested enclosures, explicit modulus, arbitrary future prefixes and scalar-family identities. |
+| Coefficient and path models | 24 | Unbounded Pascal/factorial coefficients, signed P-I recurrence, normalized weighted-tree mass and signed-aggregate bounds. Not the indexed matrix evaluator. |
+| Indexed transport | 14 | Actual finite-map L1 norm, source-weight budgets and arbitrary completed normalized transport rounds. Exact model, not a proof of the CSR/interval implementation. |
+| Indexed focus | 19 | Coordinate-wise infinity-norm bound through arbitrary completed row-gather rounds, exact weight consumption and row coverage. Not a CSR/IEEE refinement. |
+| Exact enclosures | 7 | Natural quotient bounds and scaled-rational interval/error policies; not real completion or host rounding correspondence. |
+| Raw-row normalization | 17 | Native finite-map unit mass, exact raw ratios, rescaling, isolate identity and consumer admission. Production uses an exact dyadic adapter; the host refinement is still unproved. |
 
-The trusted boundary includes Bend's checker, compiler and safe Base primitives,
-the library extraction/tree-shaking tools, ABI declarations and codecs, the host
-command interpreter, and the JS engine. Byte parity establishes freshness, not
-formal correctness of those components. `tests/verified-kernels.test.ts` checks
-numeric/tag boundaries and spies on real renderer/heat consumers to catch bypasses.
-`tests/proofs.test.ts` mutates exported wrappers, the ABI, compiler footer, source
-receipts and generated bytes: the gate must reject drift, not bless a parallel model.
+**145 claims are connected to executed policies or streams; 11 older arithmetic
+cell contracts, five heat/error laws, 23 constructive-series claims and 24
+coefficient/path claims, 14 indexed-transport claims, 19 indexed-focus claims and
+seven exact-enclosure claims and 17 raw-row normalization claims are
+retained as separate mathematical contracts.** Stream counts
+include named termination checks as well as invariants and corollaries, not just
+one-step decisions. This does not prove all callers, filesystem effects, callback
+ordering, matrix dimensions or source-to-JavaScript translation. Boundary and
+integration tests remain.
 
-### Runtime numeric domain
+### Executed arithmetic streams, not a separate twin
 
-The pinned backend supports immediate naturals through **2^48 - 1**, stricter
-than JavaScript's `MAX_SAFE_INTEGER`. The codecs reject negative, fractional,
-nonfinite or out-of-range counts before execution and reject invalid results.
-Bend laws quantify over unbounded naturals; runtime claims apply within this
-checked domain. Kernel intermediates stay in range: subtraction saturates,
-comparison selects an input, and basis indices reconstruct or decrease `have`.
-Natural array counts/order requests in production are well within the bound.
+`proofs/streams.mjs` defines the machines that `compileJs` emits for production.
+The proof adds unbounded **ghost** accumulators for input/output values and
+positional powers. These are mathematical state only: no wide integer is stored
+in a JS number, and no runtime BigInt is introduced. A product-machine proof
+checks that every observable runtime state agrees before and after removing
+the ghosts. Termination ranks use the same transitions as the generated code.
 
-Bend emits a recursive `Nat.min`, unsuitable for large counts. The compiled
-accounting implementation instead compares and selects. `counts-proof.bend`
-proves that implementation equal to the structural `Nat.min` specification
-for **all naturals**, then transports the original five laws through the equality.
-No handwritten JS optimization replaces the proven implementation. ABI tests
-exercise counts at zero, 100,000, 2^32 and the backend maximum.
+The five machines establish:
 
-## Safe Bend only
+- Comparison agrees with the exact values of every consumed most-significant-first prefix.
+- Addition and subtraction reconstruct every little-endian prefix, including
+  final carry, exact underflow and the retained nonzero extent.
+- Multiply-add rows accept low/high digits only when their equation reconstructs
+  the exact product plus accumulator and carry. The complete row is proved,
+  including its final carry; a corrupt digit is refused.
+- Short division accepts quotient/remainder digits only when they reconstruct
+  the current numerator and leave a smaller remainder. Every accepted prefix
+  satisfies the complete quotient/remainder relation; invalid witnesses stop.
+- All executed scalar state is u32-sized. Integer intermediates are explicitly
+  bounded to at most 33 bits for add/subtract, 32 bits for a multiply-add cell and
+  48 bits for short division; those integers are exact in JavaScript.
 
-`check:proofs` is authoritative; plain `bend` does not enforce our extra policy.
-The gate walks the complete local import closure of laws, proofs and kernel,
-rejecting:
+`check:streams` automatically builds proof trees and checks them independently.
+Stronger equality-product search is scoped and restored. Derived claims may
+use only a previously checked invariant group and already checked consequences
+of that same group; input-safety claims additionally use the enforced input kinds. It accepts no new foreign facts.
+The checker has per-goal and whole-check deadlines. Runtime adapters explicitly
+validate parameter bounds rather than assuming the generator enforces them.
 
-- every `@unsafe`, even an unused helper in a transitive import;
-- references to unsafe Base primitives `Array.fork` and `Array.join`;
-- foreign C/JS imports, remote packages, and unrecognized import forms;
-- paths or symlinks escaping the repository.
+This is **not yet a fully verified multiword library**. Array capture, packing,
+output materialization, the outer schoolbook multiplication traversal, general
+long division and shifts remain host obligations. The stream theorems quantify
+over arbitrary finite prefixes, not merely the lengths exercised by tests.
 
-Local imports use `import ./file.bend as Alias` (parent paths inside the repo
-are allowed); the only nonlocal import is `import Base`. Comments and quoted
-literals are not code. Proof-module `main` is never executed; the compiler's
-kernel CLI is stripped and likewise never executed.
+### Constructive series: a checked route through finite arithmetic
 
-Bend 2.0.26's Base **contains two unsafe array-sharing definitions; we do not
-use them**. Each proof gate audits `bend base`: those must be the only unsafe
-definitions, and their names may appear only at their declarations, excluding
-indirect use through other helpers. Changes fail closed for a new audit.
-Importing Base is not a claim that its entire library is unsafe-free.
+`proofs/series.mjs` does not introduce an `exp` axiom or assume convergence. It
+represents rational approximations with unbounded natural numerators and
+denominators. With `d = n + gap`, `gap > 0`, its actual transition is:
 
-This is not a sandbox for a malicious compiler or concurrent edits. Negative
-fixtures exercise unsafe paths without adding unsafe code to actual proofs.
-
-## What is proved?
-
-### Executed: disclosure decisions
-
-`proofs/disclosure.bend`, exported as `kernel.disclosure`, supplies the renderer's
-candidate-admission decision. The laws cover all five-Boolean input combinations:
-
-| Law | Guarantee |
-| --- | --- |
-| `scope_wins` | Out-of-scope nodes are dropped, including repeated nuclei. |
-| `exclusion_wins` | Exclusion wins over disclosure and nucleus exceptions. |
-| `fresh_revealed` | An eligible unseen node is admitted. |
-| `seen_suppressed` | A seen node is suppressed when repetition is disabled. |
-| `periphery_suppressed` | A seen non-nucleus cannot repeat. |
-| `nucleus_repeated` | Repetition admits an eligible nucleus, seen or not. |
-
-`Reveal` means admit a candidate, not necessarily fit it within the output budget.
-`Suppress` increments the disclosure count; `Drop` does not. The previous finite
-lookup table has been replaced by the compiled function. Three ABI probes cover
-all result tags and distinguish all five argument positions, rather than
-re-enumerating the proved truth table. Host set membership, nucleus classification,
-suppression bookkeeping, sorting and formatting remain tested.
-
-### Executed: prefix accounting
-
-`proofs/counts.bend` specifies `shown = min(total, requested)` and
-`remaining = total - shown`. The compiled equivalent supplies both renderers'
-prefix caps, omission counts and returned `shown` metadata. The five laws prove:
-
-- shown never exceeds total or requested;
-- shown plus remaining equals total;
-- a full prefix omits nothing;
-- applying the same cap twice is idempotent.
-
-`revealGroups` now reports the actual fitted prefix rather than all candidates
-as `shown`, matching its omission footer. Integration tests check that contract.
-These laws do **not** prove token estimation, UTF-16 lengths, formatting, header
-fallbacks, or binary-search safety/maximality.
-
-### Executed: heat-basis extension commands
-
-`proofs/basis.bend`, exported as `kernel.basisStep`, directs
-`extendChebyshevVectors` in `src/core/heat.ts`. Given existing vector count `have`
-and desired maximum order, the compiled result is the only admission decision:
-
-| Law | Guarantee |
-| --- | --- |
-| `basis_empty_refused` | An empty basis yields `Empty`, never a recurrence. |
-| `basis_complete_retained` | A basis already beyond the target order yields `Complete`. |
-| `basis_first_order` | A one-vector basis with requested order >= 1 yields `First`. |
-| `basis_next_exact` | A missing order >= 2 yields exactly `Next(have, have-1, have-2)`. |
-
-The host refuses `Empty`, returns on `Complete`, computes the first multiplication
-on `First`, and reads/writes the indices from `Next`. Existing basis vectors
-are reused. This is a structural bridge, **not** a proof of the Float64 recurrence,
-array dimensions/aliasing, cache generation, Bessel coefficients or heat accuracy.
-
-### Model only: exact heat-transport conservation
-
-`proofs/heat.bend` models nonnegative rational matrix-vector transport with
-integer numerators. `nat-proof.bend` proves arithmetic by induction, without
-algebraic axioms or conservation assumptions. Each source column has mass
-numerator a[j] and weights w[i,j]. `Normalized` requires a **proof** that every
-column sums to the same strictly positive denominator D. Then:
-
-```
-out[i] = sum_j w[i,j] * a[j]
-sum_i out[i] = D * sum_j a[j]
+```text
+v = d + growth                         (growth is any natural)
+D' = D v;  T' = T n;  S' = (S + T) v
+L = S / D;  U = (gap S + d T) / (gap D)
 ```
 
-Input mass has denominator Q; output has denominator D*Q, so this is exact
-conservation of rational mass. Any finite nonnegative rational column-stochastic
-matrix admits such a common denominator. `Nat` establishes nonnegativity; lists
-are zero-padded and an empty list is the zero vector, not a fixed-point simulation.
+Starting at `D=1, T=C, S=0`, the checker proves:
 
-| Law | Guarantee |
-| --- | --- |
-| `heat_vector_add_mass` | Vector addition adds total masses. |
-| `heat_scale_mass` | Scaling scales total mass. |
-| `heat_transport_mass` | Normalized transport conserves rational mass. |
-| `heat_singleton_mass` | A probability-one self-transition retains arbitrary mass. |
+- Positive denominators and the finite-tail bound `gap S + d T <= d C D`.
+- Lower endpoints never decrease; upper endpoints never increase.
+- A Bernoulli majorant `(d + k gap) T <= d C D`.
+- For every positive precision integer `q`, the explicit modulus
+  `K(q) = q d² C` implies `U - L <= 1/q` at every `k >= K(q)`.
+- A checkpoint can capture **any** prefix. If its index is at least `K(q)`,
+  **every later prefix**, regardless of future nonnegative growth inputs,
+  differs from the saved lower endpoint by at most `1/q`.
 
-This targets algebra beneath `forwardHeat`: its exact walk is P = W D_degree^-1,
-with identity on isolated nodes. The premise is checked normalization evidence,
-not conservation assumed as an axiom. Negative tests reject a mass-dropping
-implementation and a forged normalization witness. The singleton gives a
-concrete, nonempty valid witness.
+The last claim is a universal Cauchy estimate, not testing a finite set of
+prefixes or merely assuming the existence of a limit. Conservative nonnegative
+slack variables expose exact conservation equations; all those equations are
+also checked. The modulus is an existence witness, deliberately not a proposed
+runtime iteration count. The model is proof-only: its huge exact values are not
+executed as JS numbers or added as runtime BigInts.
 
-**Boundary:** this model is not compiled into the heat solver. We have not proved
-that `buildCsr` establishes its premises, degree conjugation refines this walk,
-or the Chebyshev polynomial equals the exponential. Extending conservation from
-one step through powers to the infinite Poisson mixture
-`exp(-t) sum_k t^k/k! P^k` still needs an iteration/limit development. IEEE-754
-rounding, Bessel/gamma evaluation, pruning and truncation need error bounds.
-Changing real arithmetic to naturals does not discharge these obligations.
+Six further claims prove that exponential/Poisson and Bessel denominator
+recurrences instantiate this model, and that a valid finite tail cutoff exists
+for **every nonnegative rational argument**, not only the supported `[0,64]`
+runtime domain. An initial rational `C/B` uses these enclosures divided by `B`;
+for positive natural `B`, the same modulus is conservative. Production scalar
+series and the vector verifier now share `interval.ts`'s `geometricTail`: at the
+first tail term, `n=ratio`, `d=SCALE`, `gap=SCALE-ratio`, and `C=next` give exactly
+its rational bound before outward rounding.
 
-### Not a law: monotonically growing lit sets
+`scripts/prove-polynomial.mjs` is **untrusted search**, not a new kernel. It
+constructs exhaustive natural-factor cuts and bounded products of existing
+inequalities, then uses gdp-wired's solver to construct proof trees. Every tree
+is replayed by the existing `gdp-wired/kernel.check`; there are no foreign facts,
+new axioms or kernel modifications. The shared checker validates support lists,
+proves every initial and inductive case, and allows derived premises only after
+they have been checked in the same state context. Cyclic and input-dependent
+premise escapes are refused. Search is capped by time, tree visits and products.
 
-The old “dwell monotonicity” test covered one fixture. The universal claim is
-false even for exact symmetric heat: relative thresholding can lose nodes as
-heat spreads. With edges `(0,1,1e-6)` and `(0,2,1)`, seed `[0,1,0]`, the
-2%-of-maximum lit set has size **3 at t=8** but **2 at t=64**. Both Chebyshev
-and the independent scaled-Taylor reference witness this in `tests/heat.test.ts`.
-The fixture test is named for what it asserts, not a universal invariant.
+### Finite Poisson coefficients and normalized paths
 
-## Test-retirement ledger
+`proofs/operators.mjs` constructs complete Pascal rows, factorial witnesses and
+parity bits over unbounded natural numbers. Its 19 invariants include, for every
+reachable row `n` and every `0 <= k <= n`:
 
-Retired the products that repeated executed Bend laws; keep small witnesses for
-unproved compiler/codec boundaries in `tests/verified-kernels.test.ts`:
+```
+B[k] * K[k] * R[k] = n!
+K[0] = 1, K[k] = k * K[k-1]
+R[n] = 1, R[k-1] = (n+1-k) * R[k]
+K[k] > 0, R[k] > 0
+```
 
-| Retired coverage | Proof replacement | Remaining runtime probes |
-| --- | --- | --- |
-| 32-case disclosure truth table | Six exhaustive disclosure laws | Three cases covering all tags and distinct Boolean patterns for every argument position. |
-| 6 × 6 count-pair matrix against `Math.min` | Five accounting laws plus `shown_equiv` | Five selected pairs: zero in either argument, asymmetric counts, 2^32, and the backend maximum (also catches recursive lowering). |
-| Repeated basis-order samples / duplicate `Complete` case | Four basis-command laws | Every command tag and `Next` indices at the minimum and backend maximum; real heat-interpreter wiring. |
+These are quantified statements, not proofs up to a selected degree. The index
+and factorial witnesses are built inside the transition; no foreign factorial
+or binomial facts are assumed. The model stays proof-only: its unbounded values
+are not executed using JS Number in production.
 
-Invalid-input rejection, unsafe/import guards, artifact/ABI mutations and actual
-consumer-call tests remain: Bend does not prove the host bridge or safety gate.
-**No existing integration or numerical tests are retired.**
+`proofs/operator-steps.mjs` adds two checked one-step laws. With the constructed
+parity `Q[j]`, define `C_n[k] = (-1)^Q[n-k] B[k]`, zero outside the row. The
+positive/negative pair satisfies exactly the coefficient shift-and-negate
+recurrence for multiplication by `P-I`. Together with the factorial invariant,
+this supplies the finite coefficient algebra behind
 
-| Coverage | Remaining obligation |
-| --- | --- |
-| Disclosure suppression/repeated nuclei | Actual IDs, set membership, edge classification and bookkeeping. |
-| Scope/exclusion before overflow | Cap ordering and full artifact contents. |
-| Budgets, group rendering, overflow, ops | Strings, footers, fallback paths, caller clamps and fitting. |
-| `conserved-heat.test.ts`: conservation/singletons | Float64 degree correction, isolated-node dispatch and tolerances. |
-| Stationary mass / analytic star | Spectral mixing, exponential, focus conjugation and excess subtraction. |
-| `heat.test.ts`: Bessel/Taylor/positivity | Approximation, coefficients, pruning and rounding errors. |
-| Recurrence-prefix parity / cache isolation | Float64 interpreter, mutable arrays, aliasing and graph invalidation beyond the proved index commands. |
-| Lit-set widening | Fixture only; the counterexample protects against a universal misstatement. |
-| Nuclei/startup/filesystem/extraction/sync/provenance | Seed assembly, imports, IO, parsers, races and attribution. |
+```
+C_n[k] / n! = (-1)^(n-k) / (k! * (n-k)!)
+```
 
-Sample-by-sample tests of the pure disclosure predicate would be redundant;
-keep ABI/generation and integration witnesses. Retiring budget examples would
-require a production-executed fit kernel proving both safety and prefix maximality
-under actual string costs and fallback rules. In particular, appending is not
-universally byte-monotone: the omission footer disappears at the full prefix,
-its decimal count can shrink, and a header alone can exceed a tiny budget.
-The full-prefix fast path handles one discontinuity, not a proof of binary search.
+The same file proves three structural-induction laws for every finite normalized
+binary weighted tree, with no depth bound. Every leaf has signed parts summing
+to the input mass `M`; every internal pair of nonnegative weights sums to its
+positive divisor. The exact common denominator stays positive, the positive
+and negative numerator sum is `M * denominator`, and their absolute difference
+is no larger. Arbitrary-depth weighted composition is covered **in this path
+model**. This is a signed-aggregate bound, not yet the L1 norm theorem for an
+indexed matrix: grouping leaves by output coordinate and correspondence to the
+actual sparse traversal remain separate obligations.
+
+The search uses one bounded round of intermediate monomials to substitute
+factorial witnesses through products. Kernel rules have not changed. The shared
+checker admits quantified instances only from checked invariant groups and
+checks native one-step and fold obligations; it never reuses a step law as an
+invariant. Tests include exact BigInt oracles through degree 32, a deeper weighted
+tree, corrupt certificates, broken coefficients/parity, and missing normalization.
+
+### Indexed signed transport and arbitrary rounds
+
+`proofs/transport.mjs` closes the gap between a single signed aggregate and a
+finite indexed vector **in the exact model**. Two sparse buffers alternate as
+source and destination. A coordinate is stored canonically as `(p,n)` with
+`p=0` or `n=0`; opposite signs cancel at each destination update. Consequently,
+`sum(p+n)` is the vector's actual L1 norm, not an uncancelled mass envelope.
+The sums are native gdp-wired finite-map sums, over all keys with no size bound.
+
+Each source is removed into a pending column, receives a positive integer weight
+budget `D`, and emits nonnegative integer weights until that budget is exhausted.
+A round can flip buffers only when no nonzero source remains and the pending
+budget is zero. The common rational denominator then multiplies by `D`. Arbitrary
+rational column-stochastic weights can use a common denominator; isolates emit
+all `D` units to themselves. There is no fixed graph, dimension or round limit.
+
+The checked invariants include canonical coordinates, positive denominators,
+weight bounds, and
+
+```
+bound = initialNorm * denominator
+D * sourceL1 + remaining * pendingL1 + destinationL1 <= D * bound
+```
+
+They imply `sourceL1 / denominator <= initialNorm` after every state, including
+every completed round. Separate native step laws check completed output bounds,
+round/denominator progress, and exact weight consumption. Seed inputs are a
+magnitude and sign, so `initialNorm` is the actual input norm. Tests independently
+execute the expressions with BigInt, recompute map sums, and compare eight sparse
+matrix powers with cancellation and an isolated high-index coordinate.
+
+This does **not** remove the production boundary: the encoder from CSR traversal
+to this protocol, interval rounding, and the analytic exponential identity still
+need correspondence proofs. The installed runtime has not been changed to this
+proof-only transport model. The complementary focus/infinity-norm protocol is
+checked below; neither model is yet a refinement proof of the production traversal.
+
+### Ported focus and interval policies
+
+`proofs/focus.mjs` gives the transpose companion: row-stochastic gathers over two
+sparse buffers with canonical signed coordinates. Seed inputs must fit a supplied
+natural bound `M`; any rational vector can choose its actual infinity norm after
+common scaling. The source buffer is immutable while rows are gathered. Each
+row consumes exactly `D` weight units before committing, and a cursor must visit
+all `size` rows before buffer rollover. Empty vectors, zero weights, repeated
+neighbors and isolated identity rows are allowed. There is no dimension or round
+cap.
+
+The kernel checks both buffers' coordinate bounds, the accumulator budget
+`pendingP + pendingN + remaining*bound <= D*bound`, and
+`bound = M*denominator`. These give the true infinity-norm bound at every
+completed round. A separate step law prevents claiming completion with skipped
+rows. BigInt tests compare repeated sparse matrix powers, test source-buffer
+immutability, and require rejection of removed weight/coverage guards.
+
+`proofs/enclosures.mjs` ports seven interval policies to natural arithmetic:
+quotient floor/ceiling bounds, addition, nonnegative multiplication,
+positive-denominator division, signed subtraction and the certificate endpoint
+error implication. Cross multiplication represents rational comparisons;
+common positive scaling and, for affine signed comparisons, a common offset
+avoid lossy floating-point arithmetic. Quotient policies require a checked
+Euclidean witness `n=q*d+r`, `0<=r<d`; they do not assume an opaque division
+function is correct. The executed division stream supplies such witnesses in
+its specialized domain. These policies alone do not prove the TypeScript
+interval implementation or an IEEE codec.
+
+### Exact raw-row normalization and the production adapter
+
+`proofs/normalization.mjs` starts from arbitrary raw natural weights rather than
+assuming an already-normalized row. An immutable `Raw` map records the input;
+`Pending` is drained into `Output` only after the row is frozen. For any positive
+rescaling factor `F`, native finite-map invariants prove
+
+```
+F * sum(Pending) + sum(Output) = F * (sum(Raw) + isolate)
+F * Pending[k] + Output[k] = F * Raw[k] + (k=self ? F*isolate : 0)
+```
+
+A finished nonzero row has `Output[k] = F*Raw[k]`, positive denominator
+`F*sum(Raw)`, unchanged ratios and output sum equal to its denominator. A zero
+row instead has exactly one coefficient of weight `F` at `self`, denominator
+`F`, and no mass elsewhere. A checked emission bound ties every next coefficient
+to the remaining denominator budget required by gather/scatter. The proof uses
+native sum closures at the queried keys, not assumed pointwise sum facts.
+
+`src/core/normalization.ts` is now called by the production certificate builder.
+It decodes each positive Float64 weight as an integer mantissa times a power of
+two, chooses a common exponent, and adds integer weights with the executed u32
+streams. Probability intervals are rounded outward only after this exact sum.
+The isolate's explicit identity row is executed by the existing identity fast
+path. Duplicate neighbors are retained and zero edges contribute no mass.
+
+Tests compare independent BigInt IEEE decoding, exact fraction cross-products,
+interval enclosure, common-denominator rescaling, and several powers of both
+indexed consumer protocols using the **actual adapter's rows**. Tests also cover
+mixed smallest/largest finite weights and subnormal rows. This connects the
+components operationally and tests their correspondence; it does not establish
+a full formal refinement of the IEEE codec, host loops or CSR indexing.
+The production certificate therefore retains its conditional assumptions.
+
+### Portability ledger, not an equivalence shortcut
+
+`proofs/ports.json` accounts for all 28 retained Lean claims. `check:ports` verifies
+that each is tracked exactly once and that every cited gdp-wired claim exists.
+Currently six have runtime specializations, eighteen have constructive rational
+counterparts, and four are explicitly open. No entry claims full equivalence.
+The open entries are real exponential embedding/identity/nonnegativity and the
+remaining list-shift correspondence. Rational row normalization is now covered;
+its IEEE/CSR implementation correspondence remains a separate boundary.
+
+The executable policies do not call Lean. However, the proof gate still checks
+the retained Lean receipt and dedicated CI still checks those Lean theorems.
+Making Lean merely an optional third check is the goal, **not yet the verified
+state**. Replacing a general real theorem with a rational protocol without
+recording that difference would silently weaken coverage.
+
+### What still keeps Lean in the pipeline
+
+The earlier assertion that this route necessarily required a new real-number
+kernel was too strong. The checked constructive Cauchy model demonstrates a
+route using the existing natural-number kernel. However, a Cauchy presentation
+alone is not yet the matrix-exponential theorem promised by `certifyDiffusion`.
+Remaining work includes:
+
+1. Lift the checked finite signed-coefficient identity to the Cauchy limit,
+   including the product/reindexing argument that identifies the Poisson
+   operator series with `exp(t(P-I))` on indexed vectors.
+2. Connect the checked indexed transport protocol to the CSR row/column
+   traversal and its interval implementation. The exact finite-map forward/L1 and focus/infinity-norm bounds
+   now hold through arbitrary rounds; the production refinement is not proved.
+3. The remaining host packing, outer arithmetic loops, interval operations and
+   IEEE conversion bridge described below.
+
+The 28 Lean model theorems and their CI/release gate therefore remain. No
+certificate assumption has been removed on the strength of the new model.
+
+
+
+### Stateful host obligations
+
+The semaphore counts slots reserved for awakened waiters as occupied. A release
+transfers an occupied slot rather than exposing it to a newcomer before the
+waiter resumes. The regression reproduces that precise microtask interleaving.
+The host still owns the Promise queue and must execute one release per admission.
+
+Cache trimming executes the proved keep count, then deletes oldest entries.
+The proof supplies the count; tests cover Map ordering, eviction callbacks,
+root identity, and reset/restore behavior.
+
+Lease decisions require both matching epoch and lease and a present root.
+Host tests cover capture timing and invalidation. Focus decisions similarly use
+host-computed equality of graph generations, keys, and vector dimensions.
+
+### Exact prefix fitting
+
+The renderer evaluates **every prefix's actual cost**. A generated decision
+keeps the highest-index candidate that fits. There is no monotonic-cost premise:
+footer digit changes, disappearing footers, and collapsed groups are included.
+Grouped cost enumeration is linear in the number of groups. Tiny-budget
+fallbacks clip the header, and empty results report their actual token estimate.
+
+The four policy laws cover selection safety, accepting a later fitting
+candidate, retaining the maximum selected index, and refusing an over-budget candidate. Exhaustive host traversal,
+string cost construction, and the four-characters-per-token estimate remain
+implementation obligations tested independently. This is not a theorem about a
+model-specific tokenizer.
+
+## Exact heat algebra
+
+`proofs/heat.mjs` expresses vector addition, scaling, normalized transport and
+the singleton law as finite-tree folds and a pure function. Trees represent
+finite list decompositions, including zero-padding for unequal vectors. The
+fold proofs use induction, not a maximum vector length or a collection of
+samples. Normalization is an explicit equality between each source column's
+weight sum and a positive denominator; it is not conservation assumed outright.
+
+These replace the old exact-numerator algebra model, not the actual numerical
+solver. The representation correspondence to vectors and the connection from
+CSR construction through normalization are not formalized. No numerical tests
+are retired on the strength of these model laws.
+
+## Lean numerical models: 28 checked theorems
+
+These are a separate proof layer, not additional gdp-wired laws and not an
+export of the generated JavaScript. `proofs/lean/ledger.json` names every required
+theorem and its scope. `proofs/lean/receipt.json` explicitly records
+`correspondence: "not-proved"`; the gate rejects a receipt claiming otherwise.
+
+| Module | Theorems | Proven scope |
+|---|---:|---|
+| `Fovea/Arithmetic.lean` | 7 | Unbounded digit-list addition, scaling, multiplication, shifts and division reconstruction/remainder bounds. These are algorithm models, not the indexed TypeScript loops. |
+| `Fovea/Analysis.lean` | 14 | Banach-algebra Poisson identity, geometric/Poisson tails, coefficient recurrence, normalized rows (including isolates), stochastic one-/infinity-norm and iterate bounds. |
+| `Fovea/Intervals.lean` | 7 | Natural floor/ceiling bounds, real interval addition/product/division, signed subtraction and the endpoint-distance implication used for acceptance. No IEEE-754 codec theorem is claimed. |
+
+`check:lean` compiles all three modules, then independently prints and checks the
+axioms of **every** ledger theorem. Only `propext`, `Classical.choice` and
+`Quot.sound` are accepted. It rejects missing declarations, proof placeholders,
+extra axioms and native-evaluation shortcuts. A receipt is written only with
+`--write`, after all checks succeed. The axiom report and SHA-256 input hashes
+bind the compiler script, toolchain, ledger and all model sources.
+
+To reproduce with a clean mathlib checkout outside this repository:
+
+```sh
+elan toolchain install leanprover/lean4:v4.19.0
+git clone --depth 1 --branch v4.19.0 https://github.com/leanprover-community/mathlib4.git /tmp/fovea-mathlib
+export FOVEA_MATHLIB_ROOT=/tmp/fovea-mathlib
+# The checker requires commit c44e0c8ee63ca166450922a373c7409c5d26b00b.
+(cd "$FOVEA_MATHLIB_ROOT" && lake exe cache get Mathlib/Tactic.lean Mathlib/Analysis/Normed/Algebra/Exponential.lean)
+bun run check:lean
+# After deliberately changing a model, ledger or checker:
+bun run check:lean --write
+bun run proofs:generate
+bun run check:fast
+```
+
+CI and releases run the full Lean check. Normal `check:proofs`, `check:fast`,
+prepack and CLI builds verify the model receipt without loading Lean. Both
+published distributions carry the source-bound receipt and model sources, not
+the Lean toolchain or mathlib. Cached mathlib artifacts and the Lean kernel are
+part of the proof-checking environment, not part of the installed product.
+A freshness receipt alone is not a proof certificate or an adversarial-security
+boundary; the full check is what establishes the listed model theorems.
+
+### The remaining implementation bridge
+
+None of these theorems automatically proves a separately written JavaScript
+algorithm. In particular, the reference certificate still needs:
+
+1. **Representation correspondence:** u32 words, native bit operations and
+   Float64 decoding/encoding represent the exact naturals/reals used in Lean,
+   with all machine intermediate bounds accounted for.
+2. **Algorithm correspondence:** actual indexed loops for multiword operations
+   and interval rounding implement the proved definitions, including all
+   branches, termination and error/refusal paths.
+3. **Evaluator correspondence:** CSR traversal, finite operator iterations,
+   signed decomposition and tail enlargement instantiate the analytic model.
+
+The first parts of that bridge now execute from the generated arithmetic
+streams described above. The full reference evaluator still needs a generated
+or refined implementation, including the remaining host traversal, packing,
+shifts and interval composition. `certifyDiffusion` therefore remains conditional. The current
+certificate's assumption list is intentionally unchanged, and the numerical
+oracle/integration tests stay in place. A verified reference evaluator could
+certify each actual fast result without separately proving every Float64
+Chebyshev execution; an unconditional theorem about that solver is a different
+and larger obligation.
+
+## Scalar numerical certificates
+
+`src/core/numerics.ts` is executed by `heat.ts`:
+
+- Bessel coefficients use the positive power series for I_k(t), computed with
+  outward **192-fractional-bit fixed-point u32-limb intervals** with additional
+  integer limbs as needed. Each product/division rounds
+  its lower endpoint down and upper endpoint up.
+- Once the next-term ratio is below one, a decreasing-ratio geometric bound
+  encloses the entire remaining positive tail. A finite iteration cap fails
+  closed if no sufficiently narrow certificate is obtained.
+- `exp(-t) I_k(t)` multiplies the Bessel interval by a cached outward-rounded
+  reciprocal of the positive exponential series. No `Math.exp`, logarithm, gamma,
+  or subtractive cancellation is involved in those coefficient calculations.
+- Conversion to Float64 explicitly rounds the top 53 bits once, using sticky
+  bits and ties-to-even, then widens to neighboring representable numbers. The
+  production coefficient is inside that returned interval.
+- Square roots use a host candidate, but independently check that the adjacent
+  floats bracket the answer by squaring their **exact binary rational values**.
+  A bad candidate is refused rather than silently trusted.
+
+The supported certificate domain is finite t in **[0,64]**, matching operation
+clamps, and integer order **0..512**. Scalar caches are bounded to four times.
+Other inputs are explicitly rejected. Normal operation chooses order <=90.
+
+The arithmetic backend is `src/core/u32.ts`: unsigned little-endian
+`Uint32Array` limbs, never a single low-precision fixed-point word. Generated
+streams prove all-prefix addition/subtraction reconstruction, comparison,
+digit/carry/borrow bounds and termination. Multiplication uses 16-bit halves
+and a generated multiply-add row stream. Short division constructs an exact
+<=48-bit JS integer, then advances its generated stream only when the candidate
+quotient/remainder satisfies the exact equation and remainder bound. Add/subtract intermediates need at most 33 exact bits.
+Native bit splitting and packing operate only on bounded integer values.
+
+These are executable certificates assembled from proved streams and cells,
+**not a proof of the entire arithmetic stack or reference evaluator**. The Lean development proves separate
+unbounded digit algorithms and analytic ingredients; it does not automatically
+transfer those theorems to these TypeScript implementations.
+The trusted boundary still includes loop traversal, native bit operations,
+interval composition, binary-number decoding, Float64 rounding, and the JS
+engine's exact representation of these bounded integers. The vector recurrence
+remains Float64; replacing the scalar backend does not prove its rounding error.
+Tests cover zero, subnormals, limb carries, endpoint times, known independent
+values and the actual heat solver.
+
+The rational error-envelope law proves that bounded propagated error plus a
+bounded local error stays inside the accumulated allowance. It does not
+establish those allowances for CSR multiplication or the Chebyshev recurrence.
+
+## End-to-end runtime verification
+
+`certifyHeat` in `src/core/heat-certificate.ts` checks an actual Float64 result
+against an independent **u32 interval** evaluator. The public entrypoint
+`certifyDiffusion` in `pi-fovea/substrate` verifies the exact result returned by
+`diffuseMass`, not a replacement result. This mode is opt-in: the usual cached
+Chebyshev path and its performance contract are unchanged.
+
+The target is explicit. Let `P[i,j] = w[i,j] / sum_j w[i,j]`, interpreting every
+stored finite edge weight as its exact binary rational. A zero row has `P[i,i]=1`.
+Focus uses `exp(t(P-I)) a`; forward mass uses `exp(t(P^T-I)) a`. The reference
+normalizes from those weights, **not the rounded `csr.deg` values**, so disagreement
+from degree accumulation, square roots, recurrence, coefficients, summation and
+pruning is included in the final candidate-to-target bound.
+
+The reference evaluates the positive expansion
+
+```
+exp(t(P-I)) a = exp(-t) * sum_{k>=0} (t^k / k!) P^k a.
+```
+
+Weights are decoded as exact dyadics, lifted to common integer units and summed
+exactly before probability division is rounded outward. This avoids overflow,
+all-subnormal denominators and pre-normalization fixed-point rounding. Signed vectors are split
+into positive and negative parts. Every finite operator application and sum
+propagates outward intervals. Row-stochastic focus is nonexpansive in the
+infinity norm; column-stochastic forward transport is nonexpansive in the
+one-norm. If the last included term has index k and `t/(k+2)<1`, the omitted
+coefficient mass is bounded by
+
+```
+(exp(-t) * t^(k+1)/(k+1)!) / (1 - t/(k+2)).
+```
+
+The implementation evaluates an upper enclosure of this bound, multiplies it
+by an upper bound on the appropriate source norm, and enlarges both ends of
+each signed output interval. It returns `maxAbsoluteError`, an outward-rounded
+upper bound on the distance from the actual candidate to that enclosure.
+`withinTolerance` is true only when that upper bound fits the requested absolute
+tolerance. A corrupt candidate or corrupt degree vector is not silently certified.
+
+**This closes a runtime verification gap, not every formal-proof gap.** The
+returned `assumptions` records dependence on the limb/interval implementation,
+JS semantics, the exponential/Poisson series identity, and stochastic norm
+bounds. The analytic identity, limiting geometric-series argument and norm
+bounds now have checked Lean model theorems. Their instantiation by the actual
+limb/vector evaluator is still unproved, so the runtime assumptions are retained.
+Seven laws cover the actual rounding decisions; three cover actual work
+admission. Neither set is a proof of the complete evaluator.
+
+The evaluator allows at most 512 Poisson iterations and a configurable reference
+work cap of at most 1,000,000 normalization/operator visits (default 100,000).
+This counts structural visits, not seconds or limb instructions; running the
+fast candidate is additional work. Invalid CSR/data, insufficient fixed-point
+precision, exhausted work, or nonfinite output bounds fail closed. A valid
+candidate that exceeds tolerance returns `withinTolerance: false`.
+
+## Remaining numerical theorem
+
+An unconditional, machine-checked matrix-exponential theorem is still open.
+The fast solver itself would require proofs composing:
+
+1. CSR/degree normalization error and the operator's norm bound;
+2. scalar coefficient intervals and the omitted Chebyshev-series tail;
+3. recurrence and vector-summation roundoff;
+4. any coefficient pruning and the similarity transforms around the solver.
+
+The separate Lean development supplies analytic ingredients for the Poisson
+reference, not this Chebyshev proof or a refinement proof of either TypeScript
+implementation. A passing rational bookkeeping theorem does not discharge it. The independent scaled-Taylor tests,
+conservation tests, recurrence parity tests and threshold counterexample remain.
+In particular, increasing diffusion time does not universally increase a
+thresholded lit set.
+
+## Trust and regression gates
+
+Trusted for executed policies: gdp-wired's checking kernel, the generator/ABI
+bridge, numeric codecs, JS engine and host effect interpreters. The numerical
+certificate implementation is still trusted. For the separate model theorems,
+the Lean kernel, pinned mathlib environment and its standard axioms are trusted;
+Lean is not loaded by the installed product.
+The untrusted prover's result alone is never accepted. A source receipt is
+freshness evidence, not a cryptographic proof certificate. The proof-source
+import checks are a development safety guard, not a sandbox for hostile JS.
+
+`tests/series.test.ts` executes the constructive model with independent BigInt
+arithmetic, checks large rational-family instances, refuses circular or
+input-dependent proof premises and verifies that corrupted polynomial proof
+trees are rejected. This is separate from the universal proof gate.
+
+`tests/streams.test.ts` checks actual production dispatch, long carry/borrow
+chains, whole-row equations, invalid digit witnesses, runtime bounds and ghost
+erasure. `tests/proofs.test.ts` also mutates a stream, its reconstruction invariant
+and its projection, requiring the autoprover to refuse each change.
+
+`tests/lean-proofs.test.ts` rejects stale model sources, missing theorems, altered
+axiom audits, proof escapes and claimed TypeScript correspondence. With
+`FOVEA_MATHLIB_ROOT` set, it also gives Lean a false unbounded addition theorem
+and requires failure before the receipt can be overwritten. CI runs that full
+check separately from the compiler-free affected tests.
+
+`tests/proofs.test.ts` mutates policies, imports, ABI and artifacts and requires
+refusal without writes. `tests/verified-kernels.test.ts` checks ABI boundaries and
+spies on actual renderer/heat consumers. `tests/asyncutil.test.ts` tests the real
+handoff schedule, and `tests/numerics.test.ts` exercises scalar certificates.
+`tests/heat-certificate.test.ts` checks analytic solutions, signed fields,
+isolates, extreme weights, corrupt candidates/degrees, and bounded refusal.
+`tests/interval.test.ts` independently checks interval endpoints with BigInt.
+`tests/u32.test.ts` compares multiword loops, shifts, quotient/remainder, and
+Float64 rounding with an independent BigInt oracle (BigInt is test-only here).
+Direct lease/reset/capacity truth-table examples and duplicate count examples
+were removed: their laws are checked on every proof gate. ABI boundaries,
+overflow refusal, real eviction and semaphore interleavings remain tested.
+Startup tests require registration to remain analysis-free and under its
+existing byte budget. No budget was raised and no numerical suite was retired.

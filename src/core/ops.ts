@@ -3,6 +3,7 @@
 // rendering), focus centers the fovea on a query, dwell advances diffusion
 // time and returns the delta, impact seeds from changed files.
 
+import { resetFocus } from "../verified/generated/control.js";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
@@ -603,7 +604,7 @@ export const focus = async (
   }
   const scopeKey = [options.path ?? "", options.language?.toLowerCase() ?? "", options.kind ?? ""].join("|");
   const key = `${state.generation}:${[...seeds].sort((a, b) => a - b).join(",")}:${scopeKey}`;
-  if (options.fresh || session.generation !== state.generation || session.focusKey !== key) {
+  if (resetFocus(options.fresh ?? false, session.generation === state.generation, session.focusKey === key)) {
     clearSessionFocus(session);
     session.focusKey = key;
     session.scope = { path: options.path, language: options.language, kind: options.kind };
@@ -658,7 +659,7 @@ export const dwell = async (root: string, factor?: number, budget?: number): Pro
   const g = state.graph;
   const session = getSession(root);
   const B = clampBudget(budget, 512);
-  if (session.seeds.length && (session.generation !== state.generation || (session.tk.length > 0 && session.tk[0]?.length !== g.nodes.length))) {
+  if (session.seeds.length && (resetFocus(false, session.generation === state.generation, session.tk.length === 0 || session.tk[0]?.length === g.nodes.length))) {
     const previousGeneration = session.generation || "unknown";
     clearSessionFocus(session);
     const text = `fovea dwell: focus expired because the graph changed (${previousGeneration} → ${state.generation}). Call fovea_focus again; no stale vector was applied.`;

@@ -3,6 +3,7 @@ import { lstat, realpath, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, basename, join, relative, resolve, sep, isAbsolute, parse } from "node:path";
 import { OBSERVED_ROOT_LIMIT } from "./asyncutil.js";
+import { capacityPlan } from "../verified/generated/control.js";
 
 const absolutePath = (cwd: string, input: string): string => {
   const raw = input.startsWith("@") ? input.slice(1) : input;
@@ -49,7 +50,7 @@ export class ExecutionRoots {
     if (this.recent().at(-1) === root) return { fresh: false };
     this.observed.delete(root);
     let evicted: string | undefined;
-    if (this.observed.size >= this.capacity) {
+    if (capacityPlan(this.observed.size, this.capacity).evict) {
       evicted = this.observed.keys().next().value!;
       this.observed.delete(evicted);
       this.retired.push(evicted); this.retired = this.retired.slice(-this.capacity); this.retirements++;

@@ -4,6 +4,20 @@ import { assembleGraphWithIndex } from "./core/graph.js";
 import { buildCsr, chebyshevVectors, chooseOrder, heatField } from "./core/heat.js";
 import type { FileFacts } from "./core/build.js";
 import type { Graph } from "./core/types.js";
+import type { HeatCertificate, HeatCertificateOptions } from "./core/heat-certificate.js";
+export type { HeatCertificate } from "./core/heat-certificate.js";
+
+/** Opt-in, bounded interval verification of this entrypoint's actual Float64 output.
+ * The reference uses exact-edge normalization, not the rounded degree vector.
+ * Inspect withinTolerance; the analytic and implementation assumptions are explicit.
+ */
+export async function certifyDiffusion(graph:Graph,source:Float64Array,time:number,
+  options:Pick<HeatCertificateOptions,'absoluteTolerance'|'maxWork'>={}):Promise<HeatCertificate> {
+  const input=Float64Array.from(source),value=diffuseMass(graph,input,[time])[0]!.mass;
+  const csr=buildCsr(graph),settings={absoluteTolerance:options.absoluteTolerance,maxWork:options.maxWork};
+  const {certifyHeat}=await import('./core/heat-certificate.js');
+  return certifyHeat(csr,input,time,{...settings,mode:'forward',candidate:value});
+}
 
 export const SUBSTRATE_VERSION = 1 as const;
 export type SnapshotFacts = Pick<FileFacts, "sha1" | "symbols" | "imports" | "calls" | "literals" | "anchors">;
