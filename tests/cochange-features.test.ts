@@ -1,19 +1,41 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { COCHANGE_HALF_LIFE_DAYS, coChangeHistory, effectiveWeight, expectationResiduals } from "../src/core/cochange.js";
+import {
+  COCHANGE_HALF_LIFE_DAYS,
+  coChangeHistory,
+  effectiveWeight,
+  expectationResiduals,
+} from "../src/core/cochange.js";
 
 const NOW = 1_700_000_000_000;
 const DAY = 86_400_000;
 const roots: string[] = [];
-const cache = (root: string): string => join(tmpdir(), `pi-fovea-cochange-${createHash("sha1").update(root).digest("hex").slice(0, 16)}.json`);
-const git = (root: string, ...args: string[]): string => execFileSync("git", ["-C", root, ...args], {
-  encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-  env: { ...process.env, GIT_AUTHOR_DATE: new Date(NOW).toISOString(), GIT_COMMITTER_DATE: new Date(NOW).toISOString() },
-}).trim();
+const cache = (root: string): string =>
+  join(
+    tmpdir(),
+    `pi-fovea-cochange-${createHash("sha1").update(root).digest("hex").slice(0, 16)}.json`,
+  );
+const git = (root: string, ...args: string[]): string =>
+  execFileSync("git", ["-C", root, ...args], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      GIT_AUTHOR_DATE: new Date(NOW).toISOString(),
+      GIT_COMMITTER_DATE: new Date(NOW).toISOString(),
+    },
+  }).trim();
 const repo = (): string => {
   const root = mkdtempSync(join(tmpdir(), "fovea-feature-history-"));
   roots.push(root);
@@ -64,7 +86,14 @@ describe("feature integration history (real Git)", () => {
     expect((await coChangeHistory(root, ["a.ts", "b.ts"])).size).toBe(0);
     mergeFeature(root, 2, true);
     const history = await coChangeHistory(root, ["a.ts", "b.ts"]);
-    expect(history.get("a.ts")?.[0]).toMatchObject({ partner: "b.ts", n_ij: 2, n_i: 4, n_j: 2, N: 5, lastTs: NOW });
+    expect(history.get("a.ts")?.[0]).toMatchObject({
+      partner: "b.ts",
+      n_ij: 2,
+      n_i: 4,
+      n_j: 2,
+      N: 5,
+      lastTs: NOW,
+    });
     expect(history.get("b.ts")?.[0]).toMatchObject({ n_i: 2, n_j: 4 });
   });
 
@@ -84,7 +113,12 @@ describe("feature integration history (real Git)", () => {
     commit(root, "unlabeled b", ["b"]);
     git(root, "checkout", "main");
     git(root, "merge", "--ff-only", "ff");
-    expect((await coChangeHistory(root, ["a", "b"])).get("a")?.[0]).toMatchObject({ n_ij: 2, n_i: 3, n_j: 3, N: 5 });
+    expect((await coChangeHistory(root, ["a", "b"])).get("a")?.[0]).toMatchObject({
+      n_ij: 2,
+      n_i: 3,
+      n_j: 3,
+      N: 5,
+    });
   });
 
   it("recovers explicit split followups/chains, requiring independent support and retaining raw decay", async () => {
@@ -120,7 +154,11 @@ describe("feature integration history (real Git)", () => {
       appendFileSync(join(root, file), `${subject}\n`);
       git(root, "add", "-A");
       execFileSync("git", ["-C", root, "commit", "-qm", subject], {
-        env: { ...process.env, GIT_AUTHOR_DATE: new Date(date).toISOString(), GIT_COMMITTER_DATE: new Date(date).toISOString() },
+        env: {
+          ...process.env,
+          GIT_AUTHOR_DATE: new Date(date).toISOString(),
+          GIT_COMMITTER_DATE: new Date(date).toISOString(),
+        },
       });
     };
     datedCommit("first", "a", NOW - 100 * DAY);
@@ -139,7 +177,12 @@ describe("feature integration history (real Git)", () => {
     git(root, "rm", "b");
     git(root, "commit", "-qm", "deletion");
     commit(root, "restore", ["b"]);
-    expect((await coChangeHistory(root, ["a", "b"])).get("a")?.[0]).toMatchObject({ n_ij: 2, n_i: 2, n_j: 3, N: 4 });
+    expect((await coChangeHistory(root, ["a", "b"])).get("a")?.[0]).toMatchObject({
+      n_ij: 2,
+      n_i: 2,
+      n_j: 3,
+      N: 4,
+    });
   });
 
   it("does not group proximity, issue references, ambiguous, missing, or future subjects", async () => {
@@ -175,12 +218,27 @@ describe("feature integration history (real Git)", () => {
 
   it("preserves NUL-delimited odd paths, collision-safe pair identities, and subroot counts", async () => {
     const root = repo();
-    const names = ["a|b", "c", "a", "b|c", "white space ", "tab\tname", "line\nname", "日本語", "back\\slash", "FOVEA"];
+    const names = [
+      "a|b",
+      "c",
+      "a",
+      "b|c",
+      "white space ",
+      "tab\tname",
+      "line\nname",
+      "日本語",
+      "back\\slash",
+      "FOVEA",
+    ];
     const files = names.map((name) => `sub/${name}`);
     for (let i = 0; i < 2; i++) commit(root, `paths${i}`, files);
     commit(root, "outside", ["elsewhere"]);
     const full = await coChangeHistory(root, files);
-    expect(full.get("sub/a|b")?.find((p) => p.partner === "sub/c")).toMatchObject({ n_ij: 2, n_i: 2, N: 3 });
+    expect(full.get("sub/a|b")?.find((p) => p.partner === "sub/c")).toMatchObject({
+      n_ij: 2,
+      n_i: 2,
+      N: 3,
+    });
     const subroot = join(root, "sub");
     try {
       const sub = await coChangeHistory(subroot, names);
@@ -189,7 +247,9 @@ describe("feature integration history (real Git)", () => {
         expect(sub.get(name)).toHaveLength(names.length - 1);
         expect(sub.get(name)?.[0]).toMatchObject({ n_ij: 2, n_i: 2, N: 3 });
       }
-    } finally { rmSync(cache(subroot), { force: true }); }
+    } finally {
+      rmSync(cache(subroot), { force: true });
+    }
   });
 
   it("invalidates v3 cache and tracked-file identity", async () => {
@@ -215,10 +275,17 @@ describe("feature integration history (real Git)", () => {
     const before = JSON.parse(readFileSync(cache(root), "utf8")).key;
     git(root, "fetch", "--deepen=2");
     expect(git(root, "rev-parse", "HEAD")).toBe(head);
-    expect((await coChangeHistory(root, ["a", "b"])).get("a")?.[0]).toMatchObject({ n_ij: 3, n_i: 3, N: 3 });
+    expect((await coChangeHistory(root, ["a", "b"])).get("a")?.[0]).toMatchObject({
+      n_ij: 3,
+      n_i: 3,
+      N: 3,
+    });
     expect(JSON.parse(readFileSync(cache(root), "utf8")).key).not.toBe(before);
     git(root, "fetch", "--unshallow");
-    expect((await coChangeHistory(root, ["a", "b"])).get("a")?.[0]).toMatchObject({ n_ij: 5, N: 5 });
+    expect((await coChangeHistory(root, ["a", "b"])).get("a")?.[0]).toMatchObject({
+      n_ij: 5,
+      N: 5,
+    });
   });
 
   it("bounds first-parent observations to 400 even with empty commits", async () => {
@@ -228,7 +295,8 @@ describe("feature integration history (real Git)", () => {
     // Fast plumbing avoids 400 process pairs while still creating real Git objects.
     const tree = git(root, "rev-parse", "HEAD^{tree}");
     let parent = git(root, "rev-parse", "HEAD");
-    for (let i = 0; i < 400; i++) parent = git(root, "commit-tree", tree, "-p", parent, "-m", `empty${i}`);
+    for (let i = 0; i < 400; i++)
+      parent = git(root, "commit-tree", tree, "-p", parent, "-m", `empty${i}`);
     git(root, "update-ref", "refs/heads/main", parent);
     expect((await coChangeHistory(root, ["a", "b"])).size).toBe(0);
     expect(JSON.parse(readFileSync(cache(root), "utf8")).commits).toBe(400);

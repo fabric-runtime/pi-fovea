@@ -12,9 +12,28 @@ for (const arg of process.argv.slice(2)) {
   const g = state.graph;
   const litEdges = g.edges.filter((e) => e.kind === "join").length;
   const callEdges = g.edges.filter((e) => e.kind === "invokes").length;
-  console.log(root.split("/").pop() + ": " + [g.files.length + " files", g.nodes.length + " nodes", g.edges.length + " edges", g.anchors.length + " anchors", litEdges + " join-edges", callEdges + " call-edges", ms.toFixed(0) + "ms build"].join(", "));
+  console.log(
+    root.split("/").pop() +
+      ": " +
+      [
+        g.files.length + " files",
+        g.nodes.length + " nodes",
+        g.edges.length + " edges",
+        g.anchors.length + " anchors",
+        litEdges + " join-edges",
+        callEdges + " call-edges",
+        ms.toFixed(0) + "ms build",
+      ].join(", "),
+  );
   resetSessions();
   const t1 = performance.now();
   const s = await sketch(root, 400);
-  console.log("  sketch: " + s.tokens + " tok, " + (performance.now() - t1).toFixed(0) + "ms, groups in body: " + s.text.split("\n").length);
+  console.log(
+    "  sketch: " +
+      s.tokens +
+      " tok, " +
+      (performance.now() - t1).toFixed(0) +
+      "ms, groups in body: " +
+      s.text.split("\n").length,
+  );
 }

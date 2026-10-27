@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildCsr,
-  excess,
-  focusField,
-  forwardHeat,
-  taylorReference,
-} from "../src/core/heat.js";
+import { buildCsr, excess, focusField, forwardHeat, taylorReference } from "../src/core/heat.js";
 import type { Csr } from "../src/core/heat.js";
 import type { Graph, NodeRec } from "../src/core/types.js";
 
 const graphFromEdges = (n: number, edges: Array<[number, number, number]>): Graph => {
   const nodes: NodeRec[] = Array.from({ length: n }, (_, i) => ({
-    id: `n${i}@f`, name: `n${i}`, kind: "function", file: "f", line: i + 1, sig: `n${i}`, lang: "t",
+    id: `n${i}@f`,
+    name: `n${i}`,
+    kind: "function",
+    file: "f",
+    line: i + 1,
+    sig: `n${i}`,
+    lang: "t",
   }));
   return {
     nodes,
@@ -63,9 +63,16 @@ const focusReference = (csr: Csr, a: Float64Array, t: number): Float64Array => {
 
 describe("degree-corrected conserved heat", () => {
   it("conserves forward mass at every diffusion time", () => {
-    const csr = buildCsr(graphFromEdges(6, [
-      [0, 1, 0.5], [1, 2, 2], [2, 3, 1.25], [3, 4, 3], [4, 5, 0.75], [1, 5, 0.4],
-    ]));
+    const csr = buildCsr(
+      graphFromEdges(6, [
+        [0, 1, 0.5],
+        [1, 2, 2],
+        [2, 3, 1.25],
+        [3, 4, 3],
+        [4, 5, 0.75],
+        [1, 5, 0.4],
+      ]),
+    );
     const a = Float64Array.from([1, 0, 0.25, 0, 1, 0]);
     for (const t of [0, 0.5, 2, 8, 32]) {
       expect(sum(forwardHeat(csr, a, t))).toBeCloseTo(sum(a), 8);
@@ -73,14 +80,18 @@ describe("degree-corrected conserved heat", () => {
   });
 
   it("converges to degree-proportional stationary mass", () => {
-    const csr = buildCsr(graphFromEdges(4, [
-      [0, 1, 1], [1, 2, 3], [2, 3, 2],
-    ]));
+    const csr = buildCsr(
+      graphFromEdges(4, [
+        [0, 1, 1],
+        [1, 2, 3],
+        [2, 3, 2],
+      ]),
+    );
     const a = Float64Array.from([1, 0, 0, 1]);
     const got = forwardHeat(csr, a, 64);
     const totalDegree = sum(csr.deg);
     for (let i = 0; i < csr.n; i++) {
-      expect(got[i]!).toBeCloseTo(sum(a) * csr.deg[i]! / totalDegree, 7);
+      expect(got[i]!).toBeCloseTo((sum(a) * csr.deg[i]!) / totalDegree, 7);
     }
   });
 
@@ -126,10 +137,21 @@ describe("degree-corrected conserved heat", () => {
   });
 
   it("matches the independent scaled-Taylor reference", () => {
-    const csr = buildCsr(graphFromEdges(9, [
-      [0, 1, 0.4], [1, 2, 1.7], [2, 3, 0.8], [3, 4, 2.2], [4, 5, 0.3],
-      [5, 6, 1.1], [6, 7, 0.9], [7, 8, 1.4], [0, 5, 0.6], [1, 7, 1.3], [2, 8, 0.5],
-    ]));
+    const csr = buildCsr(
+      graphFromEdges(9, [
+        [0, 1, 0.4],
+        [1, 2, 1.7],
+        [2, 3, 0.8],
+        [3, 4, 2.2],
+        [4, 5, 0.3],
+        [5, 6, 1.1],
+        [6, 7, 0.9],
+        [7, 8, 1.4],
+        [0, 5, 0.6],
+        [1, 7, 1.3],
+        [2, 8, 0.5],
+      ]),
+    );
     const a = Float64Array.from([1, 0, 0.25, 0, 0, 1, 0, 0.5, 0]);
     for (const t of [0.5, 2, 8, 16]) {
       expect(maxDifference(forwardHeat(csr, a, t), forwardReference(csr, a, t))).toBeLessThan(1e-8);

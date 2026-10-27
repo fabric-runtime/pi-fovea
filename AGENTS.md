@@ -74,10 +74,20 @@ including receipt hashes, entry points, licenses and compiler-free execution.
 `bun run check:package path/to/package.tgz` checks an existing archive; publish
 that same checked tarball with `bun publish path/to/package.tgz`.
 
+## Readable authored sources
+
+Use `bun run format` for authored TypeScript/JavaScript and root JSON configuration,
+and `bun run format:check` to verify without rewriting. Prettier is pinned. Do not
+format semantic files in `tests/fixtures/` or edit `src/verified/generated/` directly;
+the proof generator emits readable JavaScript and declarations itself. Authored
+proofs, runtime bridges, and proof checkers are TypeScript, included in the strict
+root `tsconfig.json`, and run through `tsx` in development. Keep small packaging and
+corpus scripts as directly executable Node ESM where appropriate.
+
 ## Executed gdp-wired kernels
 
-`proofs/kernel.mjs` and `proofs/controls.mjs` are the executable policies;
-`proofs/laws.mjs` supplies independent specifications. `proofs/ledger.json` lists
+`proofs/kernel.ts` and `proofs/controls.ts` are the executable policies;
+`proofs/laws.ts` supplies independent specifications. `proofs/ledger.json` lists
 all required laws. Never weaken a law to make a proof pass. After changing proof
 sources, the ABI, bridge, or adapters: `bun run proofs:generate`, review generated
 JS, then `bun run check:fast`. Do not hand-edit `src/verified/generated/`.
@@ -88,7 +98,7 @@ for executed policies, exact scalar certificates, and remaining numerical gaps.
 
 ## Generated arithmetic streams
 
-`proofs/streams.mjs` defines five executable digit machines; `scripts/check-streams.mjs`
+`proofs/streams.ts` defines five executable digit machines; `scripts/check-streams.ts`
 checks 98 claims including unbounded prefix reconstruction, termination, intermediate
 bounds and ghost erasure. `bun run check:streams` is a quick local check and needs
 no Lean. Do not compile ghost state or pass unproved premises to corollary checks.
@@ -98,11 +108,11 @@ outer traversal obligations separate; this is not a proof of the entire evaluato
 
 ## Constructive scalar-series foundation
 
-`proofs/series.mjs` proves 23 natural/rational claims, including a uniform
+`proofs/series.ts` proves 23 natural/rational claims, including a uniform
 all-future-prefix Cauchy bound and an explicit modulus. `bun run check:series`
 needs no Lean. These are mathematical model proofs, not yet a proof of the
 complete matrix-exponential evaluator; retain the certificate assumptions.
-`scripts/prove-polynomial.mjs` is untrusted search. Every returned tree must pass
+`scripts/prove-polynomial.ts` is untrusted search. Every returned tree must pass
 `gdp-wired/kernel.check`; do not turn its products, cuts or failed searches into
 assumed facts. Support lists may only remove hypotheses. Derived premises must
 already be checked in the same state context; never import input-dependent
@@ -112,13 +122,13 @@ claims as unconditional state facts.
 
 `proofs/lean` contains 28 model theorems, not proofs of the production TypeScript
 loops. Do not claim runtime correspondence or remove certificate assumptions
-on the strength of these models. `scripts/check-lean.mjs` pins Lean/mathlib,
+on the strength of these models. `scripts/check-lean.ts` pins Lean/mathlib,
 audits every required theorem's axioms, and rejects proof escapes.
 
 After changing a Lean input, use the pinned checkout described in
 `docs/proofs.md`: `FOVEA_MATHLIB_ROOT=... bun run check:lean --write`, then
 `bun run proofs:generate` and `bun run check:fast`. Run heavy checks on Modal.
-Normal checks/prepack verify the Lean receipt without loading a compiler;
+Normal checks/prepack verify the Lean receipt without invoking Lean;
 CI/releases additionally run the full proof check. Keep the required-theorem
 inventory and standard-axiom allowlist strict, and keep mathlib/cache artifacts
 outside the checkout and published packages.

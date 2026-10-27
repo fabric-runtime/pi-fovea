@@ -15,10 +15,12 @@ export const tokenEstimate = (text: string): number => Math.ceil(text.length / 4
 export const fitPrefix = (costs: readonly number[], budget: number): number => {
   if (!Number.isFinite(budget)) throw new RangeError("Expected finite token budget");
   const limit = Math.max(0, Math.floor(budget));
-  let selected = 0, selectedCost = 0;
+  let selected = 0,
+    selectedCost = 0;
   for (let index = 0; index < costs.length; index++) {
     const next = fitStep(limit, index, costs[index]!, selected, selectedCost);
-    selected = next.selected; selectedCost = next.cost;
+    selected = next.selected;
+    selectedCost = next.cost;
   }
   return selected - 1;
 };
@@ -59,15 +61,26 @@ const RELATION_PRIORITY: Record<EdgeKind, number> = {
 
 const relationLabel = (edge: Edge, seedAtA: boolean, candidate: NodeRec): string => {
   switch (edge.kind) {
-    case "invokes": return seedAtA ? "→ callee" : "← caller";
-    case "imports": return edge.evidence?.possible
-      ? seedAtA ? "→ possible import" : "← possible importer"
-      : seedAtA ? "→ import" : "← importer";
-    case "tests": return seedAtA ? "→ subject" : "← test";
-    case "inherits": return seedAtA ? "→ parent" : "← subclass";
-    case "anchors": return seedAtA ? candidate.kind === "file" ? "→ feature file" : "→ handler" : "← feature";
-    case "join": return "↔ shared literal";
-    case "contains": return seedAtA ? "◇ member" : "◇ file";
+    case "invokes":
+      return seedAtA ? "→ callee" : "← caller";
+    case "imports":
+      return edge.evidence?.possible
+        ? seedAtA
+          ? "→ possible import"
+          : "← possible importer"
+        : seedAtA
+          ? "→ import"
+          : "← importer";
+    case "tests":
+      return seedAtA ? "→ subject" : "← test";
+    case "inherits":
+      return seedAtA ? "→ parent" : "← subclass";
+    case "anchors":
+      return seedAtA ? (candidate.kind === "file" ? "→ feature file" : "→ handler") : "← feature";
+    case "join":
+      return "↔ shared literal";
+    case "contains":
+      return seedAtA ? "◇ member" : "◇ file";
   }
 };
 
@@ -94,8 +107,11 @@ const directRelations = (g: Graph, seeds: ReadonlySet<number>): Map<number, Dire
       evidence: edge.evidence,
     };
     const current = out.get(node);
-    if (!current || relation.priority > current.priority ||
-      (relation.priority === current.priority && relation.weight > current.weight)) {
+    if (
+      !current ||
+      relation.priority > current.priority ||
+      (relation.priority === current.priority && relation.weight > current.weight)
+    ) {
       out.set(node, relation);
     }
   }
@@ -120,21 +136,27 @@ export interface RevealedNode {
 export interface FitResult {
   text: string;
   tokens: number;
-  shown: number;      // individually rendered nodes
+  shown: number; // individually rendered nodes
   suppressed: number; // skipped because already disclosed
-  litTotal: number;   // eligible candidates after scope/disclosure filtering
+  litTotal: number; // eligible candidates after scope/disclosure filtering
   candidateOmitted: number; // outside the display cap, still included in overflow
   truncated: boolean;
   overflowPath?: string; // tmp artifact holding the full list, when it spilled
 }
 
-const cmpNodes = (g: Graph, field: Float64Array) => (x: number, y: number): number => {
-  const f = field[y]! - field[x]!;
-  if (f !== 0) return f;
-  const a = g.nodes[x]!;
-  const b = g.nodes[y]!;
-  return a.file === b.file ? (a.line - b.line || a.name.localeCompare(b.name)) : a.file < b.file ? -1 : 1;
-};
+const cmpNodes =
+  (g: Graph, field: Float64Array) =>
+  (x: number, y: number): number => {
+    const f = field[y]! - field[x]!;
+    if (f !== 0) return f;
+    const a = g.nodes[x]!;
+    const b = g.nodes[y]!;
+    return a.file === b.file
+      ? a.line - b.line || a.name.localeCompare(b.name)
+      : a.file < b.file
+        ? -1
+        : 1;
+  };
 
 export interface RevealOptions {
   header?: string;
@@ -158,8 +180,21 @@ export const revealFoveated = (
   let vmax = 0;
   for (let i = 0; i < field.length; i++) if (field[i]! > vmax) vmax = field[i]!;
   if (vmax <= 0) {
-    const text = clipBudget(`${opts.header ?? "fovea"}\n(nothing matched the current graph)`, opts.budget);
-    return { text, tokens: tokenEstimate(text), shown: 0, suppressed: 0, litTotal: 0, candidateOmitted: 0, truncated: false, revealedIds: [], revealed: [] };
+    const text = clipBudget(
+      `${opts.header ?? "fovea"}\n(nothing matched the current graph)`,
+      opts.budget,
+    );
+    return {
+      text,
+      tokens: tokenEstimate(text),
+      shown: 0,
+      suppressed: 0,
+      litTotal: 0,
+      candidateOmitted: 0,
+      truncated: false,
+      revealedIds: [],
+      revealed: [],
+    };
   }
   const seedSet = new Set(opts.seeds ?? []);
   const relations = directRelations(g, seedSet);
@@ -168,21 +203,40 @@ export const revealFoveated = (
   for (let i = 0; i < g.nodes.length; i++) {
     const h = field[i]! / vmax;
     const direct = relations.get(i);
-    if ((!direct || direct.kind === "contains") && (h < WARM_TIER * 0.1 || field[i]! < HEAT_EPS)) continue;
+    if ((!direct || direct.kind === "contains") && (h < WARM_TIER * 0.1 || field[i]! < HEAT_EPS))
+      continue;
     const id = g.nodes[i]!.id;
     const inNucleus = seedSet.has(i) || (direct !== undefined && direct.kind !== "contains");
     const decision = disclosureDecision(
-      !opts.include || opts.include.has(id), opts.exclude?.has(id) ?? false,
-      opts.disclosed?.has(id) ?? false, opts.repeatNucleus ?? false, inNucleus,
+      !opts.include || opts.include.has(id),
+      opts.exclude?.has(id) ?? false,
+      opts.disclosed?.has(id) ?? false,
+      opts.repeatNucleus ?? false,
+      inNucleus,
     );
     if (decision === "D") continue;
-    if (decision === "S") { suppressed++; continue; }
+    if (decision === "S") {
+      suppressed++;
+      continue;
+    }
     candidates.push(i);
   }
   const byHeat = cmpNodes(g, field);
   candidates.sort((a, b) => {
-    const aPriority = seedSet.has(a) ? 2 : relations.get(a)?.kind === "contains" ? 0 : relations.has(a) ? 1 : 0;
-    const bPriority = seedSet.has(b) ? 2 : relations.get(b)?.kind === "contains" ? 0 : relations.has(b) ? 1 : 0;
+    const aPriority = seedSet.has(a)
+      ? 2
+      : relations.get(a)?.kind === "contains"
+        ? 0
+        : relations.has(a)
+          ? 1
+          : 0;
+    const bPriority = seedSet.has(b)
+      ? 2
+      : relations.get(b)?.kind === "contains"
+        ? 0
+        : relations.has(b)
+          ? 1
+          : 0;
     return bPriority - aPriority || byHeat(a, b);
   });
   const cap = Math.max(0, Math.floor(opts.maxCandidates ?? 400));
@@ -213,7 +267,11 @@ export const revealFoveated = (
         : relation.label
       : undefined;
     const provenance = relation?.kind === "contains" ? "" : evidenceLabel(relation?.evidence);
-    const context = seedSet.has(i) ? "  [focus]" : displayRelation ? `  [${displayRelation}${provenance}]` : "";
+    const context = seedSet.has(i)
+      ? "  [focus]"
+      : displayRelation
+        ? `  [${displayRelation}${provenance}]`
+        : "";
     const remember = (role: RevealedNode["role"]): void => {
       ids.push(node.id);
       revealed.push({
@@ -233,11 +291,12 @@ export const revealFoveated = (
     };
     const glowLine = `  · ${node.name} (${node.kind}) ${formatNodeLocation(node)}`;
     if (h >= HOT_TIER || seedSet.has(i)) {
-      const line = node.kind === "file"
-        ? `▪ ${node.file}${context}`
-        : node.kind === "anchor"
-          ? `⚑ ${node.sig}${context}`
-          : `▲ ${formatNodeLocation(node)}  ${node.sig}${context}`;
+      const line =
+        node.kind === "file"
+          ? `▪ ${node.file}${context}`
+          : node.kind === "anchor"
+            ? `⚑ ${node.sig}${context}`
+            : `▲ ${formatNodeLocation(node)}  ${node.sig}${context}`;
       lines.push(line);
       allItems.push(line);
       remember(seedSet.has(i) ? "focus" : semanticRelation ? "direct" : "hot");
@@ -276,13 +335,17 @@ export const revealFoveated = (
   const renderK = (k: number, note = artifactNote): string => {
     const shownIndiv = shownCount(individual, k);
     const remaining = remainingCount(litTotal, shownIndiv);
-    const footer = remaining > 0
-      ? `\n… ${remaining} more results collapsed or outside budget${note} — use fovea_dwell for wider context`
-      : "";
+    const footer =
+      remaining > 0
+        ? `\n… ${remaining} more results collapsed or outside budget${note} — use fovea_dwell for wider context`
+        : "";
     return header + "\n" + items.slice(0, k).join("\n") + footer;
   };
 
-  const k = fitPrefix(Array.from({ length: items.length + 1 }, (_, i) => tokenEstimate(renderK(i))), opts.budget);
+  const k = fitPrefix(
+    Array.from({ length: items.length + 1 }, (_, i) => tokenEstimate(renderK(i))),
+    opts.budget,
+  );
   let text = k >= 0 ? renderK(k) : clipBudget(header, opts.budget);
   const shown = shownCount(individual, k >= 0 ? k : 0);
   // The footer appears whenever anything was omitted — a collapsed glow
@@ -317,7 +380,11 @@ export const revealFoveated = (
 
 // Grouped reveal for sketch and impact, one line per group.
 
-export interface GroupLine { label: string; mass: number; detail: string; }
+export interface GroupLine {
+  label: string;
+  mass: number;
+  detail: string;
+}
 
 export const revealGroups = (
   groups: GroupLine[],
@@ -328,16 +395,23 @@ export const revealGroups = (
   const renderK = (k: number, note = artifactNote): string => {
     const body = ordered.slice(0, k).map((gl) => `${gl.label.padEnd(2)} ${gl.detail}`);
     const rest = remainingCount(ordered.length, k);
-    const footer = rest > 0 ? [`\n… ${rest} more groups omitted${note} — use fovea_focus for detail`] : [];
+    const footer =
+      rest > 0 ? [`\n… ${rest} more groups omitted${note} — use fovea_focus for detail`] : [];
     return [opts.header, ...body, ...footer].join("\n");
   };
   // Linear-time cost enumeration: each prefix has an independently priced footer.
   let chars = opts.header.length;
   const costs: number[] = [];
   for (let i = 0; i <= ordered.length; i++) {
-    if (i > 0) { const gl = ordered[i - 1]!; chars += 1 + `${gl.label.padEnd(2)} ${gl.detail}`.length; }
+    if (i > 0) {
+      const gl = ordered[i - 1]!;
+      chars += 1 + `${gl.label.padEnd(2)} ${gl.detail}`.length;
+    }
     const rest = remainingCount(ordered.length, i);
-    const footer = rest > 0 ? `\n\n… ${rest} more groups omitted${artifactNote} — use fovea_focus for detail` : "";
+    const footer =
+      rest > 0
+        ? `\n\n… ${rest} more groups omitted${artifactNote} — use fovea_focus for detail`
+        : "";
     costs.push(Math.ceil((chars + footer.length) / 4));
   }
   const kBest = fitPrefix(costs, opts.budget);
@@ -345,7 +419,11 @@ export const revealGroups = (
   let overflowPath: string | undefined;
   if (kBest < ordered.length && opts.overflowTo) {
     try {
-      writeSpill(opts.overflowTo, [opts.header, ...ordered.map((gl) => `${gl.label.padEnd(2)} ${gl.detail}`)].join("\n") + "\n");
+      writeSpill(
+        opts.overflowTo,
+        [opts.header, ...ordered.map((gl) => `${gl.label.padEnd(2)} ${gl.detail}`)].join("\n") +
+          "\n",
+      );
       overflowPath = opts.overflowTo;
     } catch {
       text = kBest >= 0 ? renderK(kBest, "") : clipBudget(opts.header, opts.budget);

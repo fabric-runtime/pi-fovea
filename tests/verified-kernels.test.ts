@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as kernel from "../src/verified/generated/kernel.js";
-import { BEND_NAT_MAX, VERIFIED_NAT_MAX, nextBasisStep, remainingCount, shownCount } from "../src/verified/policy.js";
+import {
+  BEND_NAT_MAX,
+  VERIFIED_NAT_MAX,
+  nextBasisStep,
+  remainingCount,
+  shownCount,
+} from "../src/verified/policy.js";
 import { disclosureDecision } from "../src/core/disclosure.js";
 import { buildCsr, chebyshevVectors } from "../src/core/heat.js";
 import { revealFoveated, revealGroups } from "../src/core/render.js";
@@ -8,8 +14,14 @@ import type { Graph } from "../src/core/types.js";
 
 afterEach(() => vi.restoreAllMocks());
 const graph = (): Graph => ({
-  nodes: [{ id: "a", name: "a", kind: "function", file: "a.ts", line: 1, sig: "a()", lang: "TypeScript" }],
-  edges: [], anchors: [], files: ["a.ts"], byName: new Map(), byFile: new Map(),
+  nodes: [
+    { id: "a", name: "a", kind: "function", file: "a.ts", line: 1, sig: "a()", lang: "TypeScript" },
+  ],
+  edges: [],
+  anchors: [],
+  files: ["a.ts"],
+  byName: new Map(),
+  byFile: new Map(),
 });
 
 describe("executed verified kernels", () => {
@@ -17,7 +29,10 @@ describe("executed verified kernels", () => {
     const decision = vi.spyOn(kernel, "disclosure");
     // Each argument has a distinct, nonconstant bit pattern across these probes.
     // This catches ABI permutations without re-enumerating the proved policy.
-    const probes: { inputs: Parameters<typeof disclosureDecision>; tag: ReturnType<typeof disclosureDecision> }[] = [
+    const probes: {
+      inputs: Parameters<typeof disclosureDecision>;
+      tag: ReturnType<typeof disclosureDecision>;
+    }[] = [
       { inputs: [false, true, true, true, false], tag: "D" },
       { inputs: [true, false, true, false, false], tag: "S" },
       { inputs: [true, false, false, true, true], tag: "R" },
@@ -42,7 +57,15 @@ describe("executed verified kernels", () => {
 
   it("rejects non-natural and backend-overflow numeric inputs before execution", () => {
     const run = vi.spyOn(kernel, "shownCount");
-    for (const bad of [-1, 0.5, NaN, Infinity, -Infinity, BEND_NAT_MAX + 1, Number.MAX_SAFE_INTEGER]) {
+    for (const bad of [
+      -1,
+      0.5,
+      NaN,
+      Infinity,
+      -Infinity,
+      BEND_NAT_MAX + 1,
+      Number.MAX_SAFE_INTEGER,
+    ]) {
       expect(() => shownCount(bad, 1)).toThrow(RangeError);
       expect(() => shownCount(1, bad)).toThrow(RangeError);
       expect(() => remainingCount(1, bad)).toThrow(RangeError);
@@ -51,7 +74,9 @@ describe("executed verified kernels", () => {
     expect(run).not.toHaveBeenCalled();
     expect(() => kernel.shownCount(1n as unknown as number, 1)).toThrow(RangeError);
     expect(() => kernel.basisStep(2 ** 32, 1)).toThrow(RangeError);
-    expect(() => disclosureDecision(1 as unknown as boolean, false, false, false, false)).toThrow(TypeError);
+    expect(() => disclosureDecision(1 as unknown as boolean, false, false, false, false)).toThrow(
+      TypeError,
+    );
   });
 
   it("decodes exact predecessor commands without overflowing backend naturals", () => {
@@ -60,7 +85,12 @@ describe("executed verified kernels", () => {
     expect(nextBasisStep(1, 1)).toEqual({ $: "First" });
     // Only the minimum recurrence and maximum backend index need codec probes.
     for (const have of [2, BEND_NAT_MAX]) {
-      expect(nextBasisStep(have, have)).toEqual({ $: "Next", at: have, previous: have - 1, older: have - 2 });
+      expect(nextBasisStep(have, have)).toEqual({
+        $: "Next",
+        at: have,
+        previous: have - 1,
+        older: have - 2,
+      });
     }
   });
 
@@ -82,6 +112,11 @@ describe("executed verified kernels", () => {
     const step = vi.spyOn(kernel, "basisStep");
     const basis = chebyshevVectors(buildCsr(graph()), new Float64Array([1]), 3);
     expect(basis).toHaveLength(4);
-    expect(step.mock.calls).toEqual([[1, 3], [2, 3], [3, 3], [4, 3]]);
+    expect(step.mock.calls).toEqual([
+      [1, 3],
+      [2, 3],
+      [3, 3],
+      [4, 3],
+    ]);
   });
 });

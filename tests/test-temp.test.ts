@@ -15,7 +15,11 @@ describe("test temporary-storage isolation", () => {
 
   it.each([0, 7])("removes private artifacts when the runner exits with %i", (exitCode) => {
     const helper = new URL("../scripts/test-temp.ts", import.meta.url).href;
-    const result = spawnSync("bun", ["-e", `
+    const result = spawnSync(
+      "bun",
+      [
+        "-e",
+        `
       import { isolatedTestTemp } from ${JSON.stringify(helper)};
       import { writeFileSync } from "node:fs";
       import { join } from "node:path";
@@ -23,7 +27,10 @@ describe("test temporary-storage isolation", () => {
       writeFileSync(join(env.TMPDIR, "cache.json"), "temporary");
       process.stdout.write(JSON.stringify(env));
       process.exit(${exitCode});
-    `], { encoding: "utf8", timeout: 10_000 });
+    `,
+      ],
+      { encoding: "utf8", timeout: 10_000 },
+    );
     expect(result.error).toBeUndefined();
     expect(result.stderr).toBe("");
     expect(result.status).toBe(exitCode);

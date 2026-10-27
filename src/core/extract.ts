@@ -22,18 +22,20 @@ import {
 import { mapLimit } from "./asyncutil.js";
 import { extractBend } from "./bend.js";
 import { makeFileSource, type FileSource } from "./source.js";
-import type {
-  CallSite,
-  ImportSite,
-  LiteralSite,
-  NodeKind,
-  SymbolRec,
-} from "./types.js";
+import type { CallSite, ImportSite, LiteralSite, NodeKind, SymbolRec } from "./types.js";
 
 type NamedSig = { name: string; kind: NodeKind };
 
-const RX = (re: RegExp, kind: NodeKind, parentGroup?: number, nameGroup?: number) => ({ re, kind, parentGroup, nameGroup });
-const SIG_RULES: Record<string, Array<{ re: RegExp; kind: NodeKind; parentGroup?: number; nameGroup?: number }>> = {
+const RX = (re: RegExp, kind: NodeKind, parentGroup?: number, nameGroup?: number) => ({
+  re,
+  kind,
+  parentGroup,
+  nameGroup,
+});
+const SIG_RULES: Record<
+  string,
+  Array<{ re: RegExp; kind: NodeKind; parentGroup?: number; nameGroup?: number }>
+> = {
   TypeScript: [
     RX(/\bclass\s+([A-Za-z_$][\w$]*)/, "class"),
     RX(/\binterface\s+([A-Za-z_$][\w$]*)/, "interface"),
@@ -76,9 +78,7 @@ const SIG_RULES: Record<string, Array<{ re: RegExp; kind: NodeKind; parentGroup?
     RX(/^\s*(?:struct|enum|union)\s+([A-Za-z_]\w*)/, "class"),
   ],
   "C++": [],
-  Java: [
-    RX(/\b(?:class|interface|enum|record)\s+([A-Za-z_]\w*)/, "class"),
-  ],
+  Java: [RX(/\b(?:class|interface|enum|record)\s+([A-Za-z_]\w*)/, "class")],
   Kotlin: [],
   Lua: [RX(/\bfunction\s+([\w.:]+)/, "function")],
 };
@@ -163,7 +163,10 @@ const topLocation = (
   let line = item.range.start.line + 1;
   let sig = cleanSig(item.signature || item.name);
   if (item.name && (!identifierRe(item.name).test(sig) || /^@/.test(sig))) {
-    const end = Math.min(sourceLines.length - 1, item.range.end?.line ?? item.range.start.line + 12);
+    const end = Math.min(
+      sourceLines.length - 1,
+      item.range.end?.line ?? item.range.start.line + 12,
+    );
     for (let i = item.range.start.line; i <= end; i++) {
       const candidate = sourceLines[i];
       if (candidate && identifierRe(item.name).test(candidate)) {
@@ -182,7 +185,10 @@ const topLocation = (
   const startText = (sourceLines[item.range.start.line] ?? "").trim();
   const sigHead = (sig.split("\n")[0] ?? "").trim();
   if (sigHead && startText && !startText.includes(sigHead) && !sigHead.includes(startText)) {
-    const end = Math.min(sourceLines.length - 1, item.range.end?.line ?? item.range.start.line + 12);
+    const end = Math.min(
+      sourceLines.length - 1,
+      item.range.end?.line ?? item.range.start.line + 12,
+    );
     for (let i = item.range.start.line; i <= end; i++) {
       const candidate = (sourceLines[i] ?? "").trim();
       if (candidate && (candidate.includes(sigHead) || sigHead.includes(candidate))) {
@@ -226,7 +232,14 @@ const parseStructuredOutline = async (
       // but do not emit a duplicate parent node when the struct is local.
       if (!(item.symbolType === "object" && concreteParents.has(item.name))) {
         const location = topLocation(item, sourceLines);
-        out.push({ name, kind, file, line: location.line, sig: location.sig, lang: record.language });
+        out.push({
+          name,
+          kind,
+          file,
+          line: location.line,
+          sig: location.sig,
+          lang: record.language,
+        });
       }
       for (const member of item.members ?? []) {
         const memberName = outlineName(member.name);
@@ -290,10 +303,17 @@ const parseOutlineText = (text: string, lang: string): SymbolRec[] => {
 const defaultSource = (cwd: string): FileSource => makeFileSource(cwd);
 
 const bendFacts = async (files: string[], source: FileSource) =>
-  mapLimit(files.filter((file) => langOf(file) === "Bend"), SOURCE_SCAN_CONCURRENCY, async (file) =>
-    extractBend(file, await source.read(file) ?? ""));
+  mapLimit(
+    files.filter((file) => langOf(file) === "Bend"),
+    SOURCE_SCAN_CONCURRENCY,
+    async (file) => extractBend(file, (await source.read(file)) ?? ""),
+  );
 
-export const extractSymbols = async (files: string[], cwd: string, source: FileSource = defaultSource(cwd)): Promise<SymbolRec[]> => {
+export const extractSymbols = async (
+  files: string[],
+  cwd: string,
+  source: FileSource = defaultSource(cwd),
+): Promise<SymbolRec[]> => {
   const out: SymbolRec[] = [];
   for (const [lang, langFiles] of groupByLang(files)) {
     if (lang === "Bend") {
@@ -330,14 +350,15 @@ const IMPORT_PATTERNS: Record<string, string[]> = {
     "require($EXPR)",
     "import($EXPR)",
   ],
-  Go: ['import "$M"', 'import ( $$$S )'],
+  Go: ['import "$M"', "import ( $$$S )"],
   Python: ["import $M", "from $M import $$$I"],
   Rust: ["use $M;"],
 };
 IMPORT_PATTERNS.JavaScript = IMPORT_PATTERNS.TypeScript!;
 IMPORT_PATTERNS.Tsx = IMPORT_PATTERNS.TypeScript!;
 
-export const supportsImportExtraction = (language: string): boolean => language === "Bend" || !!IMPORT_PATTERNS[language]?.length;
+export const supportsImportExtraction = (language: string): boolean =>
+  language === "Bend" || !!IMPORT_PATTERNS[language]?.length;
 
 // Only literal paths and one-hole expressions are modeled. Never evaluate code
 // or interpret arbitrary expressions as a static module specifier.
@@ -345,7 +366,8 @@ const importExpression = (raw: string): Pick<ImportSite, "spec" | "dynamic"> => 
   const expression = raw.trim();
   const literal = (text: string): string | undefined => {
     const match = /^(['"`])([^\\\r\n]*)\1$/.exec(text.trim());
-    if (!match || match[2]!.includes(match[1]!) || (match[1] === "`" && match[2]!.includes("${"))) return undefined;
+    if (!match || match[2]!.includes(match[1]!) || (match[1] === "`" && match[2]!.includes("${")))
+      return undefined;
     return match[2];
   };
   const value = literal(expression);
@@ -360,7 +382,8 @@ const importExpression = (raw: string): Pick<ImportSite, "spec" | "dynamic"> => 
   const head = /^(['"])([^\\'"\r\n]*)\1\s*\+\s*/.exec(expression);
   if (head) {
     const rest = expression.slice(head[0].length);
-    if (identifier.test(rest)) return { spec: expression, dynamic: { prefix: head[2]!, suffix: "" } };
+    if (identifier.test(rest))
+      return { spec: expression, dynamic: { prefix: head[2]!, suffix: "" } };
     const plus = rest.indexOf("+");
     if (plus >= 0 && identifier.test(rest.slice(0, plus).trim())) {
       const suffix = literal(rest.slice(plus + 1));
@@ -392,13 +415,22 @@ const importsFromMatches = (matches: readonly AgMatch[]): ImportSite[] => {
   return dedupe(out, (i) => `${i.file}|${i.spec}|${i.line}`);
 };
 
-export const extractImports = async (files: string[], cwd: string, source: FileSource = defaultSource(cwd)): Promise<ImportSite[]> => {
-  const perLang = await Promise.all([...groupByLang(files)].map(([lang, langFiles]) =>
-    patternRunAll(IMPORT_PATTERNS[lang] ?? [], lang, langFiles, cwd),
-  ));
+export const extractImports = async (
+  files: string[],
+  cwd: string,
+  source: FileSource = defaultSource(cwd),
+): Promise<ImportSite[]> => {
+  const perLang = await Promise.all(
+    [...groupByLang(files)].map(([lang, langFiles]) =>
+      patternRunAll(IMPORT_PATTERNS[lang] ?? [], lang, langFiles, cwd),
+    ),
+  );
   const matches: AgMatch[] = [];
   for (const local of perLang) pushAll(matches, local);
-  return [...importsFromMatches(matches), ...(await bendFacts(files, source)).flatMap((facts) => facts.imports)];
+  return [
+    ...importsFromMatches(matches),
+    ...(await bendFacts(files, source)).flatMap((facts) => facts.imports),
+  ];
 };
 
 const CALL_PATTERNS = ["$O.$M($$$A)", "$F($$$A)"];
@@ -408,28 +440,134 @@ const CALL_PATTERNS = ["$O.$M($$$A)", "$F($$$A)"];
 // They carry no cross-file meaning; exclude them at extraction.
 const CALL_WARDS = new Set([
   // generic member-call noise and loggers
-  "log", "info", "warn", "debug", "trace", "close", "flush", "tostring", "valueof",
-  "tolowercase", "touppercase", "printf", "sprintf", "fprintf", "errorf",
-  "fatal", "fatalf", "panic", "panicf", "println", "print",
+  "log",
+  "info",
+  "warn",
+  "debug",
+  "trace",
+  "close",
+  "flush",
+  "tostring",
+  "valueof",
+  "tolowercase",
+  "touppercase",
+  "printf",
+  "sprintf",
+  "fprintf",
+  "errorf",
+  "fatal",
+  "fatalf",
+  "panic",
+  "panicf",
+  "println",
+  "print",
   // JS/TS runtime + test frameworks
-  "require", "console", "settimeout", "setinterval", "cleartimeout", "clearinterval",
-  "queuemicrotask", "parseint", "parsefloat", "isnan", "isfinite",
-  "it", "describe", "test", "expect", "xit", "xdescribe",
-  "beforeeach", "aftereach", "beforeall", "afterall",
-  "jest", "vitest", "vi", "mock", "spyon",
+  "require",
+  "console",
+  "settimeout",
+  "setinterval",
+  "cleartimeout",
+  "clearinterval",
+  "queuemicrotask",
+  "parseint",
+  "parsefloat",
+  "isnan",
+  "isfinite",
+  "it",
+  "describe",
+  "test",
+  "expect",
+  "xit",
+  "xdescribe",
+  "beforeeach",
+  "aftereach",
+  "beforeall",
+  "afterall",
+  "jest",
+  "vitest",
+  "vi",
+  "mock",
+  "spyon",
   // python builtins
-  "str", "int", "float", "bool", "bytes", "bytearray", "list", "dict", "set",
-  "tuple", "frozenset", "super", "isinstance", "issubclass", "getattr", "setattr",
-  "hasattr", "delattr", "open", "range", "enumerate", "zip", "sorted", "next",
-  "all", "any", "sum", "abs", "round", "format", "chr", "ord", "hex", "oct",
-  "bin", "id", "input", "vars", "dir", "callable", "hash", "object", "property",
-  "staticmethod", "classmethod", "memoryview", "slice", "type", "repr", "len",
+  "str",
+  "int",
+  "float",
+  "bool",
+  "bytes",
+  "bytearray",
+  "list",
+  "dict",
+  "set",
+  "tuple",
+  "frozenset",
+  "super",
+  "isinstance",
+  "issubclass",
+  "getattr",
+  "setattr",
+  "hasattr",
+  "delattr",
+  "open",
+  "range",
+  "enumerate",
+  "zip",
+  "sorted",
+  "next",
+  "all",
+  "any",
+  "sum",
+  "abs",
+  "round",
+  "format",
+  "chr",
+  "ord",
+  "hex",
+  "oct",
+  "bin",
+  "id",
+  "input",
+  "vars",
+  "dir",
+  "callable",
+  "hash",
+  "object",
+  "property",
+  "staticmethod",
+  "classmethod",
+  "memoryview",
+  "slice",
+  "type",
+  "repr",
+  "len",
   // go builtins
-  "append", "cap", "clear", "delete", "make", "new", "copy", "complex", "real",
-  "imag", "recover", "min", "max",
+  "append",
+  "cap",
+  "clear",
+  "delete",
+  "make",
+  "new",
+  "copy",
+  "complex",
+  "real",
+  "imag",
+  "recover",
+  "min",
+  "max",
   // rust std noise
-  "unwrap", "expect", "clone", "into", "from", "collect", "iter", "eprintln",
-  "format", "vec", "assert", "asserteq", "assertne", "dbg",
+  "unwrap",
+  "expect",
+  "clone",
+  "into",
+  "from",
+  "collect",
+  "iter",
+  "eprintln",
+  "format",
+  "vec",
+  "assert",
+  "asserteq",
+  "assertne",
+  "dbg",
 ]);
 const CALL_WARD_PATTERN = `^(?i:${[...CALL_WARDS].join("|")})$`;
 
@@ -450,13 +588,22 @@ const callsFromMatches = (matches: readonly AgMatch[]): CallSite[] => {
   return out;
 };
 
-export const extractCalls = async (files: string[], cwd: string, source: FileSource = defaultSource(cwd)): Promise<CallSite[]> => {
-  const perLang = await Promise.all([...groupByLang(files)].filter(([lang]) => lang !== "Bend").map(([lang, langFiles]) =>
-    patternRunAll(CALL_PATTERNS, lang, langFiles, cwd),
-  ));
+export const extractCalls = async (
+  files: string[],
+  cwd: string,
+  source: FileSource = defaultSource(cwd),
+): Promise<CallSite[]> => {
+  const perLang = await Promise.all(
+    [...groupByLang(files)]
+      .filter(([lang]) => lang !== "Bend")
+      .map(([lang, langFiles]) => patternRunAll(CALL_PATTERNS, lang, langFiles, cwd)),
+  );
   const matches: AgMatch[] = [];
   for (const local of perLang) pushAll(matches, local);
-  return [...callsFromMatches(matches), ...(await bendFacts(files, source)).flatMap((facts) => facts.calls)];
+  return [
+    ...callsFromMatches(matches),
+    ...(await bendFacts(files, source)).flatMap((facts) => facts.calls),
+  ];
 };
 
 const STRING_PATTERNS: Record<string, string[]> = {
@@ -475,11 +622,16 @@ export const ENV_TOKEN_RE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
 
 // Config files can't be parsed as code; scan quoted strings plus bare
 // path/env-shaped scalars so OpenAPI paths and k8s env keys still join.
-const CONFIG_BARE_RE = /(^|[:=\s])(\/[\w.~+\-{}*]+(?:\/[\w.~+\-{}*]+)+|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)(?=$|[:=\s])/g;
+const CONFIG_BARE_RE =
+  /(^|[:=\s])(\/[\w.~+\-{}*]+(?:\/[\w.~+\-{}*]+)+|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)(?=$|[:=\s])/g;
 
 const SOURCE_SCAN_CONCURRENCY = 8;
 
-const extractConfigLiterals = async (files: string[], cwd: string, source: FileSource = defaultSource(cwd)): Promise<LiteralSite[]> => {
+const extractConfigLiterals = async (
+  files: string[],
+  cwd: string,
+  source: FileSource = defaultSource(cwd),
+): Promise<LiteralSite[]> => {
   const configs = files.filter(isConfigFile);
   const perFile = await mapLimit(configs, SOURCE_SCAN_CONCURRENCY, async (f) => {
     const local: LiteralSite[] = [];
@@ -488,7 +640,7 @@ const extractConfigLiterals = async (files: string[], cwd: string, source: FileS
     const seenLine = new Set<string>();
     text.split("\n").forEach((lineText, i) => {
       QUOTED_RE.lastIndex = 0;
-      for (let q; (q = QUOTED_RE.exec(lineText)); ) {
+      for (let q; (q = QUOTED_RE.exec(lineText));) {
         const t = q[1] ?? q[2];
         if (t && !seenLine.has(`${i}|${t}`)) {
           seenLine.add(`${i}|${t}`);
@@ -496,7 +648,7 @@ const extractConfigLiterals = async (files: string[], cwd: string, source: FileS
         }
       }
       CONFIG_BARE_RE.lastIndex = 0;
-      for (let b; (b = CONFIG_BARE_RE.exec(lineText)); ) {
+      for (let b; (b = CONFIG_BARE_RE.exec(lineText));) {
         const t = b[2]!;
         if ((PATH_TOKEN_RE.test(t) || ENV_TOKEN_RE.test(t)) && !seenLine.has(`${i}|${t}`)) {
           seenLine.add(`${i}|${t}`);
@@ -546,7 +698,7 @@ const completeLiterals = async (
     if (src === undefined) return local;
     src.split("\n").forEach((lineText, i) => {
       TEMPLATE_RE.lastIndex = 0;
-      for (let m; (m = TEMPLATE_RE.exec(lineText)); ) {
+      for (let m; (m = TEMPLATE_RE.exec(lineText));) {
         const text = m[1]!.trim();
         if (text.length >= 2) local.push({ file: f, line: i + 1, text });
       }
@@ -557,10 +709,16 @@ const completeLiterals = async (
   return dedupe(out, (literal) => `${literal.file}|${literal.line}|${literal.text}`);
 };
 
-export const extractLiterals = async (files: string[], cwd: string, source: FileSource = defaultSource(cwd)): Promise<LiteralSite[]> => {
-  const perLang = await Promise.all([...groupByLang(files)].map(([lang, langFiles]) =>
-    patternRunAll(STRING_PATTERNS[lang] ?? [], lang, langFiles, cwd),
-  ));
+export const extractLiterals = async (
+  files: string[],
+  cwd: string,
+  source: FileSource = defaultSource(cwd),
+): Promise<LiteralSite[]> => {
+  const perLang = await Promise.all(
+    [...groupByLang(files)].map(([lang, langFiles]) =>
+      patternRunAll(STRING_PATTERNS[lang] ?? [], lang, langFiles, cwd),
+    ),
+  );
   const matches: AgMatch[] = [];
   for (const local of perLang) pushAll(matches, local);
   const native = (await bendFacts(files, source)).flatMap((facts) => facts.literals);
@@ -589,12 +747,16 @@ export const coreScanRules = (files: string[]): ScanRule[] => {
   };
   for (const [language] of groupByLang(files)) {
     if (language === "Bend") continue;
-    for (const pattern of IMPORT_PATTERNS[language] ?? []) add(CORE_IMPORT_PREFIX, language, pattern);
+    for (const pattern of IMPORT_PATTERNS[language] ?? [])
+      add(CORE_IMPORT_PREFIX, language, pattern);
     for (const pattern of CALL_PATTERNS) {
       const metavar = pattern.startsWith("$O.") ? "M" : "F";
-      add(CORE_CALL_PREFIX, language, pattern, { [metavar]: { not: { regex: CALL_WARD_PATTERN } } });
+      add(CORE_CALL_PREFIX, language, pattern, {
+        [metavar]: { not: { regex: CALL_WARD_PATTERN } },
+      });
     }
-    for (const pattern of STRING_PATTERNS[language] ?? []) add(CORE_LITERAL_PREFIX, language, pattern);
+    for (const pattern of STRING_PATTERNS[language] ?? [])
+      add(CORE_LITERAL_PREFIX, language, pattern);
   }
   return rules;
 };
@@ -623,12 +785,17 @@ export const coreFactsFromScan = async (
   return {
     imports: [...importsFromMatches(imports), ...native.flatMap((facts) => facts.imports)],
     calls: [...callsFromMatches(calls), ...native.flatMap((facts) => facts.calls)],
-    literals: await completeLiterals(files, cwd, source, [...literalsFromMatches(literals), ...native.flatMap((facts) => facts.literals)]),
+    literals: await completeLiterals(files, cwd, source, [
+      ...literalsFromMatches(literals),
+      ...native.flatMap((facts) => facts.literals),
+    ]),
   };
 };
 
 // Spread-pushing big arrays overflows the argument-list limit on large repos.
-const pushAll = <T>(out: T[], more: T[]): void => { for (const x of more) out.push(x); };
+const pushAll = <T>(out: T[], more: T[]): void => {
+  for (const x of more) out.push(x);
+};
 
 const dedupe = <T>(arr: T[], key: (t: T) => string): T[] => {
   const seen = new Set<string>();

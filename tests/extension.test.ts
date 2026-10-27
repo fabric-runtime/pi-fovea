@@ -1,7 +1,17 @@
 // The extension entry as pi sees it: register the graph tools, optionally
 // replace grep, and execute through Pi's TypeBox tool contract.
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  symlinkSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { execFileSync, execSync } from "node:child_process";
 import { tmpdir as systemTmpdir } from "node:os";
 import path from "node:path";
@@ -19,7 +29,6 @@ import { resetSyncBaselines, syncBaselineStore, warmCacheHas } from "../src/core
 const tmpdir = () => realpathSync(systemTmpdir());
 
 const FIXTURE = new URL("./fixtures/mini", import.meta.url).pathname;
-
 
 interface ToolDef {
   name: string;
@@ -58,7 +67,8 @@ const fakeCtx = (cwd: string, trusted = false, sessionId = "test-session") => ({
 const load = () => {
   const tools = new Map<string, ToolDef>();
   const commands = new Map<string, CommandDef>();
-  const messages: Array<{ message: Record<string, unknown>; options?: Record<string, unknown> }> = [];
+  const messages: Array<{ message: Record<string, unknown>; options?: Record<string, unknown> }> =
+    [];
   const handlers = new Map<string, EventHandler[]>();
   extension({
     on: (name: string, handler: EventHandler) => {
@@ -72,7 +82,11 @@ const load = () => {
       try {
         return { code: 0, stdout: execFileSync(command, args, { encoding: "utf8" }), stderr: "" };
       } catch (error) {
-        return { code: 1, stdout: "", stderr: error instanceof Error ? error.message : String(error) };
+        return {
+          code: 1,
+          stdout: "",
+          stderr: error instanceof Error ? error.message : String(error),
+        };
       }
     },
     registerTool: (definition: ToolDef) => tools.set(definition.name, definition),
@@ -85,15 +99,25 @@ const load = () => {
     ctx: ReturnType<typeof fakeCtx>,
   ): Promise<unknown[]> => {
     const results: unknown[] = [];
-    for (const handler of handlers.get(name) ?? []) { const result = await handler(event, ctx); if (result !== undefined) results.push(result); }
+    for (const handler of handlers.get(name) ?? []) {
+      const result = await handler(event, ctx);
+      if (result !== undefined) results.push(result);
+    }
     return results;
   };
   return { tools, commands, messages, emit, execCalls };
 };
 
-
 const enter = (loaded: ReturnType<typeof load>, ctx: ReturnType<typeof fakeCtx>) =>
-  loaded.tools.get("fovea_sketch")!.execute("enter", { root: ctx.cwd, maxTokens: 256 }, new AbortController().signal, undefined, ctx);
+  loaded.tools
+    .get("fovea_sketch")!
+    .execute(
+      "enter",
+      { root: ctx.cwd, maxTokens: 256 },
+      new AbortController().signal,
+      undefined,
+      ctx,
+    );
 
 const enableGrep = async () => {
   const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-grep-"));
@@ -113,13 +137,19 @@ describe("extension entry", () => {
     for (const name of ["fovea_sketch", "fovea_focus", "fovea_dwell", "fovea_impact"]) {
       expect(tools.has(name), name).toBe(true);
       expect(tools.get(name)?.promptSnippet, name).toBeTruthy();
-      expect(tools.get(name)?.promptGuidelines?.some((guideline) => guideline.includes(name)), name).toBe(true);
+      expect(
+        tools.get(name)?.promptGuidelines?.some((guideline) => guideline.includes(name)),
+        name,
+      ).toBe(true);
     }
     expect(tools.has("grep")).toBe(false);
     expect(commands.has("fovea")).toBe(true);
-    expect(commands.get("fovea")!.getArgumentCompletions?.("").map((item) => item.value)).toEqual([
-      "status", "settings", "reset", "reload",
-    ]);
+    expect(
+      commands
+        .get("fovea")!
+        .getArgumentCompletions?.("")
+        .map((item) => item.value),
+    ).toEqual(["status", "settings", "reset", "reload"]);
     expect(DEFAULT_FOVEA_CONFIG.tools.grepMode).toBe("augment");
     expect(DEFAULT_FOVEA_CONFIG.tools.grepAugmentBudget).toBe(512);
   });
@@ -138,7 +168,10 @@ describe("extension entry", () => {
     try {
       const grep = loaded.tools.get("grep");
       expect(grep).toBeDefined();
-      const schema = grep!.parameters as { properties: Record<string, unknown>; required: string[] };
+      const schema = grep!.parameters as {
+        properties: Record<string, unknown>;
+        required: string[];
+      };
       expect(Object.keys(schema.properties)).toEqual([
         "pattern",
         "path",
@@ -158,7 +191,10 @@ describe("extension entry", () => {
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-agent-dir-"));
     const agentDir = path.join(root, "agent");
     mkdirSync(agentDir, { recursive: true });
-    writeFileSync(path.join(agentDir, "fovea.json"), JSON.stringify({ tools: { grepMode: "off" } }));
+    writeFileSync(
+      path.join(agentDir, "fovea.json"),
+      JSON.stringify({ tools: { grepMode: "off" } }),
+    );
     vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
     const loaded = load();
     try {
@@ -191,7 +227,9 @@ describe("extension entry", () => {
       expect(result.details.backend).toBe("native");
       expect(String(result.details.foveaError)).toContain("ast-grep");
       expect(result.content[0]!.text).toContain("native text results");
-      expect(result.content.map((block) => block.text).join("\n")).toContain("export function WhateverSymbol");
+      expect(result.content.map((block) => block.text).join("\n")).toContain(
+        "export function WhateverSymbol",
+      );
     } finally {
       vi.unstubAllEnvs();
       rmSync(loaded.root, { recursive: true, force: true });
@@ -205,7 +243,9 @@ describe("extension entry", () => {
       const sketchTool = tools.get("fovea_sketch")!;
       const ctx = fakeCtx(FIXTURE);
       const signal = new AbortController().signal;
-      await expect(sketchTool.execute("1", { root: FIXTURE }, signal, undefined, ctx)).rejects.toThrow(/ast-grep/);
+      await expect(
+        sketchTool.execute("1", { root: FIXTURE }, signal, undefined, ctx),
+      ).rejects.toThrow(/ast-grep/);
       const again = await sketchTool.execute("2", { root: FIXTURE }, signal, undefined, ctx);
       expect(again.content[0]!.text).toContain("fovea unavailable");
       expect(again.content[0]!.text).toContain("native");
@@ -215,24 +255,61 @@ describe("extension entry", () => {
     }
   });
 
-  it.skipIf(!hasAstGrep())("successful reads establish attention without inspecting results; failed reads do not", async () => {
-    resetSessions(); const loaded=load(), ctx=fakeCtx(FIXTURE);
-    try {
-      await enter(loaded,ctx);
-      const args={path:path.join(FIXTURE,"web/api.ts"),offset:2,limit:2};
-      const session=getSession(canonicalPath(FIXTURE));
-      await loaded.emit("tool_execution_start",{toolCallId:"read",toolName:"read",args},ctx);
-      expect([...session.syncScopes]).toEqual([]);
-      const event={toolCallId:"read",toolName:"read",input:args,isError:false,get content():never {throw new Error("read results must remain opaque");}};
-      await loaded.emit("tool_result",event,ctx);
-      expect([...session.syncScopes]).toEqual(["web"]);
-      const before=structuredClone(session);
-      await loaded.emit("tool_execution_start",{toolCallId:"denied",toolName:"read",args:{path:path.join(FIXTURE,"server/main.go")}},ctx);
-      await loaded.emit("tool_result",{toolCallId:"denied",toolName:"read",input:{path:path.join(FIXTURE,"server/main.go")},isError:true},ctx);
-      expect(session).toEqual(before); expect(session).not.toHaveProperty("reviewMemory"); expect(loaded.messages).toEqual([]);
-    } finally { await loaded.emit("session_shutdown",{},ctx); }
-  });
-
+  it.skipIf(!hasAstGrep())(
+    "successful reads establish attention without inspecting results; failed reads do not",
+    async () => {
+      resetSessions();
+      const loaded = load(),
+        ctx = fakeCtx(FIXTURE);
+      try {
+        await enter(loaded, ctx);
+        const args = { path: path.join(FIXTURE, "web/api.ts"), offset: 2, limit: 2 };
+        const session = getSession(canonicalPath(FIXTURE));
+        await loaded.emit(
+          "tool_execution_start",
+          { toolCallId: "read", toolName: "read", args },
+          ctx,
+        );
+        expect([...session.syncScopes]).toEqual([]);
+        const event = {
+          toolCallId: "read",
+          toolName: "read",
+          input: args,
+          isError: false,
+          get content(): never {
+            throw new Error("read results must remain opaque");
+          },
+        };
+        await loaded.emit("tool_result", event, ctx);
+        expect([...session.syncScopes]).toEqual(["web"]);
+        const before = structuredClone(session);
+        await loaded.emit(
+          "tool_execution_start",
+          {
+            toolCallId: "denied",
+            toolName: "read",
+            args: { path: path.join(FIXTURE, "server/main.go") },
+          },
+          ctx,
+        );
+        await loaded.emit(
+          "tool_result",
+          {
+            toolCallId: "denied",
+            toolName: "read",
+            input: { path: path.join(FIXTURE, "server/main.go") },
+            isError: true,
+          },
+          ctx,
+        );
+        expect(session).toEqual(before);
+        expect(session).not.toHaveProperty("reviewMemory");
+        expect(loaded.messages).toEqual([]);
+      } finally {
+        await loaded.emit("session_shutdown", {}, ctx);
+      }
+    },
+  );
 });
 
 describe.skipIf(!hasAstGrep())("extension execution", () => {
@@ -283,62 +360,74 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     const loaded = await enableGrep();
     cpSync(FIXTURE, loaded.root, { recursive: true });
     try {
-      const graph = await loaded.tools.get("grep")!.execute(
-        "t-grep-graph",
-        { pattern: "GetUserHandler" },
-        new AbortController().signal,
-        undefined,
-        fakeCtx(loaded.root, true),
-      );
+      const graph = await loaded.tools
+        .get("grep")!
+        .execute(
+          "t-grep-graph",
+          { pattern: "GetUserHandler" },
+          new AbortController().signal,
+          undefined,
+          fakeCtx(loaded.root, true),
+        );
       expect(graph.content[0]!.text).toContain("fovea grep");
       expect(graph.content[0]!.text).toContain("server/users.go");
       expect(graph.details).toMatchObject({ backend: "fovea", query: "GetUserHandler" });
 
-      const graphAgain = await loaded.tools.get("grep")!.execute(
-        "t-grep-graph-again",
-        { pattern: "GetUserHandler" },
-        new AbortController().signal,
-        undefined,
-        fakeCtx(loaded.root, true),
-      );
+      const graphAgain = await loaded.tools
+        .get("grep")!
+        .execute(
+          "t-grep-graph-again",
+          { pattern: "GetUserHandler" },
+          new AbortController().signal,
+          undefined,
+          fakeCtx(loaded.root, true),
+        );
       expect(graphAgain.content[0]!.text).toBe(graph.content[0]!.text);
-      const qualified = await loaded.tools.get("grep")!.execute(
-        "t-grep-qualified",
-        { pattern: "AirportsController.search" },
-        new AbortController().signal,
-        undefined,
-        fakeCtx(loaded.root, true),
-      );
+      const qualified = await loaded.tools
+        .get("grep")!
+        .execute(
+          "t-grep-qualified",
+          { pattern: "AirportsController.search" },
+          new AbortController().signal,
+          undefined,
+          fakeCtx(loaded.root, true),
+        );
       expect(qualified.content[0]!.text).toContain("fovea grep");
       expect(qualified.content[0]!.text).toContain("web/airports.controller.ts");
 
-      const route = await loaded.tools.get("grep")!.execute(
-        "t-grep-route",
-        { pattern: "/api/users/{id}" },
-        new AbortController().signal,
-        undefined,
-        fakeCtx(loaded.root, true),
-      );
+      const route = await loaded.tools
+        .get("grep")!
+        .execute(
+          "t-grep-route",
+          { pattern: "/api/users/{id}" },
+          new AbortController().signal,
+          undefined,
+          fakeCtx(loaded.root, true),
+        );
       expect(route.content[0]!.text).toContain("fovea grep");
       expect(route.content[0]!.text).toContain("server/main.go");
 
-      const regex = await loaded.tools.get("grep")!.execute(
-        "t-grep-regex",
-        { pattern: "Get.*Handler" },
-        new AbortController().signal,
-        undefined,
-        fakeCtx(loaded.root, true),
-      );
+      const regex = await loaded.tools
+        .get("grep")!
+        .execute(
+          "t-grep-regex",
+          { pattern: "Get.*Handler" },
+          new AbortController().signal,
+          undefined,
+          fakeCtx(loaded.root, true),
+        );
       expect(regex.content[0]!.text).toContain("func GetUserHandler");
       expect(regex.content[0]!.text).not.toContain("fovea grep");
 
-      const native = await loaded.tools.get("grep")!.execute(
-        "t-grep-native",
-        { pattern: "GetUserHandler", path: "server", literal: true, context: 1 },
-        new AbortController().signal,
-        undefined,
-        fakeCtx(loaded.root, true),
-      );
+      const native = await loaded.tools
+        .get("grep")!
+        .execute(
+          "t-grep-native",
+          { pattern: "GetUserHandler", path: "server", literal: true, context: 1 },
+          new AbortController().signal,
+          undefined,
+          fakeCtx(loaded.root, true),
+        );
       expect(native.content[0]!.text).toContain("func GetUserHandler");
       expect(native.content[0]!.text).not.toContain("fovea grep");
     } finally {
@@ -346,20 +435,25 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     }
   });
 
-
   it("co-existence: native grep results gain a Fovea graph section for symbol queries", async () => {
     resetSessions();
     const loaded = load();
     await enter(loaded, fakeCtx(FIXTURE));
-    const [patch] = await loaded.emit("tool_result", {
-      type: "tool_result",
-      toolName: "grep",
-      toolCallId: "t-augment",
-      input: { pattern: "GetUserHandler" },
-      content: [{ type: "text", text: "server/users.go:5: func GetUserHandler(id string) string {" }],
-      details: { matches: 1 },
-      isError: false,
-    }, fakeCtx(FIXTURE));
+    const [patch] = await loaded.emit(
+      "tool_result",
+      {
+        type: "tool_result",
+        toolName: "grep",
+        toolCallId: "t-augment",
+        input: { pattern: "GetUserHandler" },
+        content: [
+          { type: "text", text: "server/users.go:5: func GetUserHandler(id string) string {" },
+        ],
+        details: { matches: 1 },
+        isError: false,
+      },
+      fakeCtx(FIXTURE),
+    );
     const result = patch as { content: Array<{ text: string }>; details: Record<string, unknown> };
     expect(result.content).toHaveLength(2);
     expect(result.content[0]!.text).toContain("func GetUserHandler");
@@ -377,15 +471,21 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
 
     // Native-only options stay native AND scope the graph lookup: `path`
     // narrows the Fovea query instead of suppressing it.
-    const [scopedPatch] = await loaded.emit("tool_result", {
-      type: "tool_result",
-      toolName: "grep",
-      toolCallId: "t-augment-scoped",
-      input: { pattern: "GetUserHandler", path: "server", limit: 20 },
-      content: [{ type: "text", text: "server/users.go:5: func GetUserHandler(id string) string {" }],
-      details: {},
-      isError: false,
-    }, fakeCtx(FIXTURE));
+    const [scopedPatch] = await loaded.emit(
+      "tool_result",
+      {
+        type: "tool_result",
+        toolName: "grep",
+        toolCallId: "t-augment-scoped",
+        input: { pattern: "GetUserHandler", path: "server", limit: 20 },
+        content: [
+          { type: "text", text: "server/users.go:5: func GetUserHandler(id string) string {" },
+        ],
+        details: {},
+        isError: false,
+      },
+      fakeCtx(FIXTURE),
+    );
     expect((scopedPatch as { content: Array<{ text: string }> }).content).toHaveLength(2);
   });
 
@@ -402,11 +502,23 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
       isError: false,
       ...extra,
     });
-    const [regex] = await loaded.emit("tool_result", baseEvent({ pattern: "Get.*Handler" }), fakeCtx(FIXTURE));
+    const [regex] = await loaded.emit(
+      "tool_result",
+      baseEvent({ pattern: "Get.*Handler" }),
+      fakeCtx(FIXTURE),
+    );
     expect(regex).toBeUndefined();
-    const [errored] = await loaded.emit("tool_result", baseEvent({ pattern: "GetUserHandler" }, { isError: true }), fakeCtx(FIXTURE));
+    const [errored] = await loaded.emit(
+      "tool_result",
+      baseEvent({ pattern: "GetUserHandler" }, { isError: true }),
+      fakeCtx(FIXTURE),
+    );
     expect(errored).toBeUndefined();
-    const [readTool] = await loaded.emit("tool_result", baseEvent({ pattern: "GetUserHandler" }, { toolName: "read" }), fakeCtx(FIXTURE));
+    const [readTool] = await loaded.emit(
+      "tool_result",
+      baseEvent({ pattern: "GetUserHandler" }, { toolName: "read" }),
+      fakeCtx(FIXTURE),
+    );
     expect(readTool).toBeUndefined();
 
     // Symbol queries that WOULD seed on this fixture stay untouched when the
@@ -414,10 +526,17 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     const agentDirRoot = mkdtempSync(path.join(tmpdir(), "pi-fovea-augment-mode-"));
     try {
       for (const mode of ["off", "replace"] as const) {
-        writeFileSync(path.join(agentDirRoot, "fovea.json"), JSON.stringify({ tools: { grepMode: mode } }));
+        writeFileSync(
+          path.join(agentDirRoot, "fovea.json"),
+          JSON.stringify({ tools: { grepMode: mode } }),
+        );
         vi.stubEnv("PI_CODING_AGENT_DIR", agentDirRoot);
         const fresh = load();
-        const [blocked] = await fresh.emit("tool_result", baseEvent({ pattern: "GetUserHandler" }), fakeCtx(FIXTURE, true));
+        const [blocked] = await fresh.emit(
+          "tool_result",
+          baseEvent({ pattern: "GetUserHandler" }),
+          fakeCtx(FIXTURE, true),
+        );
         expect(blocked, mode).toBeUndefined();
       }
     } finally {
@@ -432,15 +551,19 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     vi.stubEnv("FOVEA_AST_GREP", "/fovea-test/nonexistent-sg");
     try {
       const loaded = load();
-      const [patch] = await loaded.emit("tool_result", {
-        type: "tool_result",
-        toolName: "grep",
-        toolCallId: "t",
-        input: { pattern: "WhateverSymbol" },
-        content: [{ type: "text", text: "native" }],
-        details: {},
-        isError: false,
-      }, fakeCtx(root));
+      const [patch] = await loaded.emit(
+        "tool_result",
+        {
+          type: "tool_result",
+          toolName: "grep",
+          toolCallId: "t",
+          input: { pattern: "WhateverSymbol" },
+          content: [{ type: "text", text: "native" }],
+          details: {},
+          isError: false,
+        },
+        fakeCtx(root),
+      );
       expect(patch).toBeUndefined();
     } finally {
       vi.unstubAllEnvs();
@@ -455,7 +578,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-before-agent-"));
     cpSync(FIXTURE, root, { recursive: true });
     execSync("git init -qb main && git add -A", { cwd: root });
-    execSync('git -c user.name=t -c user.email=t@t commit -qm init', { cwd: root });
+    execSync("git -c user.name=t -c user.email=t@t commit -qm init", { cwd: root });
     resetSessions();
     resetSyncBaselines();
     const loaded = load();
@@ -493,7 +616,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-warm-agent-"));
     cpSync(FIXTURE, root, { recursive: true });
     execSync("git init -qb main && git add -A", { cwd: root });
-    execSync('git -c user.name=t -c user.email=t@t commit -qm init', { cwd: root });
+    execSync("git -c user.name=t -c user.email=t@t commit -qm init", { cwd: root });
     resetSessions();
     resetSyncBaselines();
     const loaded = load();
@@ -538,12 +661,11 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     }
   });
 
-
   it("re-baselines instead of leaking drift across a resumed session", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-resume-"));
     cpSync(FIXTURE, root, { recursive: true });
     execSync("git init -qb main && git add -A", { cwd: root });
-    execSync('git -c user.name=t -c user.email=t@t commit -qm init', { cwd: root });
+    execSync("git -c user.name=t -c user.email=t@t commit -qm init", { cwd: root });
     const loaded = load();
     const ctx = fakeCtx(root);
     try {
@@ -560,7 +682,11 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
       );
 
       await loaded.emit("session_shutdown", { reason: "resume" }, ctx);
-      await loaded.emit("session_start", { reason: "resume", previousSessionFile: "/old/session.jsonl" }, ctx);
+      await loaded.emit(
+        "session_start",
+        { reason: "resume", previousSessionFile: "/old/session.jsonl" },
+        ctx,
+      );
       const results = await loaded.emit("before_agent_start", { prompt: "resumed session" }, ctx);
 
       expect(results.filter((result) => result !== undefined)).toEqual([]);
@@ -575,7 +701,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-steer-"));
     cpSync(FIXTURE, root, { recursive: true });
     execSync("git init -qb main && git add -A", { cwd: root });
-    execSync('git -c user.name=t -c user.email=t@t commit -qm init', { cwd: root });
+    execSync("git -c user.name=t -c user.email=t@t commit -qm init", { cwd: root });
     resetSessions();
     resetSyncBaselines();
     const loaded = load();
@@ -604,7 +730,9 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
         customType: "pi-fovea-sync",
         display: true,
       });
-      expect(String(loaded.messages[0]!.message.content)).toContain("Steer: account for this update");
+      expect(String(loaded.messages[0]!.message.content)).toContain(
+        "Steer: account for this update",
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -614,12 +742,14 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-queue-steer-"));
     cpSync(FIXTURE, root, { recursive: true });
     execSync("git init -qb main && git add -A", { cwd: root });
-    execSync('git -c user.name=t -c user.email=t@t commit -qm init', { cwd: root });
+    execSync("git -c user.name=t -c user.email=t@t commit -qm init", { cwd: root });
     resetSessions();
     resetSyncBaselines();
     const loaded = load();
     const ctx = fakeCtx(root);
-    const mirror = globalThis as { __tmustierPiQueueSteerState?: { pending: number; paused: boolean; blocked: boolean } };
+    const mirror = globalThis as {
+      __tmustierPiQueueSteerState?: { pending: number; paused: boolean; blocked: boolean };
+    };
     const previous = mirror.__tmustierPiQueueSteerState;
     mirror.__tmustierPiQueueSteerState = { pending: 2, paused: false, blocked: false };
     try {
@@ -642,7 +772,9 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
       await loaded.emit("turn_end", {}, ctx);
       expect(loaded.messages).toHaveLength(1);
       expect(loaded.messages[0]!.options).toEqual({ deliverAs: "nextTurn" });
-      expect(String(loaded.messages[0]!.message.content)).toContain("Steer: account for this update");
+      expect(String(loaded.messages[0]!.message.content)).toContain(
+        "Steer: account for this update",
+      );
     } finally {
       mirror.__tmustierPiQueueSteerState = previous;
       rmSync(root, { recursive: true, force: true });
@@ -653,7 +785,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-other-session-"));
     cpSync(FIXTURE, root, { recursive: true });
     execSync("git init -qb main && git add -A", { cwd: root });
-    execSync('git -c user.name=t -c user.email=t@t commit -qm init', { cwd: root });
+    execSync("git -c user.name=t -c user.email=t@t commit -qm init", { cwd: root });
     resetSessions();
     resetSyncBaselines();
     const loaded = load();
@@ -683,8 +815,12 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
 
       expect(loaded.messages).toHaveLength(1);
       expect(loaded.messages[0]!.options).toEqual({ deliverAs: "nextTurn" });
-      expect(String(loaded.messages[0]!.message.content)).toContain("Origin: another Fovea-enabled session.");
-      expect(String(loaded.messages[0]!.message.content)).toContain("Notice: review this concurrent update");
+      expect(String(loaded.messages[0]!.message.content)).toContain(
+        "Origin: another Fovea-enabled session.",
+      );
+      expect(String(loaded.messages[0]!.message.content)).toContain(
+        "Notice: review this concurrent update",
+      );
       expect(String(loaded.messages[0]!.message.content)).not.toContain("Steer:");
     } finally {
       rmSync(provenancePathFor(root, "session-b"), { force: true });
@@ -696,9 +832,12 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-hidden-sync-"));
     cpSync(FIXTURE, root, { recursive: true });
     mkdirSync(path.join(root, ".pi"), { recursive: true });
-    writeFileSync(path.join(root, ".pi", "fovea.json"), JSON.stringify({ sync: { mode: "hidden" } }));
+    writeFileSync(
+      path.join(root, ".pi", "fovea.json"),
+      JSON.stringify({ sync: { mode: "hidden" } }),
+    );
     execSync("git init -qb main && git add -A", { cwd: root });
-    execSync('git -c user.name=t -c user.email=t@t commit -qm init', { cwd: root });
+    execSync("git -c user.name=t -c user.email=t@t commit -qm init", { cwd: root });
     resetSessions();
     resetSyncBaselines();
     const loaded = load();
@@ -736,7 +875,10 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
   it("disables sync work and delivery in disabled mode", async () => {
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-disabled-sync-"));
     mkdirSync(path.join(root, ".pi"), { recursive: true });
-    writeFileSync(path.join(root, ".pi", "fovea.json"), JSON.stringify({ sync: { mode: "disabled" } }));
+    writeFileSync(
+      path.join(root, ".pi", "fovea.json"),
+      JSON.stringify({ sync: { mode: "disabled" } }),
+    );
     const loaded = load();
     const ctx = fakeCtx(root, true);
     try {
@@ -765,7 +907,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-warm-"));
     cpSync(FIXTURE, root, { recursive: true });
     execSync("git init -qb main && git add -A", { cwd: root });
-    execSync('git -c user.name=t -c user.email=t@t commit -qm init', { cwd: root });
+    execSync("git -c user.name=t -c user.email=t@t commit -qm init", { cwd: root });
     resetSessions();
     resetSyncBaselines();
     const loaded = load();
@@ -793,7 +935,9 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
       await loaded.emit("turn_end", {}, ctx);
       expect(loaded.messages).toHaveLength(1);
       expect(loaded.messages[0]!.options).toEqual({ deliverAs: "steer", triggerTurn: true });
-      expect(String(loaded.messages[0]!.message.content)).toContain("Steer: account for this update");
+      expect(String(loaded.messages[0]!.message.content)).toContain(
+        "Steer: account for this update",
+      );
       expect(String(loaded.messages[0]!.message.content)).toContain("GET /api/users/{*}/warmed");
       expect(String(loaded.messages[0]!.message.content)).toContain("Origin: current session.");
     } finally {
@@ -817,25 +961,37 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
   });
 
   it("keeps startup and idle prompts neutral, then enrolls on successful access", async () => {
-    const loaded=load(), root=mkdtempSync(path.join(tmpdir(),"pi-fovea-coordinator-start-")), ctx=fakeCtx(root,true);
+    const loaded = load(),
+      root = mkdtempSync(path.join(tmpdir(), "pi-fovea-coordinator-start-")),
+      ctx = fakeCtx(root, true);
     try {
-      writeFileSync(path.join(root,"probe.ts"),"export const probe = 1;\n"); evictState(root);
-      await loaded.emit("session_start",{reason:"new"},ctx);
-      await loaded.emit("before_agent_start",{prompt:"hello"},ctx);
-      await loaded.emit("turn_end",{},ctx);
-      expect(getInflight(root)).toBeUndefined(); expect(getState(root)).toBeUndefined();
+      writeFileSync(path.join(root, "probe.ts"), "export const probe = 1;\n");
+      evictState(root);
+      await loaded.emit("session_start", { reason: "new" }, ctx);
+      await loaded.emit("before_agent_start", { prompt: "hello" }, ctx);
+      await loaded.emit("turn_end", {}, ctx);
+      expect(getInflight(root)).toBeUndefined();
+      expect(getState(root)).toBeUndefined();
       expect(existsSync(cachePathFor(root))).toBe(false);
-      const event={toolName:"read",toolCallId:"read",input:{path:path.join(root,"probe.ts")},isError:false};
-      await loaded.emit("tool_result",{...event,isError:true},ctx); expect(getState(root)).toBeUndefined();
-      await loaded.emit("tool_result",event,ctx);
-      expect(getState(root)).toBeDefined(); expect(syncBaselineStore().has(root)).toBe(true);
+      const event = {
+        toolName: "read",
+        toolCallId: "read",
+        input: { path: path.join(root, "probe.ts") },
+        isError: false,
+      };
+      await loaded.emit("tool_result", { ...event, isError: true }, ctx);
+      expect(getState(root)).toBeUndefined();
+      await loaded.emit("tool_result", event, ctx);
+      expect(getState(root)).toBeDefined();
+      expect(syncBaselineStore().has(root)).toBe(true);
       expect(loaded.messages).toHaveLength(0);
     } finally {
-      await loaded.emit("session_shutdown",{},ctx); evictState(root);
-      rmSync(root,{recursive:true,force:true}); rmSync(cachePathFor(root),{force:true});
+      await loaded.emit("session_shutdown", {}, ctx);
+      evictState(root);
+      rmSync(root, { recursive: true, force: true });
+      rmSync(cachePathFor(root), { force: true });
     }
   });
-
 });
 
 describe.skipIf(!hasAstGrep())("explicit multi-root continuity", () => {
@@ -844,7 +1000,10 @@ describe.skipIf(!hasAstGrep())("explicit multi-root continuity", () => {
     const a = path.join(parent, "a");
     const b = path.join(parent, "b");
     cpSync(FIXTURE, a, { recursive: true });
-    execSync("git init -qb main && git add -A && git -c user.name=t -c user.email=t@t commit -qm init", { cwd: a });
+    execSync(
+      "git init -qb main && git add -A && git -c user.name=t -c user.email=t@t commit -qm init",
+      { cwd: a },
+    );
     execFileSync("git", ["worktree", "add", "-qb", "other", b], { cwd: a });
     symlinkSync(b, path.join(parent, "alias"), "dir");
     resetSessions();
@@ -853,9 +1012,18 @@ describe.skipIf(!hasAstGrep())("explicit multi-root continuity", () => {
     const ctx = fakeCtx(a, true);
     const signal = new AbortController().signal;
     try {
-      const run = (root?: string) => loaded.tools.get("fovea_focus")!.execute("focus", {
-        root, query: "server/main.go", maxTokens: 512,
-      }, signal, undefined, ctx);
+      const run = (root?: string) =>
+        loaded.tools.get("fovea_focus")!.execute(
+          "focus",
+          {
+            root,
+            query: "server/main.go",
+            maxTokens: 512,
+          },
+          signal,
+          undefined,
+          ctx,
+        );
       const [, alternate] = await Promise.all([run("."), run("../alias")]);
       expect(alternate.details.root).toBe(b);
       expect(alternate.details.observedRoots).toEqual([a, b]);
@@ -869,8 +1037,17 @@ describe.skipIf(!hasAstGrep())("explicit multi-root continuity", () => {
       expect((await run("../b")).details.observedRoots).toEqual([a, b]);
       // A cwd inside the project resolves to the project root, not the subdir.
       const subCtx = fakeCtx(path.join(a, "server"), true);
-      const nested = await loaded.tools.get("fovea_focus")!.execute("focus-sub", { query: "server/main.go", maxTokens: 512 }, signal, undefined, subCtx);
-      expect(nested.details.root).toBe(a); expect(nested.details.agentOrigin).toBe(path.join(a, "server"));
+      const nested = await loaded.tools
+        .get("fovea_focus")!
+        .execute(
+          "focus-sub",
+          { query: "server/main.go", maxTokens: 512 },
+          signal,
+          undefined,
+          subCtx,
+        );
+      expect(nested.details.root).toBe(a);
+      expect(nested.details.agentOrigin).toBe(path.join(a, "server"));
       expect(Math.ceil(alternate.content[0]!.text.length / 4)).toBeLessThanOrEqual(512);
 
       const main = path.join(b, "server/main.go");
@@ -906,8 +1083,14 @@ describe.skipIf(!hasAstGrep())("explicit multi-root continuity", () => {
     for (const root of [a, b, outside]) {
       cpSync(FIXTURE, root, { recursive: true });
       mkdirSync(path.join(root, ".pi"));
-      writeFileSync(path.join(root, ".pi/fovea.json"), JSON.stringify({ sync: { mode: "disabled" }, tools: { grepMode: "off" } }));
-      execSync("git init -qb main && git add -A && git -c user.name=t -c user.email=t@t commit -qm init", { cwd: root });
+      writeFileSync(
+        path.join(root, ".pi/fovea.json"),
+        JSON.stringify({ sync: { mode: "disabled" }, tools: { grepMode: "off" } }),
+      );
+      execSync(
+        "git init -qb main && git add -A && git -c user.name=t -c user.email=t@t commit -qm init",
+        { cwd: root },
+      );
     }
     resetSessions();
     resetSyncBaselines();
@@ -916,40 +1099,74 @@ describe.skipIf(!hasAstGrep())("explicit multi-root continuity", () => {
     const signal = new AbortController().signal;
     try {
       for (const root of ["a", "b"]) {
-        await loaded.tools.get("fovea_focus")!.execute(root, { root, query: "server/main.go", maxTokens: 512 }, signal, undefined, ctx);
+        await loaded.tools
+          .get("fovea_focus")!
+          .execute(root, { root, query: "server/main.go", maxTokens: 512 }, signal, undefined, ctx);
       }
       // Parent trust must not disable the sibling's baseline via sibling config.
       expect(syncBaselineStore().has(a)).toBe(true);
       expect(syncBaselineStore().has(b)).toBe(true);
-      const grepEvent = { toolName: "grep", input: { pattern: "GetUserHandler", path: "b/server" },
-        content: [{ type: "text", text: "native result" }], details: {}, isError: false };
+      const grepEvent = {
+        toolName: "grep",
+        input: { pattern: "GetUserHandler", path: "b/server" },
+        content: [{ type: "text", text: "native result" }],
+        details: {},
+        isError: false,
+      };
       const [patch] = await loaded.emit("tool_result", grepEvent, ctx);
       expect(patch).toMatchObject({ details: { root: b, foveaAppended: true } });
-      const [trustedPatch] = await loaded.emit("tool_result", { ...grepEvent, input: { ...grepEvent.input, path: "server" } }, fakeCtx(b, true));
+      const [trustedPatch] = await loaded.emit(
+        "tool_result",
+        { ...grepEvent, input: { ...grepEvent.input, path: "server" } },
+        fakeCtx(b, true),
+      );
       expect(trustedPatch).toBeUndefined();
       const [again] = await loaded.emit("tool_result", grepEvent, ctx);
       expect(again).toMatchObject({ details: { root: b } });
       // Native no-path grep still searches cwd, not the last bound graph root.
-      expect((await loaded.emit("tool_result", { ...grepEvent, input: { pattern: "GetUserHandler" } }, ctx))[0]).toBeUndefined();
+      expect(
+        (
+          await loaded.emit(
+            "tool_result",
+            { ...grepEvent, input: { pattern: "GetUserHandler" } },
+            ctx,
+          )
+        )[0],
+      ).toBeUndefined();
 
       await loaded.emit("turn_start", {}, ctx);
-      await loaded.emit("tool_execution_start", { toolName: "edit", toolCallId: "a-edit", args: { path: "a/server/main.go" } }, ctx);
+      await loaded.emit(
+        "tool_execution_start",
+        { toolName: "edit", toolCallId: "a-edit", args: { path: "a/server/main.go" } },
+        ctx,
+      );
       const mainA = path.join(a, "server/main.go");
       writeFileSync(mainA, readFileSync(mainA, "utf8").replace("/api/users", "/api/alpha"));
       await loaded.emit("tool_execution_end", { toolName: "edit", toolCallId: "a-edit" }, ctx);
       // Mutation without any tool event: baseline already exists from focus.
       const mainB = path.join(b, "server/main.go");
       writeFileSync(mainB, readFileSync(mainB, "utf8").replace("/api/users", "/api/beta"));
-      await loaded.emit("tool_execution_start", { toolName: "read", toolCallId: "outside", args: { path: "unobserved/server/main.go" } }, ctx);
+      await loaded.emit(
+        "tool_execution_start",
+        { toolName: "read", toolCallId: "outside", args: { path: "unobserved/server/main.go" } },
+        ctx,
+      );
       await loaded.emit("turn_end", {}, ctx);
       expect(loaded.messages).toHaveLength(2);
-      expect(loaded.messages.map((m) => (m.message.details as { root: string }).root)).toEqual([a, b]);
+      expect(loaded.messages.map((m) => (m.message.details as { root: string }).root)).toEqual([
+        a,
+        b,
+      ]);
       expect(String(loaded.messages[0]!.message.content)).toContain("Origin: current session.");
       expect(String(loaded.messages[1]!.message.content)).toContain("beta");
-      expect(loaded.messages.reduce((n, m) => n + Math.ceil(String(m.message.content).length / 4), 0)).toBeLessThanOrEqual(1024);
+      expect(
+        loaded.messages.reduce((n, m) => n + Math.ceil(String(m.message.content).length / 4), 0),
+      ).toBeLessThanOrEqual(1024);
       expect(getState(outside)).toBeUndefined();
       expect(syncBaselineStore().has(outside)).toBe(false);
-      const additional = await loaded.tools.get("fovea_sketch")!.execute("additional", { root: "unobserved" }, signal, undefined, ctx);
+      const additional = await loaded.tools
+        .get("fovea_sketch")!
+        .execute("additional", { root: "unobserved" }, signal, undefined, ctx);
       expect(additional.details.observedRoots).toEqual([a, b, outside].sort());
       expect(additional.details.workspace).toMatchObject({ capacity: 32 });
       await loaded.emit("turn_end", {}, ctx);

@@ -566,11 +566,19 @@ calls and proof checking are not modeled; Bend 1/HVM syntax is not supported.
 
 ```sh
 bun install
+bun run format       # readable authored source; excludes generated code and fixtures
+bun run format:check # non-mutating formatting check
 bun run check:fast   # gdp-wired laws + artifact parity + typecheck + affected tests
 bun run test:smoke   # curated scan-to-render floor, seconds
 bun run bench        # rate–distortion and refresh bench against ../pi-fabric
 bun run bench tests/fixtures/mini  # self-contained smoke run
 ```
+
+Authored proofs, runtime adapters, and proof checkers are TypeScript and included in
+strict typechecking. Development proof commands use `tsx`; generated runtime modules
+remain standalone JavaScript with declarations. Small Node packaging and corpus scripts
+stay `.mjs`. Formatting is pinned with Prettier; generated modules are formatted by
+`proofs:generate`, never edited directly. Semantic test fixtures are left unchanged.
 
 Development checks use **gdp-wired 0.30.1**, pinned in devDependencies. See
 [laws, proof boundaries, and numerical certificates](docs/proofs.md). No Bend

@@ -15,7 +15,12 @@
 
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, stat } from "node:fs/promises";
-import { CACHE_FILE_MAX_BYTES, maintainTempStorage, openTempRead, writeAtomicTemp } from "./temp-storage.js";
+import {
+  CACHE_FILE_MAX_BYTES,
+  maintainTempStorage,
+  openTempRead,
+  writeAtomicTemp,
+} from "./temp-storage.js";
 import { createInterface } from "node:readline";
 import { tmpdir } from "node:os";
 import { join as joinPath } from "node:path";
@@ -112,7 +117,26 @@ export interface FileDiscovery {
   report: DiscoveryReport;
 }
 
-const IGNORE_DIRS = new Set([".git", "node_modules", "dist", "vendor", ".venv", "venv", "target", "coverage", ".next", "build", "__pycache__", ".pi", ".pi-fovea", "deps", "_build", ".tox", "Pods", ".cargo"]);
+const IGNORE_DIRS = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "vendor",
+  ".venv",
+  "venv",
+  "target",
+  "coverage",
+  ".next",
+  "build",
+  "__pycache__",
+  ".pi",
+  ".pi-fovea",
+  "deps",
+  "_build",
+  ".tox",
+  "Pods",
+  ".cargo",
+]);
 // File count is also a resident-graph budget, not just a discovery limit.
 // Override deliberately for giant monorepos; normal roots stay bounded.
 const MAX_FILES = envInt("FOVEA_MAX_FILES", 8000, 100, 100_000);
@@ -120,7 +144,12 @@ const MAX_FILE_BYTES = envInt("FOVEA_MAX_FILE_BYTES", 1024 * 1024, 64 * 1024, 64
 // Protocol documents never reach ast-grep; their exact readers are
 // regex-bounded, so real-world schemas larger than the code cap still parse
 // instead of being silently dropped as oversized.
-const PROTOCOL_MAX_FILE_BYTES = envInt("FOVEA_MAX_PROTO_FILE_BYTES", 8 * 1024 * 1024, 256 * 1024, 64 * 1024 * 1024);
+const PROTOCOL_MAX_FILE_BYTES = envInt(
+  "FOVEA_MAX_PROTO_FILE_BYTES",
+  8 * 1024 * 1024,
+  256 * 1024,
+  64 * 1024 * 1024,
+);
 const PROTOCOL_DOC_RE = /\.(?:proto|graphql|gql)$/i;
 const maxFileBytes = (file: string): number =>
   PROTOCOL_DOC_RE.test(file) ? PROTOCOL_MAX_FILE_BYTES : MAX_FILE_BYTES;
@@ -128,13 +157,23 @@ const maxFileBytes = (file: string): number =>
 const MAX_SUBMODULE_DEPTH = envInt("FOVEA_MAX_SUBMODULE_DEPTH", 4, 1, 16);
 // Generated dependency manifests are enormous and carry no first-class routes.
 const LOCKFILE_NAMES = new Set([
-  "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb",
-  "pipfile.lock", "poetry.lock", "cargo.lock", "composer.lock", "gemfile.lock", "go.sum",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
+  "pipfile.lock",
+  "poetry.lock",
+  "cargo.lock",
+  "composer.lock",
+  "gemfile.lock",
+  "go.sum",
 ]);
 
 export const discoveryExclusionReason = (file: string): string | undefined => {
   const segments = file.split("/");
-  for (const segment of segments) if (IGNORE_DIRS.has(segment)) return `ignored directory ${segment}`;
+  for (const segment of segments)
+    if (IGNORE_DIRS.has(segment)) return `ignored directory ${segment}`;
   const base = segments[segments.length - 1]!.toLowerCase();
   return LOCKFILE_NAMES.has(base) || base.endsWith(".lock") ? "dependency lockfile" : undefined;
 };
@@ -159,7 +198,7 @@ const GENERATED_NAME_RE = /\.(?:min|bundle)\.(?:[cm]?js|[cm]?ts|jsx|tsx|mjs|cjs)
 export const isGeneratedSource = (rel: string, text: string): boolean => {
   if (GENERATED_NAME_RE.test(rel)) return true;
   if (text.length < MINIFIED_LINE_CHARS) return false;
-  for (let i = 0; i < text.length; ) {
+  for (let i = 0; i < text.length;) {
     const nl = text.indexOf("\n", i);
     const end = nl === -1 ? text.length : nl;
     if (end - i >= MINIFIED_LINE_CHARS) return true;
@@ -196,16 +235,21 @@ const expandSubmodules = async (
   depth: number,
 ): Promise<ExpandedListing> => {
   const candidates = entries.filter((entry) => !entry.endsWith("/"));
-  const kinds = await mapLimit(
-    candidates,
-    IO_CONCURRENCY,
-    (entry) => lstat(joinPath(root, entry)).then(
-      (value) => value.isDirectory() ? "directory" : value.isFile() || value.isSymbolicLink() ? "file" : "other",
+  const kinds = await mapLimit(candidates, IO_CONCURRENCY, (entry) =>
+    lstat(joinPath(root, entry)).then(
+      (value) =>
+        value.isDirectory()
+          ? "directory"
+          : value.isFile() || value.isSymbolicLink()
+            ? "file"
+            : "other",
       () => "unavailable",
     ),
   );
   const gitlinks = new Set(candidates.filter((_, index) => kinds[index] === "directory"));
-  const files = candidates.filter((_, index) => kinds[index] === "file").map((entry) => prefix + entry);
+  const files = candidates
+    .filter((_, index) => kinds[index] === "file")
+    .map((entry) => prefix + entry);
   const unavailableFiles = candidates
     .filter((_, index) => kinds[index] === "unavailable" || kinds[index] === "other")
     .map((entry) => prefix + entry);
@@ -216,7 +260,11 @@ const expandSubmodules = async (
       closedBoundaries.push(key);
       continue;
     }
-    const inner = await gitOut(joinPath(root, link), ["ls-files", "-z", "-co", "--exclude-standard"], { timeout: 30_000 });
+    const inner = await gitOut(
+      joinPath(root, link),
+      ["ls-files", "-z", "-co", "--exclude-standard"],
+      { timeout: 30_000 },
+    );
     if (inner === undefined) {
       closedBoundaries.push(key);
       continue;
@@ -246,8 +294,7 @@ const excludedPolicies = (): string[] => [
   "dependency lockfiles",
 ];
 
-const examples = (values: Iterable<string>): string[] =>
-  [...new Set(values)].sort().slice(0, 20);
+const examples = (values: Iterable<string>): string[] => [...new Set(values)].sort().slice(0, 20);
 
 export const discoverFiles = async (
   root: string,
@@ -256,7 +303,9 @@ export const discoverFiles = async (
   maxFiles = MAX_FILES,
 ): Promise<FileDiscovery> => {
   const limit = Math.max(1, Math.floor(maxFiles));
-  const gitListing = await gitOut(root, ["ls-files", "-z", "-co", "--exclude-standard"], { timeout: 30_000 });
+  const gitListing = await gitOut(root, ["ls-files", "-z", "-co", "--exclude-standard"], {
+    timeout: 30_000,
+  });
   if (gitListing !== undefined) {
     const entries = gitListing.split("\0").filter(Boolean);
     const expanded = await expandSubmodules(root, "", entries, enrolled, MAX_SUBMODULE_DEPTH);
@@ -376,7 +425,10 @@ export const listFiles = async (
   enrolled: ReadonlySet<string> = NO_BOUNDARIES,
 ): Promise<string[]> => (await discoverFiles(root, routeRes, enrolled)).files;
 
-interface FileMeta { size: number; mtime: number }
+interface FileMeta {
+  size: number;
+  mtime: number;
+}
 
 const statFile = async (root: string, rel: string): Promise<FileMeta | undefined> => {
   try {
@@ -400,7 +452,10 @@ const statMany = async (root: string, files: readonly string[]): Promise<Map<str
 const metaEquals = (a: FileMeta | undefined, b: FileMeta | undefined): boolean =>
   !!a && !!b && a.size === b.size && Math.abs(a.mtime - b.mtime) < 1e-6;
 
-const sha1Of = async (root: string, rel: string): Promise<{ sha1: string; text: string } | undefined> => {
+const sha1Of = async (
+  root: string,
+  rel: string,
+): Promise<{ sha1: string; text: string } | undefined> => {
   try {
     const buf = await readFile(joinPath(root, rel));
     return { sha1: createHash("sha1").update(buf).digest("hex"), text: buf.toString("utf8") };
@@ -488,7 +543,12 @@ const pendingFileFacts = (file: string, sha1: string, text: string): FileFacts =
   return facts;
 };
 
-interface CacheHeader { fovea: number; root: string; rulesSha: string; enrolled?: string[] }
+interface CacheHeader {
+  fovea: number;
+  root: string;
+  rulesSha: string;
+  enrolled?: string[];
+}
 interface CacheLine {
   file: string;
   sha1: string;
@@ -617,7 +677,9 @@ export const readEnrolledBoundaries = async (root: string): Promise<string[]> =>
     for await (const line of lines) {
       const header = JSON.parse(line) as CacheHeader;
       if (header.fovea !== CACHE_VERSION || header.root !== root) return [];
-      return Array.isArray(header.enrolled) ? header.enrolled.filter((b): b is string => typeof b === "string") : [];
+      return Array.isArray(header.enrolled)
+        ? header.enrolled.filter((b): b is string => typeof b === "string")
+        : [];
     }
     return [];
   } catch {
@@ -664,7 +726,10 @@ const extractInto = async (
   store: FactStore,
   files: string[],
   contents: Map<string, string>,
-  packRules: { pack: Awaited<ReturnType<typeof loadRepoRules>>["pack"]; fileRoutes: Awaited<ReturnType<typeof loadRepoRules>>["fileRoutes"] },
+  packRules: {
+    pack: Awaited<ReturnType<typeof loadRepoRules>>["pack"];
+    fileRoutes: Awaited<ReturnType<typeof loadRepoRules>>["fileRoutes"];
+  },
 ): Promise<void> => {
   if (!files.length) return;
   const source = makeFileSource(root, contents);
@@ -755,12 +820,17 @@ const runAnchorPass = async (
   root: string,
   store: FactStore,
   files: string[],
-  packRules: { pack: Awaited<ReturnType<typeof loadRepoRules>>["pack"]; fileRoutes: Awaited<ReturnType<typeof loadRepoRules>>["fileRoutes"] },
+  packRules: {
+    pack: Awaited<ReturnType<typeof loadRepoRules>>["pack"];
+    fileRoutes: Awaited<ReturnType<typeof loadRepoRules>>["fileRoutes"];
+  },
   source = makeFileSource(root),
 ): Promise<void> => {
   const batches: string[][] = [];
   for (let start = 0; start < files.length; start += EXTRACTION_BATCH) {
-    const batch = files.slice(start, start + EXTRACTION_BATCH).filter((file) => !isConfigFile(file));
+    const batch = files
+      .slice(start, start + EXTRACTION_BATCH)
+      .filter((file) => !isConfigFile(file));
     if (batch.length) batches.push(batch);
   }
   const extracted = await mapLimit(batches, SPAWN_CONCURRENCY, async (anchorFiles) => {
@@ -787,7 +857,8 @@ const runAnchorPass = async (
       if (previous?.anchors.length) store.facts.set(file, { ...previous, anchors: [] });
     }
     for (const anchor of result.anchors) store.facts.get(anchor.file)?.anchors.push(anchor);
-    for (const anchor of result.fileRouteAnchors) store.facts.get(anchor.file)?.anchors.push(anchor);
+    for (const anchor of result.fileRouteAnchors)
+      store.facts.get(anchor.file)?.anchors.push(anchor);
     await yieldToLoop();
   }
 };
@@ -804,7 +875,10 @@ const resolveRulePack = (
   const implicitRules = promote(aggregateFiles(sigsByFile), base.pack);
   const pack = implicitRules.length ? [...base.pack, ...implicitRules] : base.pack;
   const sha = implicitRules.length
-    ? createHash("sha1").update(base.sha).update(JSON.stringify(implicitRules.map((rule) => rule.id).sort())).digest("hex")
+    ? createHash("sha1")
+        .update(base.sha)
+        .update(JSON.stringify(implicitRules.map((rule) => rule.id).sort()))
+        .digest("hex")
     : base.sha;
   const previousSha = store.rulesSha;
   store.rulesSha = sha;
@@ -821,11 +895,12 @@ const reanchorStaleClean = async (
 ): Promise<void> => {
   if (active.sha === active.previousSha) return;
   const dirtySet = new Set(dirty);
-  const stale = files.filter((file) =>
-    !dirtySet.has(file) &&
-    !isConfigFile(file) &&
-    !store.generated.has(file) &&
-    store.facts.has(file),
+  const stale = files.filter(
+    (file) =>
+      !dirtySet.has(file) &&
+      !isConfigFile(file) &&
+      !store.generated.has(file) &&
+      store.facts.has(file),
   );
   if (stale.length) await runAnchorPass(root, store, stale, active);
 };
@@ -870,7 +945,12 @@ export const loadFacts = async (root: string, files: string[]): Promise<FactsOut
   const store = disk ?? newFactStore(root);
   let cacheDirty = disk === undefined;
   const fileSet = new Set(files);
-  const knownFiles = new Set([...store.facts.keys(), ...store.failedSha.keys(), ...store.unreadable, ...store.oversized]);
+  const knownFiles = new Set([
+    ...store.facts.keys(),
+    ...store.failedSha.keys(),
+    ...store.unreadable,
+    ...store.oversized,
+  ]);
   for (const f of knownFiles) {
     if (!fileSet.has(f)) {
       store.facts.delete(f);
@@ -975,8 +1055,12 @@ export const loadFacts = async (root: string, files: string[]): Promise<FactsOut
     store.failedSha.delete(f);
   }
   for (const f of oversized) store.oversized.add(f);
-  store.unreadable.forEach((f) => { if (!unreadable.includes(f) && files.includes(f)) store.unreadable.delete(f); });
-  store.oversized.forEach((f) => { if (!oversized.includes(f) && files.includes(f)) store.oversized.delete(f); });
+  store.unreadable.forEach((f) => {
+    if (!unreadable.includes(f) && files.includes(f)) store.unreadable.delete(f);
+  });
+  store.oversized.forEach((f) => {
+    if (!oversized.includes(f) && files.includes(f)) store.oversized.delete(f);
+  });
 
   if (cacheDirty) await persistFacts(store);
   return {
@@ -1026,14 +1110,26 @@ export const refreshFacts = async (
     store.generated.delete(known);
     deleted.push(known);
   };
-  const knownFiles = new Set([...store.facts.keys(), ...store.failedSha.keys(), ...store.unreadable, ...store.oversized]);
+  const knownFiles = new Set([
+    ...store.facts.keys(),
+    ...store.failedSha.keys(),
+    ...store.unreadable,
+    ...store.oversized,
+  ]);
   for (const known of knownFiles) {
     if (!fileSet.has(known)) removeFile(known);
   }
   // Callers with a deletion oracle (git status, listing diff) pass names
   // explicitly so a vanished file is never mislabeled unreadable.
   for (const gone of deletedPaths) {
-    if ((store.facts.has(gone) || store.failedSha.has(gone) || store.unreadable.has(gone) || store.oversized.has(gone)) && !deleted.includes(gone)) removeFile(gone);
+    if (
+      (store.facts.has(gone) ||
+        store.failedSha.has(gone) ||
+        store.unreadable.has(gone) ||
+        store.oversized.has(gone)) &&
+      !deleted.includes(gone)
+    )
+      removeFile(gone);
   }
   const added = files.filter((f) => !knownFiles.has(f));
   const candidates = new Set<string>([...changed, ...added]);
@@ -1119,12 +1215,23 @@ export const refreshFacts = async (
     stats: {
       reExtracted: dirty.sort(),
       deleted: deleted.sort(),
-      added: added.filter((f) => !unreadable.includes(f) && !store.oversized.has(f) && !store.generated.has(f) && !store.tainted.has(f)).sort(),
+      added: added
+        .filter(
+          (f) =>
+            !unreadable.includes(f) &&
+            !store.oversized.has(f) &&
+            !store.generated.has(f) &&
+            !store.tainted.has(f),
+        )
+        .sort(),
     },
   };
 };
 
-export interface GraphAssembly { graph: Graph; joinIndex: JoinIndex }
+export interface GraphAssembly {
+  graph: Graph;
+  joinIndex: JoinIndex;
+}
 
 export const assembleGraphWithIndex: (
   root: string,

@@ -32,8 +32,8 @@ import { gitHead, gitOut, gitPrefix } from "./git.js";
 
 const LOG_COMMITS = 400;
 const MAX_FILES_PER_UNIT = 24; // oversized integration units carry no pair signal
-const MIN_SHARED = 2;            // a single collision is noise
-const MAX_PAIRS_PER_FILE = 16;   // union of endpoint top-16 selections, not a hard degree cap
+const MIN_SHARED = 2; // a single collision is noise
+const MAX_PAIRS_PER_FILE = 16; // union of endpoint top-16 selections, not a hard degree cap
 const COCHANGE_CACHE_VERSION = 4;
 const EXPECTATION_MIN_SUPPORT = 3;
 const WILSON_Z_95 = 1.96;
@@ -82,7 +82,7 @@ export const scorePair = (n: number, soloA: number, soloB: number): number => {
   const union = soloA + soloB - n;
   if (union <= 0) return 0;
   const jaccard = n / union;
-  return Math.min(0.5, 0.08 + 0.55 * jaccard + 0.10 * Math.min(n / 10, 1));
+  return Math.min(0.5, 0.08 + 0.55 * jaccard + 0.1 * Math.min(n / 10, 1));
 };
 
 const wilsonLower95 = (successes: number, trials: number): number => {
@@ -95,7 +95,7 @@ const wilsonLower95 = (successes: number, trials: number): number => {
   return Math.max(0, (centre - radius) / denominator);
 };
 
-const pathOrder = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
+const pathOrder = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
  * Find historical companions conspicuously absent from `changedFiles`.
@@ -121,12 +121,14 @@ export const expectationResiduals = (
   const sources = [...changed].sort(pathOrder);
 
   for (const source of sources) {
-    const partners = [...(history.get(source) ?? [])].sort((a, b) =>
-      pathOrder(a.partner, b.partner)
-      || (a.n_ij ?? 0) - (b.n_ij ?? 0)
-      || (a.n_i ?? 0) - (b.n_i ?? 0)
-      || (a.n_j ?? 0) - (b.n_j ?? 0)
-      || a.lastTs - b.lastTs);
+    const partners = [...(history.get(source) ?? [])].sort(
+      (a, b) =>
+        pathOrder(a.partner, b.partner) ||
+        (a.n_ij ?? 0) - (b.n_ij ?? 0) ||
+        (a.n_i ?? 0) - (b.n_i ?? 0) ||
+        (a.n_j ?? 0) - (b.n_j ?? 0) ||
+        a.lastTs - b.lastTs,
+    );
     for (const p of partners) {
       if (changed.has(p.partner)) continue;
       const nIJ = p.n_ij;
@@ -134,12 +136,24 @@ export const expectationResiduals = (
       const nJ = p.n_j;
       const total = p.N;
       if (
-        nIJ === undefined || nI === undefined || nJ === undefined || total === undefined
-        || !Number.isInteger(nIJ) || !Number.isInteger(nI)
-        || !Number.isInteger(nJ) || !Number.isInteger(total)
-        || nIJ < EXPECTATION_MIN_SUPPORT || nIJ > nI || nIJ > nJ
-        || nI <= 0 || nJ < 0 || total <= 0 || nI > total || nJ > total
-      ) continue;
+        nIJ === undefined ||
+        nI === undefined ||
+        nJ === undefined ||
+        total === undefined ||
+        !Number.isInteger(nIJ) ||
+        !Number.isInteger(nI) ||
+        !Number.isInteger(nJ) ||
+        !Number.isInteger(total) ||
+        nIJ < EXPECTATION_MIN_SUPPORT ||
+        nIJ > nI ||
+        nIJ > nJ ||
+        nI <= 0 ||
+        nJ < 0 ||
+        total <= 0 ||
+        nI > total ||
+        nJ > total
+      )
+        continue;
 
       const q = wilsonLower95(nIJ, nI);
       const baseRate = nJ / total;
@@ -170,7 +184,10 @@ interface CacheShape {
 }
 
 const cachePath = (root: string): string =>
-  joinPath(tmpdir(), `pi-fovea-cochange-${createHash("sha1").update(root).digest("hex").slice(0, 16)}.json`);
+  joinPath(
+    tmpdir(),
+    `pi-fovea-cochange-${createHash("sha1").update(root).digest("hex").slice(0, 16)}.json`,
+  );
 
 // coChangeHistory returns, for every tracked file, its past co-change partners
 // with base conductance and the most recent joint unit time. filesInGraph
@@ -189,8 +206,9 @@ export const coChangeHistory = async (
   const shallowPath = await gitOut(root, ["rev-parse", "--git-path", "shallow"]);
   if (shallowPath === undefined) return new Map();
   let shallowText = "";
-  try { shallowText = await readFile(resolve(root, shallowPath.trim()), "utf8"); }
-  catch (error) {
+  try {
+    shallowText = await readFile(resolve(root, shallowPath.trim()), "utf8");
+  } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") return new Map();
   }
   const shallow = new Set(shallowText.trim().split(/\s+/));
@@ -206,33 +224,66 @@ export const coChangeHistory = async (
   try {
     const cached = JSON.parse(await readTempText(cp)) as CacheShape;
     if (
-      cached.v === COCHANGE_CACHE_VERSION && cached.head === head && cached.key === key
-      && Number.isInteger(cached.commits) && Array.isArray(cached.pairs)
-    ) return groupPairs(cached.pairs, cached.commits);
-  } catch { /* recompute */ }
+      cached.v === COCHANGE_CACHE_VERSION &&
+      cached.head === head &&
+      cached.key === key &&
+      Number.isInteger(cached.commits) &&
+      Array.isArray(cached.pairs)
+    )
+      return groupPairs(cached.pairs, cached.commits);
+  } catch {
+    /* recompute */
+  }
 
   // No pathspec: history simplification could remove integration boundaries
   // or make subroot denominators differ from the repository's observations.
-  const log = await gitOut(root, [
-    "log", "--first-parent", "--diff-merges=first-parent", "--root",
-    "--format=%x00FOVEA%x00%H%x00%P%x00%ct%x00%s%x00", "--name-status", "-z",
-    "-n", String(LOG_COMMITS), "--no-renames", "--no-ext-diff", "--no-textconv",
-    "--no-relative", "--no-notes", "--no-show-signature", "--no-color", head, "--",
-  ], { maxBuffer: 16 * 1024 * 1024 });
+  const log = await gitOut(
+    root,
+    [
+      "log",
+      "--first-parent",
+      "--diff-merges=first-parent",
+      "--root",
+      "--format=%x00FOVEA%x00%H%x00%P%x00%ct%x00%s%x00",
+      "--name-status",
+      "-z",
+      "-n",
+      String(LOG_COMMITS),
+      "--no-renames",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--no-relative",
+      "--no-notes",
+      "--no-show-signature",
+      "--no-color",
+      head,
+      "--",
+    ],
+    { maxBuffer: 16 * 1024 * 1024 },
+  );
   if (log === undefined) return new Map(); // never cache a failed/partial scan
   type Unit = { subject: string; merge: boolean; ts: number; files: Set<string> };
   const units: Unit[] = [];
   const fields = log.split("\0");
   let cursor = 0;
   while (cursor < fields.length) {
-    if (fields[cursor] === "") { cursor++; continue; }
+    if (fields[cursor] === "") {
+      cursor++;
+      continue;
+    }
     if (fields[cursor++] !== "FOVEA") return new Map();
     const hash = fields[cursor++];
     const parents = fields[cursor++];
     const seconds = Number(fields[cursor++]);
     const subject = fields[cursor++];
-    if (!hash || parents === undefined || subject === undefined || !Number.isFinite(seconds)
-      || fields[cursor++] !== "") return new Map();
+    if (
+      !hash ||
+      parents === undefined ||
+      subject === undefined ||
+      !Number.isFinite(seconds) ||
+      fields[cursor++] !== ""
+    )
+      return new Map();
     const files = new Set<string>();
     let first = true;
     while (cursor < fields.length && fields[cursor] !== "") {
@@ -252,7 +303,8 @@ export const coChangeHistory = async (
         if (tracked.has(file)) files.add(file);
       }
     }
-    if (!shallow.has(hash)) units.push({ subject, merge: parents.includes(" "), ts: seconds * 1000, files });
+    if (!shallow.has(hash))
+      units.push({ subject, merge: parents.includes(" "), ts: seconds * 1000, files });
   }
 
   // Match against the entire bounded window before mutating anything. An
@@ -315,8 +367,7 @@ export const coChangeHistory = async (
   scored.forEach((p, i) => {
     for (const f of [p[0], p[1]]) (perFile.get(f) ?? perFile.set(f, []).get(f)!).push(i);
   });
-  const eff = (p: CachedPair): number =>
-    p[2] * recencyFactor(Math.max(0, now - p[3]) / DAY_MS);
+  const eff = (p: CachedPair): number => p[2] * recencyFactor(Math.max(0, now - p[3]) / DAY_MS);
   const keep = new Set<number>();
   for (const [, idxs] of perFile) {
     idxs.sort((x, y) => eff(scored[y]!) - eff(scored[x]!));
@@ -325,14 +376,19 @@ export const coChangeHistory = async (
   const pairs = scored.filter((_, i) => keep.has(i));
 
   try {
-    await writeAtomicTemp(cp, JSON.stringify({
-      v: COCHANGE_CACHE_VERSION,
-      head,
-      key,
-      commits,
-      pairs,
-    } satisfies CacheShape));
-  } catch { /* cache is an optimization */ }
+    await writeAtomicTemp(
+      cp,
+      JSON.stringify({
+        v: COCHANGE_CACHE_VERSION,
+        head,
+        key,
+        commits,
+        pairs,
+      } satisfies CacheShape),
+    );
+  } catch {
+    /* cache is an optimization */
+  }
   return groupPairs(pairs, commits);
 };
 
@@ -347,7 +403,15 @@ const groupPairs = (pairs: CachedPair[], commits: number): CoChangeHistory => {
     nI: number,
     nJ: number,
   ): void => {
-    const partner: CoChangePartner = { partner: b, w, lastTs, n_ij: nIJ, n_i: nI, n_j: nJ, N: commits };
+    const partner: CoChangePartner = {
+      partner: b,
+      w,
+      lastTs,
+      n_ij: nIJ,
+      n_i: nI,
+      n_j: nJ,
+      N: commits,
+    };
     const list = out.get(a);
     if (list) list.push(partner);
     else out.set(a, [partner]);

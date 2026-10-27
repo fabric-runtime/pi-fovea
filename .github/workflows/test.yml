@@ -42,6 +42,8 @@ jobs:
           bunx vitest run tests/proofs.test.ts tests/verified-kernels.test.ts
       - name: Type check
         run: bun run typecheck
+      - name: Readable authored source
+        run: bun run format:check
       - name: Affected tests
         env:
           # Pull requests compare against the target branch; pushes compare

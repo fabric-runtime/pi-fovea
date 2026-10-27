@@ -43,16 +43,13 @@ export const mapLimit = async <T, R>(
 ): Promise<R[]> => {
   const out = new Array<R>(items.length);
   let next = 0;
-  const workers = Array.from(
-    { length: Math.max(1, Math.min(limit, items.length)) },
-    async () => {
-      for (;;) {
-        const i = next++;
-        if (i >= items.length) return;
-        out[i] = await fn(items[i]!, i);
-      }
-    },
-  );
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]!, i);
+    }
+  });
   await Promise.all(workers);
   return out;
 };
@@ -83,8 +80,7 @@ class Semaphore {
 export const spawnGate = new Semaphore(SPAWN_CONCURRENCY);
 
 /** Yield one macrotask; lets the TUI repaint and drain input mid-sweep. */
-export const yieldToLoop = (): Promise<void> =>
-  new Promise((resolve) => setImmediate(resolve));
+export const yieldToLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 /**
  * Yielding loop helper for long synchronous sweeps. Returns a promise; call

@@ -41,7 +41,8 @@ describe.skipIf(!hasAstGrep())("fovea ops on the minimonorepo", () => {
     await focus(FIXTURE, "loadUser", 512, {}, state);
     const session = getSession(FIXTURE);
     expect(session.tk).toHaveLength(chooseOrder(2) + 1);
-    const prefix = [...session.tk], key = session.tkKey;
+    const prefix = [...session.tk],
+      key = session.tkKey;
     await dwell(FIXTURE, 32, 512);
     expect(session.tk.length).toBeGreaterThanOrEqual(chooseOrder(64) + 1);
     prefix.forEach((vector, i) => expect(session.tk[i]).toBe(vector));
@@ -54,17 +55,21 @@ describe.skipIf(!hasAstGrep())("fovea ops on the minimonorepo", () => {
 
   it("invalidates derived name data when a synthetic node is renamed", async () => {
     const state = await ensureState(FIXTURE);
-    const index = resolveSeeds(state, "switchServer").seeds.find(i => state.graph.nodes[i]!.name.includes("switchingServers"))!;
+    const index = resolveSeeds(state, "switchServer").seeds.find((i) =>
+      state.graph.nodes[i]!.name.includes("switchingServers"),
+    )!;
     expect(index).toBeDefined();
-    const node = state.graph.nodes[index]!, name = node.name;
+    const node = state.graph.nodes[index]!,
+      name = node.name;
     try {
       node.name = "ClientConnection.jumpingWidgets";
       expect(resolveSeeds(state, "jumpWidget").seeds).toContain(index);
       expect(resolveSeeds(state, "jumpWidget", { language: "python" }).seeds).not.toContain(index);
-    } finally { node.name = name; }
+    } finally {
+      node.name = name;
+    }
     expect(resolveSeeds(state, "switchServer").seeds).toContain(index);
   });
-
 
   it("builds the graph with anchors and cross-language join edges", async () => {
     const s = await ensureState(FIXTURE);
@@ -73,9 +78,11 @@ describe.skipIf(!hasAstGrep())("fovea ops on the minimonorepo", () => {
     expect(kinds.has("join")).toBe(true);
     expect(kinds.has("contains")).toBe(true);
     expect(kinds.has("invokes")).toBe(true);
-    expect(s.graph.edges.every((edge) =>
-      !!edge.evidence?.strategy && !!edge.evidence.rule && !!edge.evidence.source,
-    )).toBe(true);
+    expect(
+      s.graph.edges.every(
+        (edge) => !!edge.evidence?.strategy && !!edge.evidence.rule && !!edge.evidence.source,
+      ),
+    ).toBe(true);
     // a join edge crossing server -> web or server -> openapi exists
     const cross = s.graph.edges.some((e) => {
       if (e.kind !== "join") return false;
@@ -126,7 +133,6 @@ describe.skipIf(!hasAstGrep())("fovea ops on the minimonorepo", () => {
     expect(r.text).toContain("loadUser");
   });
 
-
   it("recovers equivalent camelCase and inflected symbol queries", async () => {
     resetSessions();
     const plural = await focus(FIXTURE, "loadsUsers", 1200);
@@ -156,8 +162,12 @@ describe.skipIf(!hasAstGrep())("fovea ops on the minimonorepo", () => {
     expect(r.text).toContain("← caller");
     expect(r.text).toContain("GetUserHandler");
     expect(r.text).toContain("call-target-resolution");
-    const direct = (r.details.nodes as Array<{ relation?: string; evidence?: { strategy: string; rule: string; source: string } }>)
-      .find((node) => node.relation?.includes("caller"));
+    const direct = (
+      r.details.nodes as Array<{
+        relation?: string;
+        evidence?: { strategy: string; rule: string; source: string };
+      }>
+    ).find((node) => node.relation?.includes("caller"));
     expect(direct?.evidence).toMatchObject({ rule: "call-target-resolution", source: "LoadUser" });
   });
 
@@ -169,7 +179,8 @@ describe.skipIf(!hasAstGrep())("fovea ops on the minimonorepo", () => {
       "⚑ GRAPHQL QUERY user",
       "⚑ TRPC loadUser",
       "⚑ CHANNEL users.changed",
-    ]) expect(map.text).toContain(feature);
+    ])
+      expect(map.text).toContain(feature);
 
     for (const [query, expected] of [
       ["RPC users.v1.Users/GetUser", ["contracts/users.proto", "web/users.grpc.ts"]],
@@ -231,14 +242,20 @@ describe.skipIf(!hasAstGrep())("fovea ops on the minimonorepo", () => {
     expect(fresh.text).not.toContain("server/users.go:13");
     expect(Array.isArray(fresh.details.nodes)).toBe(true);
     expect(Array.isArray(fresh.details.suggestedReads)).toBe(true);
-    const reads = fresh.details.suggestedReads as Array<{ path: string; offset: number; limit: number }>;
+    const reads = fresh.details.suggestedReads as Array<{
+      path: string;
+      offset: number;
+      limit: number;
+    }>;
     expect(reads.filter((read) => read.path === "web/api.ts")).toHaveLength(1);
 
     await focus(FIXTURE, "loadUser", 256, { fresh: true, path: "web", language: "TypeScript" });
     const wider = await dwell(FIXTURE, 8, 1200);
     const widenedNodes = wider.details.nodes as Array<{ file: string; language: string }>;
     expect(widenedNodes.length).toBeGreaterThan(0);
-    expect(widenedNodes.every((node) => node.file.startsWith("web/") && node.language === "TypeScript")).toBe(true);
+    expect(
+      widenedNodes.every((node) => node.file.startsWith("web/") && node.language === "TypeScript"),
+    ).toBe(true);
   });
 
   it("dwell deepens the field and reports the t transition", async () => {
@@ -253,20 +270,32 @@ describe.skipIf(!hasAstGrep())("fovea ops on the minimonorepo", () => {
 
   it("impact warms the client and spec when the Go handler file is edited", async () => {
     resetSessions();
-    const r = await impact(FIXTURE, { files: ["server/users.go"], includeUncommitted: false, budget: 2000 });
+    const r = await impact(FIXTURE, {
+      files: ["server/users.go"],
+      includeUncommitted: false,
+      budget: 2000,
+    });
     expect(r.tokens).toBeLessThanOrEqual(2000);
     expect(r.text).toContain("fovea impact");
-    expect(r.text).toContain("web/api.ts");      // shares the /api/users literal
-    expect(r.text).toContain("openapi.yaml");    // same route in the spec
+    expect(r.text).toContain("web/api.ts"); // shares the /api/users literal
+    expect(r.text).toContain("openapi.yaml"); // same route in the spec
     expect(r.text).toContain("worker/search.rs"); // same route literal in Rust
     expect(r.details.warmedReasons).toBeTruthy();
     const reasons = r.details.warmedReasons as Record<string, string[]>;
     expect(reasons["web/api.ts"]).toContain("shared literal");
     expect(reasons["worker/search.rs"]).not.toContain("graph path");
-    const evidence = r.details.warmedEvidence as Record<string, Array<{ strategy: string; rule: string; source: string }>>;
-    expect(evidence["web/api.ts"]?.some((item) =>
-      item.strategy === "normalized-literal" && item.rule === "literal-path" && item.source.startsWith("/api/users"),
-    )).toBe(true);
+    const evidence = r.details.warmedEvidence as Record<
+      string,
+      Array<{ strategy: string; rule: string; source: string }>
+    >;
+    expect(
+      evidence["web/api.ts"]?.some(
+        (item) =>
+          item.strategy === "normalized-literal" &&
+          item.rule === "literal-path" &&
+          item.source.startsWith("/api/users"),
+      ),
+    ).toBe(true);
     // the seed file's own symbols are not part of the review list
     expect(r.text.split("\n").filter((l) => l.startsWith("server/users.go"))).toHaveLength(0);
   });
@@ -305,16 +334,22 @@ describe.skipIf(!hasAstGrep())("fovea ops on the minimonorepo", () => {
         expect(bounded.tokens).toBeLessThanOrEqual(B);
         expect(bounded.details.warmedMass).toEqual(first.details.warmedMass);
         expect(bounded.details.conservedMass).toEqual(first.details.conservedMass);
-        for (const key of ["review", "obligations", "epoch"]) expect(bounded.details).not.toHaveProperty(key);
+        for (const key of ["review", "obligations", "epoch"])
+          expect(bounded.details).not.toHaveProperty(key);
         expect(bounded.text).not.toMatch(/review memory|obligations ·|prior epoch cleared/);
       }
       for (const files of [[], ["nope/nothing.ts"]]) {
-        const clean = await impact(FIXTURE, { files, includeUncommitted: false, budget: 256 }, prepared);
+        const clean = await impact(
+          FIXTURE,
+          { files, includeUncommitted: false, budget: 256 },
+          prepared,
+        );
         expect(clean.tokens).toBeLessThanOrEqual(256);
         expect(clean.details.seeds).toBe(0);
         expect(clean.text).toContain("no seed files");
         expect(clean.text).not.toContain("web/api.ts");
-        for (const key of ["review", "obligations", "epoch", "warmedFiles"]) expect(clean.details).not.toHaveProperty(key);
+        for (const key of ["review", "obligations", "epoch", "warmedFiles"])
+          expect(clean.details).not.toHaveProperty(key);
       }
     } finally {
       clock.mockRestore();

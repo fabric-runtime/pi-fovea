@@ -88,8 +88,10 @@ export interface FoveaConfigScopes {
   scope?: FoveaConfigScope;
 }
 
-export const globalFoveaConfigPath = (agentDir: string): string => path.join(agentDir, "fovea.json");
-export const projectFoveaConfigPath = (cwd: string): string => path.join(cwd, configDirName, "fovea.json");
+export const globalFoveaConfigPath = (agentDir: string): string =>
+  path.join(agentDir, "fovea.json");
+export const projectFoveaConfigPath = (cwd: string): string =>
+  path.join(cwd, configDirName, "fovea.json");
 
 const BOUNDS: Record<string, [number, number]> = {
   "sync.budget": [128, 8192],
@@ -107,7 +109,7 @@ const boolValue = (value: unknown, fallback: boolean): boolean =>
   typeof value === "boolean" ? value : fallback;
 
 const enumValue = <T extends string>(value: unknown, values: readonly T[], fallback: T): T =>
-  typeof value === "string" && values.includes(value as T) ? value as T : fallback;
+  typeof value === "string" && values.includes(value as T) ? (value as T) : fallback;
 
 const intValue = (id: string, value: unknown, fallback: number): number =>
   clamp(id, typeof value === "number" && Number.isFinite(value) ? value : fallback);
@@ -121,20 +123,34 @@ const floatValue = (id: string, value: unknown, fallback: number): number => {
 const applyPartial = (base: FoveaConfig, partial: unknown): FoveaConfig => {
   if (typeof partial !== "object" || partial === null || Array.isArray(partial)) return base;
   const src = partial as Record<string, unknown>;
-  const sync = (typeof src.sync === "object" && src.sync !== null ? src.sync : {}) as Record<string, unknown>;
-  const tools = (typeof src.tools === "object" && src.tools !== null ? src.tools : {}) as Record<string, unknown>;
+  const sync = (typeof src.sync === "object" && src.sync !== null ? src.sync : {}) as Record<
+    string,
+    unknown
+  >;
+  const tools = (typeof src.tools === "object" && src.tools !== null ? src.tools : {}) as Record<
+    string,
+    unknown
+  >;
   return {
     sync: {
       // Legacy `enabled` booleans map to visible/disabled. An explicit mode wins.
       mode: enumValue(
         sync.mode,
         SYNC_MODES,
-        typeof sync.enabled === "boolean" ? (sync.enabled ? "enabled" : "disabled") : base.sync.mode,
+        typeof sync.enabled === "boolean"
+          ? sync.enabled
+            ? "enabled"
+            : "disabled"
+          : base.sync.mode,
       ),
       scope: enumValue(sync.scope, SYNC_SCOPES, base.sync.scope),
       budget: intValue("sync.budget", sync.budget, base.sync.budget),
       ackClean: boolValue(sync.ackClean, base.sync.ackClean),
-      steerThreshold: floatValue("sync.steerThreshold", sync.steerThreshold, base.sync.steerThreshold),
+      steerThreshold: floatValue(
+        "sync.steerThreshold",
+        sync.steerThreshold,
+        base.sync.steerThreshold,
+      ),
       pushFocus: boolValue(sync.pushFocus, base.sync.pushFocus),
     },
     tools: {
@@ -144,9 +160,17 @@ const applyPartial = (base: FoveaConfig, partial: unknown): FoveaConfig => {
       grepMode: enumValue(
         tools.grepMode,
         GREP_MODES,
-        typeof tools.replaceGrep === "boolean" ? (tools.replaceGrep ? "replace" : "off") : base.tools.grepMode,
+        typeof tools.replaceGrep === "boolean"
+          ? tools.replaceGrep
+            ? "replace"
+            : "off"
+          : base.tools.grepMode,
       ),
-      grepAugmentBudget: intValue("tools.grepAugmentBudget", tools.grepAugmentBudget, base.tools.grepAugmentBudget),
+      grepAugmentBudget: intValue(
+        "tools.grepAugmentBudget",
+        tools.grepAugmentBudget,
+        base.tools.grepAugmentBudget,
+      ),
     },
   };
 };
@@ -162,17 +186,18 @@ const readConfigFile = (file: string): Record<string, unknown> => {
   }
 };
 
-const resolveFoveaConfig = (
-  scopes: FoveaConfigScopes,
-  includeProject: boolean,
-): FoveaConfig => {
-  let config = applyPartial(DEFAULT_FOVEA_CONFIG, readConfigFile(globalFoveaConfigPath(scopes.agentDir)));
+const resolveFoveaConfig = (scopes: FoveaConfigScopes, includeProject: boolean): FoveaConfig => {
+  let config = applyPartial(
+    DEFAULT_FOVEA_CONFIG,
+    readConfigFile(globalFoveaConfigPath(scopes.agentDir)),
+  );
   if (includeProject) {
     config = applyPartial(config, readConfigFile(projectFoveaConfigPath(scopes.cwd)));
   }
   // Environment override mirrors pi-fabric's PI_* precedence over stored values.
   const off = process.env.FOVEA_TURN_SYNC;
-  if (off === "off" || off === "0" || off === "false") config = { ...config, sync: { ...config.sync, mode: "disabled" } };
+  if (off === "off" || off === "0" || off === "false")
+    config = { ...config, sync: { ...config.sync, mode: "disabled" } };
   return config;
 };
 
@@ -189,11 +214,19 @@ export const loadFoveaConfigForScope = (
 export const loadFoveaConfig = (scopes: FoveaConfigScopes): FoveaConfig =>
   resolveFoveaConfig(scopes, scopes.projectTrusted);
 
-const mergeDeep = (existing: Record<string, unknown>, partial: Record<string, unknown>): Record<string, unknown> => {
+const mergeDeep = (
+  existing: Record<string, unknown>,
+  partial: Record<string, unknown>,
+): Record<string, unknown> => {
   const out = { ...existing };
   for (const [key, value] of Object.entries(partial)) {
-    if (typeof value === "object" && value !== null && !Array.isArray(value)
-        && typeof out[key] === "object" && out[key] !== null) {
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value) &&
+      typeof out[key] === "object" &&
+      out[key] !== null
+    ) {
       out[key] = mergeDeep(out[key] as Record<string, unknown>, value as Record<string, unknown>);
     } else {
       out[key] = value;
@@ -210,9 +243,10 @@ export const saveFoveaConfig = (
   if (scope === "project" && !scopes.projectTrusted) {
     throw new Error("Cannot save project Fovea configuration for an untrusted project");
   }
-  const targetPath = scope === "project"
-    ? projectFoveaConfigPath(scopes.cwd)
-    : globalFoveaConfigPath(scopes.agentDir);
+  const targetPath =
+    scope === "project"
+      ? projectFoveaConfigPath(scopes.cwd)
+      : globalFoveaConfigPath(scopes.agentDir);
   const merged = mergeDeep(readConfigFile(targetPath), partial);
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
   const tmp = `${targetPath}.tmp-${process.pid}-${randomUUID()}`;
@@ -225,10 +259,19 @@ export const saveFoveaConfig = (
     fs.closeSync(fd);
     try {
       const current = fs.lstatSync(tmp);
-      if (current.isFile() && current.dev === written.dev && current.ino === written.ino
-        && current.uid === written.uid && current.size === written.size && current.mtimeMs === written.mtimeMs
-        && current.ctimeMs === written.ctimeMs) fs.unlinkSync(tmp);
-    } catch { /* our staging file may already have been renamed */ }
+      if (
+        current.isFile() &&
+        current.dev === written.dev &&
+        current.ino === written.ino &&
+        current.uid === written.uid &&
+        current.size === written.size &&
+        current.mtimeMs === written.mtimeMs &&
+        current.ctimeMs === written.ctimeMs
+      )
+        fs.unlinkSync(tmp);
+    } catch {
+      /* our staging file may already have been renamed */
+    }
   }
   return { scope, path: targetPath };
 };

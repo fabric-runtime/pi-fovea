@@ -13,7 +13,7 @@
   },
   "correspondence": "not-proved",
   "inputs": {
-    "scripts/check-lean.mjs": "1d270c56e45ec204fb7571936da3e0e352015408777d44c1b5f0a6443a1ef191",
+    "scripts/check-lean.ts": "e1c8fb3792786885e614ddcfcbf99ccea5355c39115f34c4d6356cf367d9a496",
     "proofs/lean/toolchain.json": "f3e1796c8f7339b968f990e98fa50985af12acce4e67d1d9f321ba12e57afbf0",
     "proofs/lean/ledger.json": "20f6b61be230dbbfe830373a6ddb0f4f5ec4b8ae4b44a8ad1ec3e14a9c0c1399",
     "proofs/lean/Fovea/Arithmetic.lean": "76562d4939387bc50f08541d5c22b9c85c4a98cce27041f1816cdcc914bd4c78",

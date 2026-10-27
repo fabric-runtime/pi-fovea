@@ -50,7 +50,10 @@ export const buildCsr = (g: Graph): Csr => {
   }
   pairs.sort((x, y) => x[0] - y[0]);
   const counts = new Uint32Array(n);
-  for (const [a, b] of pairs) { counts[a]!++; counts[b]!++; }
+  for (const [a, b] of pairs) {
+    counts[a]!++;
+    counts[b]!++;
+  }
   const rowPtr = new Uint32Array(n + 1);
   for (let i = 0; i < n; i++) rowPtr[i + 1] = rowPtr[i]! + counts[i]!;
   const col = new Uint32Array(rowPtr[n]!);
@@ -58,11 +61,18 @@ export const buildCsr = (g: Graph): Csr => {
   const cursor = new Uint32Array(n);
   for (let i = 0; i < n; i++) cursor[i] = rowPtr[i]!;
   for (const [a, b, ew] of pairs) {
-    col[cursor[a]!] = b; w[cursor[a]!] = ew; cursor[a]!++;
-    col[cursor[b]!] = a; w[cursor[b]!] = ew; cursor[b]!++;
+    col[cursor[a]!] = b;
+    w[cursor[a]!] = ew;
+    cursor[a]!++;
+    col[cursor[b]!] = a;
+    w[cursor[b]!] = ew;
+    cursor[b]!++;
   }
   const deg = new Float64Array(n);
-  for (const [a, b, ew] of pairs) { deg[a]! += ew; deg[b]! += ew; }
+  for (const [a, b, ew] of pairs) {
+    deg[a]! += ew;
+    deg[b]! += ew;
+  }
   return { n, rowPtr, col, w, deg };
 };
 
@@ -110,8 +120,10 @@ export const extendChebyshevVectors = (csr: Csr, tk: Float64Array[], K: number):
   for (;;) {
     const step = nextBasisStep(tk.length, K);
     switch (step.$) {
-      case "Empty": throw new Error("Cannot extend an empty Chebyshev basis");
-      case "Complete": return tk;
+      case "Empty":
+        throw new Error("Cannot extend an empty Chebyshev basis");
+      case "Complete":
+        return tk;
       case "First":
         invSqrt ??= inverseDegrees(csr);
         tk[1] = applyNegP(csr, tk[0]!, invSqrt);

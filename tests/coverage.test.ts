@@ -5,7 +5,15 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { hasAstGrep } from "../src/core/astgrep.js";
 import { cachePathFor, discoverFiles } from "../src/core/build.js";
-import { coverageSummary, dwell, ensureState, evictState, focus, impact, sketch } from "../src/core/ops.js";
+import {
+  coverageSummary,
+  dwell,
+  ensureState,
+  evictState,
+  focus,
+  impact,
+  sketch,
+} from "../src/core/ops.js";
 import { resetSessions } from "../src/core/session.js";
 import { explainPathCoverage } from "../src/core/state.js";
 
@@ -114,10 +122,13 @@ describe.skipIf(!hasAstGrep())("incremental Git coverage", () => {
     const unavailable = await ensureState(root);
     expect(unavailable.files).toEqual([]);
     expect(unavailable.discovery).toMatchObject({
-      recording: "partial", unavailableFilesSeen: 1, unavailableFiles: ["a.ts"],
+      recording: "partial",
+      unavailableFilesSeen: 1,
+      unavailableFiles: ["a.ts"],
     });
-    expect(await explainPathCoverage(unavailable, ["a.ts"]))
-      .toMatchObject([{ path: "a.ts", status: "unavailable" }]);
+    expect(await explainPathCoverage(unavailable, ["a.ts"])).toMatchObject([
+      { path: "a.ts", status: "unavailable" },
+    ]);
   });
 });
 
@@ -125,7 +136,10 @@ describe.skipIf(!hasAstGrep())("reported state coverage", () => {
   it("classifies explicit indexed, skipped, unsupported, excluded, and absent paths", async () => {
     const root = temporaryRoot();
     writeFileSync(join(root, "a.ts"), "export function active() { return 1; }\n");
-    writeFileSync(join(root, "huge.ts"), `export const huge = "${"x".repeat(1024 * 1024 + 64)}";\n`);
+    writeFileSync(
+      join(root, "huge.ts"),
+      `export const huge = "${"x".repeat(1024 * 1024 + 64)}";\n`,
+    );
     writeFileSync(join(root, "vendor.min.ts"), "export const generated = 1;\n");
     writeFileSync(join(root, "notes.txt"), "plain text\n");
     mkdirSync(join(root, "node_modules"));
@@ -162,26 +176,34 @@ describe.skipIf(!hasAstGrep())("reported state coverage", () => {
 
     const miss = await impact(root, { files: ["notes.txt"], includeUncommitted: false });
     expect(miss.text).toContain("file type has no structural or protocol extractor");
-    expect(miss.details.requestedCoverage).toMatchObject([{ path: "notes.txt", status: "unsupported" }]);
+    expect(miss.details.requestedCoverage).toMatchObject([
+      { path: "notes.txt", status: "unsupported" },
+    ]);
   });
 
   it("expires rather than applying a focus vector after a graph generation changes", async () => {
     const root = temporaryRoot();
-    writeFileSync(join(root, "mod.ts"), [
-      "export function alpha() { return 1; }",
-      "export function beta() { return alpha(); }",
-      "",
-    ].join("\n"));
+    writeFileSync(
+      join(root, "mod.ts"),
+      [
+        "export function alpha() { return 1; }",
+        "export function beta() { return alpha(); }",
+        "",
+      ].join("\n"),
+    );
 
     const before = await ensureState(root);
     const focused = await focus(root, "alpha", 800);
     expect(focused.details.generation).toBe(before.generation);
 
-    writeFileSync(join(root, "mod.ts"), [
-      "export function renamedAlpha(value: number) { return value + 1; }",
-      "export function beta() { return renamedAlpha(1); }",
-      "",
-    ].join("\n"));
+    writeFileSync(
+      join(root, "mod.ts"),
+      [
+        "export function renamedAlpha(value: number) { return value + 1; }",
+        "export function beta() { return renamedAlpha(1); }",
+        "",
+      ].join("\n"),
+    );
     const after = await ensureState(root, { hints: ["mod.ts"], force: true });
     expect(after.generation).not.toBe(before.generation);
 

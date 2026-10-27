@@ -57,10 +57,17 @@ describe("progressive disclosure listing", () => {
     const root = makeUmbrella();
     try {
       expect(await listFiles(root)).toEqual(["plain/seen.ts", "top.ts"]);
-      expect(await listFiles(root, undefined, new Set(["repo"])))
-        .toEqual(["plain/seen.ts", "repo/inner.ts", "top.ts"]);
-      expect(await listFiles(root, undefined, new Set(["repo", "repo/deep"])))
-        .toEqual(["plain/seen.ts", "repo/deep/f.ts", "repo/inner.ts", "top.ts"]);
+      expect(await listFiles(root, undefined, new Set(["repo"]))).toEqual([
+        "plain/seen.ts",
+        "repo/inner.ts",
+        "top.ts",
+      ]);
+      expect(await listFiles(root, undefined, new Set(["repo", "repo/deep"]))).toEqual([
+        "plain/seen.ts",
+        "repo/deep/f.ts",
+        "repo/inner.ts",
+        "top.ts",
+      ]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -182,13 +189,18 @@ describe.skipIf(!hasAstGrep())("progressive disclosure refresh", () => {
     resetSessions();
     try {
       const initial = await ensureState(superRoot);
-      const baseline = await sync(superRoot, {
-        files: [],
-        budget: 512,
-        steerThreshold: 0.01,
-        scope: "session",
-        sessionId: "session-a",
-      }, initial, { probe: "full" });
+      const baseline = await sync(
+        superRoot,
+        {
+          files: [],
+          budget: 512,
+          steerThreshold: 0.01,
+          scope: "session",
+          sessionId: "session-a",
+        },
+        initial,
+        { probe: "full" },
+      );
       expect(baseline.details.baseline).toBe("established");
       observeSessionPaths(superRoot, ["top.ts"]);
 
@@ -229,11 +241,18 @@ describe.skipIf(!hasAstGrep())("progressive disclosure refresh", () => {
     resetSessions();
     try {
       const st = await ensureState(superRoot);
-      const base = await sync(superRoot, { files: [], budget: 512, steerThreshold: 0.01 }, st, { probe: "full" });
+      const base = await sync(superRoot, { files: [], budget: 512, steerThreshold: 0.01 }, st, {
+        probe: "full",
+      });
       expect(base.details.baseline).toBe("established");
 
       appendFileSync(join(superRoot, "sub", "a.ts"), "export const inner3 = 3;\n");
-      const outcome = await sync(superRoot, { files: [], budget: 512, steerThreshold: 0.01 }, undefined, { probe: "defer" });
+      const outcome = await sync(
+        superRoot,
+        { files: [], budget: 512, steerThreshold: 0.01 },
+        undefined,
+        { probe: "defer" },
+      );
       // No rebuild on the defer path: the TTL probe spots the collapsed
       // gitlink entry and defers the real work to turn_end.
       expect(outcome.structural).toBe(true);

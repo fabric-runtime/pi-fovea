@@ -22,11 +22,33 @@ bun run check:lean          # full Lean check; requires FOVEA_MATHLIB_ROOT
 bun run check:fast         # gdp proofs, Lean receipts, types, affected tests
 ```
 
+## Authored sources and generated artifacts
+
+The definitions in `proofs/*.ts`, adapters in `proofs/runtime/*.ts`, and proof-checking
+scripts are included in strict TypeScript checking. `proofs/types.ts` describes the
+mutually exclusive invariant, consequence, transition, fold, and loop proof modes;
+the checker still validates modes and support provenance at runtime. TypeScript
+checks implementation contracts; gdp-wired independently checks the mathematical
+claims. Neither check substitutes for the other.
+
+Development commands execute TypeScript through `tsx`. The source auditor parses
+TypeScript before importing the prover, follows local type imports for receipt
+hashing, and rejects dynamic/import-equals imports, effectful dependencies, and
+unproved foreign facts. Artifact-only checking does not load gdp-wired. It still
+uses the development toolchain; installed extension/CLI execution does not.
+
+`bun run format` and `bun run format:check` use pinned Prettier for authored code.
+Generated JavaScript is emitted without minification and formatted by the generator.
+Control, limb, and stream declarations are derived from typed adapters; the kernel
+ABI remains independently declared in `proofs/kernel-abi.json`. Formatter versions
+are bound into the artifact receipt. Never hand-edit generated files. Test fixture
+sources are excluded from formatting because their text and positions are test data.
+
 ## What executes
 
-`proofs/kernel.mjs`, `proofs/controls.mjs`, and `proofs/limbs.mjs` define
-symbolic functions. Independent specifications are in `proofs/laws.mjs` and
-`limbLaws` in `proofs/limbs.mjs`. The exact functions
+`proofs/kernel.ts`, `proofs/controls.ts`, and `proofs/limbs.ts` define
+symbolic functions. Independent specifications are in `proofs/laws.ts` and
+`limbLaws` in `proofs/limbs.ts`. The exact functions
 being proved are passed to gdp-wired's `compileJs`; no handwritten alternate
 implementation supplies the policy result. Every proof must be both `proven`
 and `checked`. The gate rejects unexpected assumptions and checks the complete
@@ -92,7 +114,7 @@ integration tests remain.
 
 ### Executed arithmetic streams, not a separate twin
 
-`proofs/streams.mjs` defines the machines that `compileJs` emits for production.
+`proofs/streams.ts` defines the machines that `compileJs` emits for production.
 The proof adds unbounded **ghost** accumulators for input/output values and
 positional powers. These are mathematical state only: no wide integer is stored
 in a JS number, and no runtime BigInt is introduced. A product-machine proof
@@ -128,7 +150,7 @@ over arbitrary finite prefixes, not merely the lengths exercised by tests.
 
 ### Constructive series: a checked route through finite arithmetic
 
-`proofs/series.mjs` does not introduce an `exp` axiom or assume convergence. It
+`proofs/series.ts` does not introduce an `exp` axiom or assume convergence. It
 represents rational approximations with unbounded natural numerators and
 denominators. With `d = n + gap`, `gap > 0`, its actual transition is:
 
@@ -165,7 +187,7 @@ series and the vector verifier now share `interval.ts`'s `geometricTail`: at the
 first tail term, `n=ratio`, `d=SCALE`, `gap=SCALE-ratio`, and `C=next` give exactly
 its rational bound before outward rounding.
 
-`scripts/prove-polynomial.mjs` is **untrusted search**, not a new kernel. It
+`scripts/prove-polynomial.ts` is **untrusted search**, not a new kernel. It
 constructs exhaustive natural-factor cuts and bounded products of existing
 inequalities, then uses gdp-wired's solver to construct proof trees. Every tree
 is replayed by the existing `gdp-wired/kernel.check`; there are no foreign facts,
@@ -176,7 +198,7 @@ premise escapes are refused. Search is capped by time, tree visits and products.
 
 ### Finite Poisson coefficients and normalized paths
 
-`proofs/operators.mjs` constructs complete Pascal rows, factorial witnesses and
+`proofs/operators.ts` constructs complete Pascal rows, factorial witnesses and
 parity bits over unbounded natural numbers. Its 19 invariants include, for every
 reachable row `n` and every `0 <= k <= n`:
 
@@ -192,7 +214,7 @@ and factorial witnesses are built inside the transition; no foreign factorial
 or binomial facts are assumed. The model stays proof-only: its unbounded values
 are not executed using JS Number in production.
 
-`proofs/operator-steps.mjs` adds two checked one-step laws. With the constructed
+`proofs/operator-steps.ts` adds two checked one-step laws. With the constructed
 parity `Q[j]`, define `C_n[k] = (-1)^Q[n-k] B[k]`, zero outside the row. The
 positive/negative pair satisfies exactly the coefficient shift-and-negate
 recurrence for multiplication by `P-I`. Together with the factorial invariant,
@@ -221,7 +243,7 @@ tree, corrupt certificates, broken coefficients/parity, and missing normalizatio
 
 ### Indexed signed transport and arbitrary rounds
 
-`proofs/transport.mjs` closes the gap between a single signed aggregate and a
+`proofs/transport.ts` closes the gap between a single signed aggregate and a
 finite indexed vector **in the exact model**. Two sparse buffers alternate as
 source and destination. A coordinate is stored canonically as `(p,n)` with
 `p=0` or `n=0`; opposite signs cancel at each destination update. Consequently,
@@ -258,7 +280,7 @@ checked below; neither model is yet a refinement proof of the production travers
 
 ### Ported focus and interval policies
 
-`proofs/focus.mjs` gives the transpose companion: row-stochastic gathers over two
+`proofs/focus.ts` gives the transpose companion: row-stochastic gathers over two
 sparse buffers with canonical signed coordinates. Seed inputs must fit a supplied
 natural bound `M`; any rational vector can choose its actual infinity norm after
 common scaling. The source buffer is immutable while rows are gathered. Each
@@ -274,7 +296,7 @@ completed round. A separate step law prevents claiming completion with skipped
 rows. BigInt tests compare repeated sparse matrix powers, test source-buffer
 immutability, and require rejection of removed weight/coverage guards.
 
-`proofs/enclosures.mjs` ports seven interval policies to natural arithmetic:
+`proofs/enclosures.ts` ports seven interval policies to natural arithmetic:
 quotient floor/ceiling bounds, addition, nonnegative multiplication,
 positive-denominator division, signed subtraction and the certificate endpoint
 error implication. Cross multiplication represents rational comparisons;
@@ -287,7 +309,7 @@ interval implementation or an IEEE codec.
 
 ### Exact raw-row normalization and the production adapter
 
-`proofs/normalization.mjs` starts from arbitrary raw natural weights rather than
+`proofs/normalization.ts` starts from arbitrary raw natural weights rather than
 assuming an already-normalized row. An immutable `Raw` map records the input;
 `Pending` is drained into `Output` only after the row is frozen. For any positive
 rescaling factor `F`, native finite-map invariants prove
@@ -388,7 +410,7 @@ model-specific tokenizer.
 
 ## Exact heat algebra
 
-`proofs/heat.mjs` expresses vector addition, scaling, normalized transport and
+`proofs/heat.ts` expresses vector addition, scaling, normalized transport and
 the singleton law as finite-tree folds and a pure function. Trees represent
 finite list decompositions, including zero-padding for unequal vectors. The
 fold proofs use induction, not a maximum vector length or a collection of

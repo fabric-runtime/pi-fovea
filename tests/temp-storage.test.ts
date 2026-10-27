@@ -1,8 +1,17 @@
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { cachePathFor, loadFacts, persistFacts, readEnrolledBoundaries } from "../src/core/build.js";
+import {
+  cachePathFor,
+  loadFacts,
+  persistFacts,
+  readEnrolledBoundaries,
+} from "../src/core/build.js";
 import { coChangeHistory } from "../src/core/cochange.js";
-import { attributeChanges, provenancePathFor, recordMutationTransition } from "../src/core/provenance.js";
+import {
+  attributeChanges,
+  provenancePathFor,
+  recordMutationTransition,
+} from "../src/core/provenance.js";
 import { revealGroups } from "../src/core/render.js";
 import { hasAstGrep, scanRules } from "../src/core/astgrep.js";
 import { projectFoveaConfigPath, saveFoveaConfig } from "../src/core/config.js";
@@ -11,11 +20,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  CACHE_FILE_MAX_BYTES, JOURNAL_TTL_MS, maintainTempStorage, pruneTempStorage, readTempText,
-  withScanRuleFile, writeAtomicTemp, writeSpill,
+  CACHE_FILE_MAX_BYTES,
+  JOURNAL_TTL_MS,
+  maintainTempStorage,
+  pruneTempStorage,
+  readTempText,
+  withScanRuleFile,
+  writeAtomicTemp,
+  writeSpill,
 } from "../src/core/temp-storage.js";
 
-vi.mock("node:fs/promises", async importOriginal => ({ ...await importOriginal<typeof import("node:fs/promises")>() }));
+vi.mock("node:fs/promises", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:fs/promises")>()),
+}));
 
 const HOUR = 3600_000;
 const cache = (n: number) => `pi-fovea-${n.toString(16).padStart(16, "0")}.json`;
@@ -42,7 +59,11 @@ const put = async (name: string, age = 2 * HOUR, text = "x"): Promise<string> =>
   await fs.utimes(path, new Date(now - age), new Date(now - age));
   return path;
 };
-const exists = async (path: string) => fs.lstat(path).then(() => true, () => false);
+const exists = async (path: string) =>
+  fs.lstat(path).then(
+    () => true,
+    () => false,
+  );
 
 describe("activity-driven temporary retention", () => {
   it("previews explicit maintenance without mutation, then rechecks on apply", async () => {
@@ -96,11 +117,21 @@ describe("activity-driven temporary retention", () => {
   });
 
   it("never pressure-evicts fresh journals, including fresh records with an old mtime", async () => {
-    const journal = (n: number) => `pi-fovea-provenance-${n.toString(16).padStart(16, "0")}-0123456789abcdef.json`;
-    const old = await put(journal(0), JOURNAL_TTL_MS + HOUR, JSON.stringify({ version: 1, records: [{ at: now - JOURNAL_TTL_MS - 1 }] }));
-    const live = await put(journal(1), JOURNAL_TTL_MS + HOUR, JSON.stringify({ version: 1, records: [{ at: now }] }));
+    const journal = (n: number) =>
+      `pi-fovea-provenance-${n.toString(16).padStart(16, "0")}-0123456789abcdef.json`;
+    const old = await put(
+      journal(0),
+      JOURNAL_TTL_MS + HOUR,
+      JSON.stringify({ version: 1, records: [{ at: now - JOURNAL_TTL_MS - 1 }] }),
+    );
+    const live = await put(
+      journal(1),
+      JOURNAL_TTL_MS + HOUR,
+      JSON.stringify({ version: 1, records: [{ at: now }] }),
+    );
     const malformed = await put(journal(2), JOURNAL_TTL_MS + HOUR, "broken");
-    for (let i = 3; i < 135; i++) await put(journal(i), 0, JSON.stringify({ version: 1, records: [{ at: now }] }));
+    for (let i = 3; i < 135; i++)
+      await put(journal(i), 0, JSON.stringify({ version: 1, records: [{ at: now }] }));
     await maintainTempStorage(directory, now);
     expect(await exists(old)).toBe(false);
     expect(await exists(live)).toBe(true);
@@ -120,12 +151,15 @@ describe("activity-driven temporary retention", () => {
     await fs.link(unknown, hardlink);
     const ownedElsewhere = await put(cache(4), 9 * 24 * HOUR);
     const uid = process.getuid!();
-    vi.spyOn(process as NodeJS.Process & { getuid: () => number }, "getuid").mockReturnValue(uid + 1);
+    vi.spyOn(process as NodeJS.Process & { getuid: () => number }, "getuid").mockReturnValue(
+      uid + 1,
+    );
     await maintainTempStorage(directory, now);
     expect(await exists(ownedElsewhere)).toBe(true);
     vi.restoreAllMocks();
     await maintainTempStorage(directory, now + 6 * 60_000);
-    for (const path of [unknown, otherRepo, dir, symlink, hardlink]) expect(await exists(path)).toBe(true);
+    for (const path of [unknown, otherRepo, dir, symlink, hardlink])
+      expect(await exists(path)).toBe(true);
     expect(await exists(ownedElsewhere)).toBe(false);
     await expect(readTempText(symlink)).rejects.toThrow();
     await expect(writeAtomicTemp(symlink, "bad")).rejects.toThrow();
@@ -165,7 +199,8 @@ describe("activity-driven temporary retention", () => {
     await maintainTempStorage(directory, now);
     expect(await exists(deadPartial)).toBe(false);
     expect(await exists(deadScan)).toBe(false);
-    for (const path of [livePartial, liveScan, recent, unknown, legacy]) expect(await exists(path)).toBe(true);
+    for (const path of [livePartial, liveScan, recent, unknown, legacy])
+      expect(await exists(path)).toBe(true);
     expect(probe).toHaveBeenCalled();
   });
 
@@ -202,13 +237,20 @@ describe("runtime storage integration", () => {
     for (let i = 0; i < 65; i++) {
       const file = `file${i}.ts`;
       store.meta.set(file, { size: 1, mtime: 0 });
-      store.facts.set(file, { sha1: "hash", symbols: [], imports: [{ file, spec: largeSpec, line: 1 }], calls: [], literals: [], anchors: [] });
+      store.facts.set(file, {
+        sha1: "hash",
+        symbols: [],
+        imports: [{ file, spec: largeSpec, line: 1 }],
+        calls: [],
+        literals: [],
+        anchors: [],
+      });
     }
     await persistFacts(store);
     expect(store.facts.size).toBe(65);
     expect(store.savedAt).toBe(savedAt);
     expect(await fs.readFile(cachePathFor(root), "utf8")).toBe(previous);
-    expect((await fs.readdir(directory)).some(name => name.includes(".tmp-"))).toBe(false);
+    expect((await fs.readdir(directory)).some((name) => name.includes(".tmp-"))).toBe(false);
     // An oversized legacy cache is a miss, not partial extraction or a build failure.
     await fs.truncate(cachePathFor(root), CACHE_FILE_MAX_BYTES + 1);
     expect(await readEnrolledBoundaries(root)).toEqual([]);
@@ -228,65 +270,127 @@ describe("runtime storage integration", () => {
       git("add", ".");
       const message = join(root, ".git", "test-message");
       await fs.writeFile(message, `step ${i}\n`);
-      git("-c", "user.name=test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "-q", "-F", message);
+      git(
+        "-c",
+        "user.name=test",
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-q",
+        "-F",
+        message,
+      );
     }
-    const path = join(directory, `pi-fovea-cochange-${createHash("sha1").update(root).digest("hex").slice(0, 16)}.json`);
+    const path = join(
+      directory,
+      `pi-fovea-cochange-${createHash("sha1").update(root).digest("hex").slice(0, 16)}.json`,
+    );
     const renames = vi.spyOn(fs, "rename");
     const expected = await coChangeHistory(root, ["a.ts", "b.ts"]);
     expect(expected.get("a.ts")?.length).toBeGreaterThan(0);
-    expect(renames.mock.calls.some(([source, target]) => String(source).startsWith(`${path}.tmp-`) && target === path)).toBe(true);
+    expect(
+      renames.mock.calls.some(
+        ([source, target]) => String(source).startsWith(`${path}.tmp-`) && target === path,
+      ),
+    ).toBe(true);
     expect(await coChangeHistory(root, ["a.ts", "b.ts"])).toEqual(expected);
     await fs.unlink(path);
     renames.mockRejectedValueOnce(new Error("disk failure"));
     expect(await coChangeHistory(root, ["a.ts", "b.ts"])).toEqual(expected);
-    expect((await fs.readdir(directory)).some(name => name.includes(".tmp-"))).toBe(false);
+    expect((await fs.readdir(directory)).some((name) => name.includes(".tmp-"))).toBe(false);
   });
 
   it("journal activity cleans expired other roots but preserves fresh attribution and cleans failed staging", async () => {
     const other = provenancePathFor("/other-root", "other-session");
-    await fs.writeFile(other, JSON.stringify({ version: 1, records: [{ at: now - JOURNAL_TTL_MS - 1 }] }));
-    await fs.utimes(other, new Date(now - JOURNAL_TTL_MS - HOUR), new Date(now - JOURNAL_TTL_MS - HOUR));
+    await fs.writeFile(
+      other,
+      JSON.stringify({ version: 1, records: [{ at: now - JOURNAL_TTL_MS - 1 }] }),
+    );
+    await fs.utimes(
+      other,
+      new Date(now - JOURNAL_TTL_MS - HOUR),
+      new Date(now - JOURNAL_TTL_MS - HOUR),
+    );
     await recordMutationTransition(directory, "a.ts", "a", "b", "session", "call");
     await maintainTempStorage();
     expect(await exists(other)).toBe(false);
-    expect((await attributeChanges(directory, "session", 0, [{ file: "a.ts", beforeSha: "a", afterSha: "b" }])).kind).toBe("current-session");
+    expect(
+      (
+        await attributeChanges(directory, "session", 0, [
+          { file: "a.ts", beforeSha: "a", afterSha: "b" },
+        ])
+      ).kind,
+    ).toBe("current-session");
     const path = provenancePathFor(directory, "session");
     const before = await fs.readFile(path, "utf8");
     vi.spyOn(fs, "rename").mockRejectedValueOnce(new Error("rename failure"));
-    await expect(recordMutationTransition(directory, "a.ts", "b", "c", "session", "next")).rejects.toThrow();
+    await expect(
+      recordMutationTransition(directory, "a.ts", "b", "c", "session", "next"),
+    ).rejects.toThrow();
     expect(await fs.readFile(path, "utf8")).toBe(before);
-    expect((await fs.readdir(directory)).some(name => name.includes(".tmp-"))).toBe(false);
+    expect((await fs.readdir(directory)).some((name) => name.includes(".tmp-"))).toBe(false);
   });
 
   it("render spills trigger retention and omit the pointer when the per-file cap rejects output", async () => {
     const expired = await put(spill(999), 25 * HOUR);
     const path = join(directory, spill(0));
-    const groups = Array.from({ length: 100 }, (_, n) => ({ label: "test", mass: n, detail: `item ${n} ${"x".repeat(100)}` }));
+    const groups = Array.from({ length: 100 }, (_, n) => ({
+      label: "test",
+      mass: n,
+      detail: `item ${n} ${"x".repeat(100)}`,
+    }));
     const fit = revealGroups(groups, { header: "test", budget: 256, overflowTo: path });
     expect(fit.overflowPath).toBe(path);
     expect(await fs.readFile(path, "utf8")).toContain("item 99");
     await maintainTempStorage();
     expect(await exists(expired)).toBe(false);
-    const tooBig = revealGroups([{ label: "test", mass: 1, detail: "x".repeat(8 * 1024 * 1024) }], { header: "test", budget: 256, overflowTo: path });
+    const tooBig = revealGroups([{ label: "test", mass: 1, detail: "x".repeat(8 * 1024 * 1024) }], {
+      header: "test",
+      budget: 256,
+      overflowTo: path,
+    });
     expect(tooBig.overflowPath).toBeUndefined();
     expect(tooBig.text).not.toContain("saved to");
     expect(tooBig.tokens).toBeLessThanOrEqual(256);
   });
 
-  it.skipIf(!hasAstGrep())("real concurrent ast-grep scans leave no rule artifacts on success or failure", async () => {
-    await fs.writeFile(join(directory, "a.ts"), "console.log(42);\n");
-    const rules = [{ id: "log", language: "TypeScript", pattern: "console.log($A)" }];
-    const results = await Promise.all([scanRules(rules, ["a.ts"], directory), scanRules(rules, ["a.ts"], directory)]);
-    expect(results.map(matches => matches?.length)).toEqual([1, 1]);
-    expect(await scanRules([{ id: "invalid", language: "no-such-language", pattern: "x" }], ["a.ts"], directory)).toBeUndefined();
-    expect((await fs.readdir(directory)).filter(name => name.startsWith("pi-fovea-scan-"))).toEqual([]);
-  });
+  it.skipIf(!hasAstGrep())(
+    "real concurrent ast-grep scans leave no rule artifacts on success or failure",
+    async () => {
+      await fs.writeFile(join(directory, "a.ts"), "console.log(42);\n");
+      const rules = [{ id: "log", language: "TypeScript", pattern: "console.log($A)" }];
+      const results = await Promise.all([
+        scanRules(rules, ["a.ts"], directory),
+        scanRules(rules, ["a.ts"], directory),
+      ]);
+      expect(results.map((matches) => matches?.length)).toEqual([1, 1]);
+      expect(
+        await scanRules(
+          [{ id: "invalid", language: "no-such-language", pattern: "x" }],
+          ["a.ts"],
+          directory,
+        ),
+      ).toBeUndefined();
+      expect(
+        (await fs.readdir(directory)).filter((name) => name.startsWith("pi-fovea-scan-")),
+      ).toEqual([]);
+    },
+  );
 
   it("adjacent config staging is removed after a failed replacement", async () => {
     const target = projectFoveaConfigPath(directory);
     await fs.mkdir(target, { recursive: true }); // forces rename-to-directory failure
-    expect(() => saveFoveaConfig({ cwd: directory, agentDir: directory, projectTrusted: true }, { tools: { defaultBudget: 1024 } })).toThrow();
-    expect((await fs.readdir(join(target, ".."))).some(name => name.includes(".tmp-"))).toBe(false);
+    expect(() =>
+      saveFoveaConfig(
+        { cwd: directory, agentDir: directory, projectTrusted: true },
+        { tools: { defaultBudget: 1024 } },
+      ),
+    ).toThrow();
+    expect((await fs.readdir(join(target, ".."))).some((name) => name.includes(".tmp-"))).toBe(
+      false,
+    );
     expect((await fs.stat(target)).isDirectory()).toBe(true);
   });
 });
@@ -296,27 +400,42 @@ describe("atomic storage and scan ownership", () => {
     const descriptor = Object.getOwnPropertyDescriptor(process, "getuid")!;
     Object.defineProperty(process, "getuid", { ...descriptor, value: undefined });
     try {
-      await withScanRuleFile("rules", async path => { expect(await fs.readFile(path, "utf8")).toBe("rules"); });
-      await expect(withScanRuleFile("rules", async () => { throw new Error("scan failed"); })).rejects.toThrow("scan failed");
+      await withScanRuleFile("rules", async (path) => {
+        expect(await fs.readFile(path, "utf8")).toBe("rules");
+      });
+      await expect(
+        withScanRuleFile("rules", async () => {
+          throw new Error("scan failed");
+        }),
+      ).rejects.toThrow("scan failed");
       const originalOpen = fs.open;
       vi.spyOn(fs, "open").mockImplementationOnce(async (...args) => {
         const handle = await originalOpen(...args);
-        vi.spyOn(handle, "writeFile").mockImplementationOnce(async () => { await handle.write("partial"); throw new Error("disk full"); });
+        vi.spyOn(handle, "writeFile").mockImplementationOnce(async () => {
+          await handle.write("partial");
+          throw new Error("disk full");
+        });
         return handle;
       });
       await expect(withScanRuleFile("rules", async () => {})).rejects.toThrow("disk full");
       expect(await fs.readdir(directory)).toEqual([]);
-    } finally { Object.defineProperty(process, "getuid", descriptor); }
+    } finally {
+      Object.defineProperty(process, "getuid", descriptor);
+    }
   });
 
   it("does not accumulate persistent files without UID ownership verification", async () => {
     const descriptor = Object.getOwnPropertyDescriptor(process, "getuid")!;
     Object.defineProperty(process, "getuid", { ...descriptor, value: undefined });
     try {
-      await expect(writeAtomicTemp(join(directory, cache(0)), "facts")).rejects.toThrow("ownership");
+      await expect(writeAtomicTemp(join(directory, cache(0)), "facts")).rejects.toThrow(
+        "ownership",
+      );
       expect(() => writeSpill(join(directory, spill(0)), "spill")).toThrow("ownership");
       expect(await fs.readdir(directory)).toEqual([]);
-    } finally { Object.defineProperty(process, "getuid", descriptor); }
+    } finally {
+      Object.defineProperty(process, "getuid", descriptor);
+    }
   });
 
   it("bounds descriptor reads when a file is growing after validation", async () => {
@@ -342,11 +461,17 @@ describe("atomic storage and scan ownership", () => {
   });
   it("bounds streamed writes, cleans failed partials, and preserves the previous cache", async () => {
     const path = await put(cache(0), 0, "previous");
-    async function* oversized() { yield "123"; yield "456"; }
+    async function* oversized() {
+      yield "123";
+      yield "456";
+    }
     await expect(writeAtomicTemp(path, oversized(), 5)).rejects.toThrow("size limit");
     expect(await fs.readFile(path, "utf8")).toBe("previous");
     expect(await fs.readdir(directory)).toEqual([cache(0)]);
-    async function* broken() { yield "123"; throw new Error("writer failed"); }
+    async function* broken() {
+      yield "123";
+      throw new Error("writer failed");
+    }
     await expect(writeAtomicTemp(path, broken())).rejects.toThrow("writer failed");
     expect(await fs.readdir(directory)).toEqual([cache(0)]);
     await writeAtomicTemp(path, "complete");
@@ -362,7 +487,9 @@ describe("atomic storage and scan ownership", () => {
     await fs.writeFile(path, "");
     await fs.truncate(path, CACHE_FILE_MAX_BYTES + 1);
     await expect(readTempText(path)).rejects.toThrow("oversized");
-    expect(() => writeSpill(join(directory, spill(0)), "x".repeat(8 * 1024 * 1024 + 1))).toThrow("size limit");
+    expect(() => writeSpill(join(directory, spill(0)), "x".repeat(8 * 1024 * 1024 + 1))).toThrow(
+      "size limit",
+    );
     expect(await exists(join(directory, spill(0)))).toBe(false);
   });
 
@@ -380,15 +507,20 @@ describe("atomic storage and scan ownership", () => {
   it("keeps concurrent scan rules through use and always cleans success/failure", async () => {
     const paths: string[] = [];
     let release!: () => void;
-    const gate = new Promise<void>(resolve => { release = resolve; });
-    let entered!: () => void;
-    const ready = new Promise<void>(resolve => { entered = resolve; });
-    const scan = (text: string) => withScanRuleFile(text, async path => {
-      paths.push(path);
-      if (paths.length === 2) entered();
-      await gate;
-      expect(await fs.readFile(path, "utf8")).toBe(text);
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
     });
+    let entered!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const scan = (text: string) =>
+      withScanRuleFile(text, async (path) => {
+        paths.push(path);
+        if (paths.length === 2) entered();
+        await gate;
+        expect(await fs.readFile(path, "utf8")).toBe(text);
+      });
     const first = scan("one");
     const second = scan("two");
     await ready;
@@ -398,7 +530,11 @@ describe("atomic storage and scan ownership", () => {
     release();
     await Promise.all([first, second]);
     for (const path of paths) expect(await exists(path)).toBe(false);
-    await expect(withScanRuleFile("three", async () => { throw new Error("scan failed"); })).rejects.toThrow("scan failed");
+    await expect(
+      withScanRuleFile("three", async () => {
+        throw new Error("scan failed");
+      }),
+    ).rejects.toThrow("scan failed");
     expect(await fs.readdir(directory)).toEqual([]);
   });
 });
