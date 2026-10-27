@@ -40,6 +40,19 @@ export function numericWorkStep(
   amount: number,
   limit: number,
 ): { used: number; admit: boolean } {
+  if (
+    !Number.isSafeInteger(used) ||
+    used < 0 ||
+    used > 1000000 ||
+    !Number.isSafeInteger(amount) ||
+    amount < 0 ||
+    amount > 2000000 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 0 ||
+    limit > 1000000 ||
+    used > limit
+  )
+    throw new RangeError("Invalid numeric work inputs");
   const s = run(work, { used, amount, limit });
   return { used: s["out.used"], admit: !!s["out.admit"] };
 }

@@ -429,6 +429,19 @@ function validDivisionCell(previous, digit, divisor, quotient, remainder) {
   return !!run(divisionCell, { previous, digit, divisor, quotient, remainder })["out.valid"];
 }
 function numericWorkStep(used, amount, limit) {
+  if (
+    !Number.isSafeInteger(used) ||
+    used < 0 ||
+    used > 1e6 ||
+    !Number.isSafeInteger(amount) ||
+    amount < 0 ||
+    amount > 2e6 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 0 ||
+    limit > 1e6 ||
+    used > limit
+  )
+    throw new RangeError("Invalid numeric work inputs");
   const s = run(work, { used, amount, limit });
   return { used: s["out.used"], admit: !!s["out.admit"] };
 }

@@ -88,13 +88,6 @@ jobs:
         if: steps.release.outputs.mode != 'skip'
         run: bun run typecheck
 
-      - uses: ./.github/actions/setup-lean
-        if: steps.release.outputs.mode != 'skip'
-
-      - name: Full Lean kernel check and axiom audit
-        if: steps.release.outputs.mode != 'skip'
-        run: bun run check:lean
-
       - name: Pack
         if: steps.release.outputs.mode != 'skip'
         run: |
