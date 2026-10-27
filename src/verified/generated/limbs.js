@@ -333,6 +333,86 @@ var work = /* @__PURE__ */ (() => {
   }
   return { init, step };
 })();
+var sparseEdge = /* @__PURE__ */ (() => {
+  function $n(v, what) {
+    if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0)
+      throw new RangeError(what + " must be a natural below 2^53, not " + v);
+    return v;
+  }
+  function $x(v) {
+    if (v > 9007199254740991)
+      throw new RangeError(
+        "a value passed 2^53 - 1, past which the proofs over the naturals no longer describe the run",
+      );
+    return v;
+  }
+  function init(params) {
+    const env = {},
+      s = {};
+    return {
+      scalars: { "out.admit": 0, "out.next": 0, "out.origin": 0, "out.destination": 0 },
+      maps: {},
+    };
+  }
+  function fork(state) {
+    return {
+      scalars: { ...state.scalars },
+      maps: Object.fromEntries(
+        Object.entries(state.maps).map(([name, cells]) => [name, new Map(cells)]),
+      ),
+      ...(state.defaults ? { defaults: { ...state.defaults } } : {}),
+    };
+  }
+  function step(params, state, input) {
+    const env = {
+        row: $n(input["row"], "input row"),
+        nodes: $n(input["nodes"], "input nodes"),
+        at: $n(input["at"], "input at"),
+        end: $n(input["end"], "input end"),
+        total: $n(input["total"], "input total"),
+        to: $n(input["to"], "input to"),
+        forward: $n(input["forward"], "input forward"),
+      },
+      s = state.scalars,
+      dft = { ...state.defaults },
+      maps = state.maps;
+    if (!(
+      env["row"] <= 4294967295 &&
+      env["nodes"] <= 4294967295 &&
+      env["at"] <= 4294967295 &&
+      env["end"] <= 4294967295 &&
+      env["total"] <= 4294967295 &&
+      env["to"] <= 4294967295 &&
+      env["forward"] <= 1
+    ))
+      throw new RangeError(
+        "sparseEdge: the request fails the rule's assumption, so no proof covers the step it would take",
+      );
+    const scalars = {
+      ...s,
+      "out.admit":
+        env["row"] < env["nodes"] &&
+        env["to"] < env["nodes"] &&
+        env["at"] < env["end"] &&
+        env["end"] <= env["total"]
+          ? 1
+          : 0,
+      "out.next":
+        env["row"] < env["nodes"] &&
+        env["to"] < env["nodes"] &&
+        env["at"] < env["end"] &&
+        env["end"] <= env["total"]
+          ? $x(env["at"] + 1)
+          : env["at"],
+      "out.origin": env["forward"] === 1 ? env["row"] : env["to"],
+      "out.destination": env["forward"] === 1 ? env["to"] : env["row"],
+    };
+    return Object.keys(dft).length
+      ? { scalars, maps: state.maps, defaults: dft }
+      : { scalars, maps: state.maps };
+  }
+  return { init, step };
+})();
 var run = (m, input) => m.step({}, m.init({}), input).scalars;
 function addCell(a, b, carry) {
   const s = run(addWord, { a, b, carry });
@@ -352,6 +432,15 @@ function numericWorkStep(used, amount, limit) {
   const s = run(work, { used, amount, limit });
   return { used: s["out.used"], admit: !!s["out.admit"] };
 }
+function sparseEdgeStep(row, nodes, at, end, total, to, forward) {
+  const s = run(sparseEdge, { row, nodes, at, end, total, to, forward: +forward });
+  return {
+    admit: !!s["out.admit"],
+    next: s["out.next"],
+    origin: s["out.origin"],
+    destination: s["out.destination"],
+  };
+}
 function roundingIncrement(mode, guard, sticky, odd) {
   return run(rounding, { mode, guard: +guard, sticky: +sticky, odd: +odd })["out.increment"];
 }
@@ -360,6 +449,7 @@ export {
   numericWorkStep,
   productCell,
   roundingIncrement,
+  sparseEdgeStep,
   subtractCell,
   validDivisionCell,
 };

@@ -17,6 +17,10 @@ import { streams, streamLawNames } from "../proofs/streams.ts";
 import { checkStreams } from "./check-streams.ts";
 import { seriesLawNames } from "../proofs/series.ts";
 import { checkSeries } from "./check-series.ts";
+import { completionLawNames } from "../proofs/completion.ts";
+import { checkCompletion } from "./check-completion.ts";
+import { operatorIdentityLawNames } from "../proofs/operator-identity.ts";
+import { checkOperatorIdentity } from "./check-operator-identity.ts";
 import { operatorLawNames } from "../proofs/operator-steps.ts";
 import { checkOperators } from "./check-operators.ts";
 import { transportLawNames } from "../proofs/transport.ts";
@@ -49,6 +53,8 @@ export function checkLaws(root: string) {
     errorLaw.name,
     ...streamLawNames,
     ...seriesLawNames,
+    ...completionLawNames,
+    ...operatorIdentityLawNames,
     ...operatorLawNames,
     ...transportLawNames,
     ...focusLawNames,
@@ -71,11 +77,13 @@ export function checkLaws(root: string) {
     1 +
     checkStreams() +
     checkSeries() +
+    checkCompletion() +
     checkOperators() +
     checkTransport() +
     checkFocus() +
     checkEnclosures() +
-    checkNormalization()
+    checkNormalization() +
+    checkOperatorIdentity()
   );
 }
 const machineSource = (name: string, fn: { rule: { machine: Machine } }) => {

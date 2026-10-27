@@ -9,6 +9,7 @@ export interface PolynomialOptions {
   rows?: number;
   closureRounds?: number;
   degreeLift?: number;
+  linearProducts?: boolean;
   cuts?: Lin[];
 }
 

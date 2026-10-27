@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   obligations,
+  assumed,
   loopObligations,
   foldObligations,
   stepLawObligations,
@@ -59,7 +60,9 @@ function goalsFor(proof: ProofGroup, basis: MachineProof | undefined, available:
       name: law.name,
       hyps: [
         ...(basis.machine.pre ? [basis.machine.pre] : []),
-        ...supportFor(proof, law, available).map((support) => support.holds),
+        // Quantified invariants must be instantiated at this goal's keys,
+        // never reused as formulas with unrelated free witness names.
+        ...assumed(supportFor(proof, law, available), proof.instances?.(law) ?? {}),
         ...(proof.inputs && basis.machine.assume ? [basis.machine.assume] : []),
         { op: "not", x: law.holds },
       ],

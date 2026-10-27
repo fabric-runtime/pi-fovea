@@ -25,6 +25,20 @@ export async function certifyDiffusion(
   return certifyHeat(csr, input, time, { ...settings, mode: "forward", candidate: value });
 }
 
+/** Direct u32-interval heat solve. Float64 is used only at the public boundary. */
+export async function solveDiffusion(
+  graph: Graph,
+  source: Float64Array,
+  time: number,
+  options: Pick<HeatCertificateOptions, "absoluteTolerance" | "maxWork"> = {},
+): Promise<HeatCertificate> {
+  validateMassGraph(graph, source);
+  const input = Float64Array.from(source),
+    csr = buildCsr(graph);
+  const { solveHeat } = await import("./core/heat-certificate.js");
+  return solveHeat(csr, input, time, { ...options, mode: "forward" });
+}
+
 export const SUBSTRATE_VERSION = 1 as const;
 export type SnapshotFacts = Pick<
   FileFacts,
@@ -58,20 +72,9 @@ export async function assembleFactGraph(facts: ReadonlyMap<string, SnapshotFacts
   return (await assembleGraphWithIndex("", files, new Map(facts))).graph;
 }
 
-/** Column-mass heat D^(1/2) exp(-t Lsym) D^(-1/2) q, sharing one Chebyshev basis.
- * Times are analysis scales, not wall-clock ages. Isolates retain their source mass.
- * Results are exposure, not calibrated risk. Callers may project/reweight the graph.
- */
-export function diffuseMass(
-  graph: Graph,
-  source: Float64Array,
-  times: readonly number[],
-): Array<{ time: number; mass: Float64Array }> {
-  if (source.length !== graph.nodes.length || source.some((v) => !Number.isFinite(v) || v < 0)) {
+function validateMassGraph(graph: Graph, source: Float64Array): void {
+  if (source.length !== graph.nodes.length || source.some((v) => !Number.isFinite(v) || v < 0))
     throw new Error("Mass must be finite, nonnegative, and match the graph");
-  }
-  if (times.some((t) => !Number.isFinite(t) || t < 0 || t > 64))
-    throw new Error("Diffusion scales must lie in [0, 64]");
   if (
     graph.edges.some(
       (e) =>
@@ -86,6 +89,21 @@ export function diffuseMass(
     )
   )
     throw new Error("Invalid conductance edge");
+}
+
+/** Column-mass heat D^(1/2) exp(-t Lsym) D^(-1/2) q, sharing one Chebyshev basis.
+ * Times are analysis scales, not wall-clock ages. Isolates retain their source mass.
+ * Results are exposure, not calibrated risk. Callers may project/reweight the graph.
+ */
+export function diffuseMass(
+  graph: Graph,
+  source: Float64Array,
+  times: readonly number[],
+): Array<{ time: number; mass: Float64Array }> {
+  validateMassGraph(graph, source);
+  if (times.some((t) => !Number.isFinite(t) || t < 0 || t > 64))
+    throw new Error("Diffusion scales must lie in [0, 64]");
+
   if (!times.length) return [];
   const csr = buildCsr(graph);
   const seed = Float64Array.from(source, (mass, i) =>

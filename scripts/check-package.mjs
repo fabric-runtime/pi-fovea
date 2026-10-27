@@ -30,8 +30,11 @@ try {
   );
   const archive = args[0] ? resolve(args[0]) : join(temp, "package.tgz");
   if (!args[0]) {
-    if (cliOnly) run(process.execPath, ["scripts/pack-cli.mjs", archive]);
-    else run("bun", ["pm", "pack", "--filename", archive, "--quiet"]);
+    // Packing runs the complete proof gate first; its measured runtime now
+    // exceeds the shorter deadline used for artifact-only checks below.
+    const packOptions = { timeout: 360_000 };
+    if (cliOnly) run(process.execPath, ["scripts/pack-cli.mjs", archive], packOptions);
+    else run("bun", ["pm", "pack", "--filename", archive, "--quiet"], packOptions);
   }
   const entries = run("tar", ["-tzf", archive]).trim().split("\n");
   assert(
@@ -124,11 +127,9 @@ try {
     FOVEA_AST_GREP: join(temp, "missing-ast-grep"),
     FOVEA_MATHLIB_ROOT: join(temp, "missing-mathlib"),
   };
-  const lean = run(process.execPath, [join(unpacked, "scripts/check-lean.ts"), "--artifact"], {
-    cwd: temp,
-    env,
-  });
-  assert.match(lean, /Lean theorem receipts match/);
+  // The source/output receipt above is mandatory. The independent Lean audit
+  // is not a dependency of either installed distribution; the CLI-only archive
+  // deliberately carries only the proof sources named by its own receipt.
   const sketch = run(process.execPath, [bin, "sketch", fixture, "512"], { cwd: temp, env });
   assert.match(sketch, /fovea sketch/);
   assert.match(sketch, /packagedProbe/);

@@ -31,6 +31,20 @@ export declare function numericWorkStep(
   used: number;
   admit: boolean;
 };
+export declare function sparseEdgeStep(
+  row: number,
+  nodes: number,
+  at: number,
+  end: number,
+  total: number,
+  to: number,
+  forward: boolean,
+): {
+  admit: boolean;
+  next: number;
+  origin: number;
+  destination: number;
+};
 export declare function roundingIncrement(
   mode: number,
   guard: boolean,

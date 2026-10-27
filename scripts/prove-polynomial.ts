@@ -20,7 +20,10 @@ import type { Goal, Path, Tree } from "gdp-wired/kernel";
 import type { PolynomialOptions } from "../proofs/types.ts";
 
 type Limits = Required<
-  Pick<PolynomialOptions, "nodes" | "products" | "rows" | "closureRounds" | "degreeLift">
+  Pick<
+    PolynomialOptions,
+    "nodes" | "products" | "rows" | "closureRounds" | "degreeLift" | "linearProducts"
+  >
 >;
 interface TraceEvent {
   phase: "limit" | "leaf" | "split";
@@ -119,6 +122,20 @@ function productLeaf(
       }
     }
   }
+  // Optional products of linear inequalities close positive-factor cancellation
+  // goals that monomial lifting alone cannot refute. This is untrusted search:
+  // withProducts records each pair and the existing kernel rechecks it.
+  if (limits.linearProducts) {
+    const linear = rows.flatMap((row, index) =>
+      Object.keys(row.lin).every((key) => factors(key).length <= 1) ? [index] : [],
+    );
+    for (let i = 0; i < linear.length; i++) {
+      for (let j = i + 1; j < linear.length; j++) {
+        pairs.push([linear[i]!, linear[j]!]);
+        if (pairs.length > limits.products || performance.now() > until) return;
+      }
+    }
+  }
   const result = solve(withProducts(rows, pairs), limits.rows);
   trace?.push({
     phase: "leaf",
@@ -141,6 +158,7 @@ export function provePolynomial(
     rows: options.rows ?? 2000,
     closureRounds: options.closureRounds ?? 0,
     degreeLift: options.degreeLift ?? 0,
+    linearProducts: options.linearProducts ?? false,
   };
   if (!Number.isInteger(limits.degreeLift) || limits.degreeLift < 0 || limits.degreeLift > 2)
     throw new Error("Polynomial degree lift must be 0, 1 or 2");

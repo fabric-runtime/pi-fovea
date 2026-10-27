@@ -2,8 +2,10 @@
 
 Fovea uses **gdp-wired 0.30.1**, an exact-pinned development dependency.
 There is no Bend compiler dependency. Bend-language extraction remains supported.
-An independent development checks numerical models with Lean 4.19.0 and pinned
-mathlib. These model proofs do not imply that the TypeScript implements them.
+An optional independent development checks stronger abstract numerical models
+with Lean 4.19.0 and pinned mathlib. Neither development, packaging nor the
+required CI gate needs Lean. Neither model development proves that the complete
+Float64/CSR implementation refines its mathematical model.
 
 ```sh
 bun run check:proofs       # all required laws checked, then byte-for-byte generation
@@ -11,6 +13,9 @@ bun run proofs:generate   # deliberate regeneration after proofs pass
 bun run proofs:artifact   # source/bridge/output receipts, without loading the prover
 bun run check:streams       # 98 arithmetic stream claims; no Lean needed
 bun run check:series        # 23 constructive-series claims; no Lean needed
+bun run check:completion    # 19 rational completion certificates; no Lean needed
+bun run check:residual      # finite binomial coefficient/evaluation claims
+bun run check:operator-identity # 114 composed finite-rational operator claims
 bun run check:operators     # 24 coefficient/path claims; no Lean needed
 bun run check:transport     # 14 indexed-transport claims; no Lean needed
 bun run check:focus         # 19 indexed focus/row-gather claims; no Lean needed
@@ -19,7 +24,7 @@ bun run check:normalization # 17 raw-row and rescaling claims; no Lean needed
 bun run check:ports         # scoped inventory of all 28 retained Lean claims
 bun run check:lean:artifact # model receipt freshness; no Lean loaded
 bun run check:lean          # full Lean check; requires FOVEA_MATHLIB_ROOT
-bun run check:fast         # gdp proofs, Lean receipts, types, affected tests
+bun run check:fast         # gdp proofs, generated receipts, types, affected tests
 ```
 
 ## Authored sources and generated artifacts
@@ -77,35 +82,39 @@ Checking never rewrites; explicit generation writes only after proofs and code
 generation succeed. CLI packaging verifies these same source/output receipts.
 Neither the installed extension nor the bundled CLI needs gdp-wired or a compiler.
 
-## Coverage ledger: 265 checked claims
+## Coverage ledger: 405 checked claims
 
-| Family | Laws | Production connection |
-|---|---:|---|
-| Disclosure | 6 | Executed generated decisions in both focus/dwell rendering paths. |
-| Prefix accounting | 5 | Executed shown/remaining counts in both renderers. |
-| Basis commands | 4 | Executed commands control Chebyshev vector extension. |
-| Semaphore | 7 | Executed acquisition/release decisions, including reserved handoffs. |
-| Capacity | 3 | Executed root admission and shared cache trimming. |
-| Leases | 4 | Executed epoch/lease/presence checks before late results are accepted. |
-| Focus lifecycle | 4 | Executed fresh/key/generation reset decisions and stale dwell rejection. |
-| Prefix selection | 4 | Executed admission for every actual rendered-prefix cost. |
-| u32 arithmetic cells | 11 | Retained generated primitive contracts; production multiword operations now use the stronger streams below. |
-| Arithmetic streams | 98 | Executed digit machines, all-prefix reconstruction, completion, intermediate bounds, termination and checked ghost erasure. |
-| Rounding decisions | 7 | Executed floor, directed ceiling and nearest-even choices in limb shifts and Float64 conversion. |
-| Certificate work | 3 | Executed admission of normalization and operator visits; refusal leaves the budget unchanged. |
-| Exact heat algebra | 4 | Mathematical fold model; not the Float64 matrix implementation. |
-| Signed error envelope | 1 | Conditional rational model; local numerical bounds are premises. |
-| Constructive series | 23 | Exact rational Cauchy model: finite-tail bounds, nested enclosures, explicit modulus, arbitrary future prefixes and scalar-family identities. |
-| Coefficient and path models | 24 | Unbounded Pascal/factorial coefficients, signed P-I recurrence, normalized weighted-tree mass and signed-aggregate bounds. Not the indexed matrix evaluator. |
-| Indexed transport | 14 | Actual finite-map L1 norm, source-weight budgets and arbitrary completed normalized transport rounds. Exact model, not a proof of the CSR/interval implementation. |
-| Indexed focus | 19 | Coordinate-wise infinity-norm bound through arbitrary completed row-gather rounds, exact weight consumption and row coverage. Not a CSR/IEEE refinement. |
-| Exact enclosures | 7 | Natural quotient bounds and scaled-rational interval/error policies; not real completion or host rounding correspondence. |
-| Raw-row normalization | 17 | Native finite-map unit mass, exact raw ratios, rescaling, isolate identity and consumer admission. Production uses an exact dyadic adapter; the host refinement is still unproved. |
+| Family                            | Laws | Production connection                                                                                                                                                              |
+| --------------------------------- | ---: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Disclosure                        |    6 | Executed generated decisions in both focus/dwell rendering paths.                                                                                                                  |
+| Prefix accounting                 |    5 | Executed shown/remaining counts in both renderers.                                                                                                                                 |
+| Basis commands                    |    4 | Executed commands control Chebyshev vector extension.                                                                                                                              |
+| Semaphore                         |    7 | Executed acquisition/release decisions, including reserved handoffs.                                                                                                               |
+| Capacity                          |    3 | Executed root admission and shared cache trimming.                                                                                                                                 |
+| Leases                            |    4 | Executed epoch/lease/presence checks before late results are accepted.                                                                                                             |
+| Focus lifecycle                   |    4 | Executed fresh/key/generation reset decisions and stale dwell rejection.                                                                                                           |
+| Prefix selection                  |    4 | Executed admission for every actual rendered-prefix cost.                                                                                                                          |
+| u32 arithmetic cells              |   11 | Retained generated primitive contracts; production multiword operations now use the stronger streams below.                                                                        |
+| Arithmetic streams                |   98 | Executed digit machines, all-prefix reconstruction, completion, intermediate bounds, termination and checked ghost erasure.                                                        |
+| Rounding decisions                |    7 | Executed floor, directed ceiling and nearest-even choices in limb shifts and Float64 conversion.                                                                                   |
+| Certificate work                  |    3 | Executed admission of normalization and operator visits; refusal leaves the budget unchanged.                                                                                      |
+| Sparse edge execution             |    7 | Generated cursor admission, progress, coordinate bounds, refusal and gather/scatter direction.                                                                                     |
+| Exact heat algebra                |    4 | Mathematical fold model; not the Float64 matrix implementation.                                                                                                                    |
+| Signed error envelope             |    1 | Conditional rational model; local numerical bounds are premises.                                                                                                                   |
+| Constructive series               |   23 | Exact rational Cauchy model: finite-tail bounds, nested enclosures, explicit modulus, arbitrary future prefixes and scalar-family identities.                                      |
+| Constructive completion           |   19 | Shrinking rational enclosures, all-future checkpoint bounds, finite product/reciprocal continuity and rational separation witnesses. Not yet an operator-limit identification.     |
+| Finite-rational operator identity |  114 | Coefficients, indexed evaluation, finite reindexing, all-later-prefix bounds, terminating precision selection and constructive Cauchy-name comparison.                             |
+| Coefficient and path models       |   24 | Unbounded Pascal/factorial coefficients, signed P-I recurrence, normalized weighted-tree mass and signed-aggregate bounds. Not the indexed matrix evaluator.                       |
+| Indexed transport                 |   14 | Actual finite-map L1 norm, source-weight budgets and arbitrary completed normalized transport rounds. Exact model, not a proof of the CSR/interval implementation.                 |
+| Indexed focus                     |   19 | Coordinate-wise infinity-norm bound through arbitrary completed row-gather rounds, exact weight consumption and row coverage. Not a CSR/IEEE refinement.                           |
+| Exact enclosures                  |    7 | Natural quotient bounds and scaled-rational interval/error policies; not real completion or host rounding correspondence.                                                          |
+| Raw-row normalization             |   17 | Native finite-map unit mass, exact raw ratios, rescaling, isolate identity and consumer admission. Production uses an exact dyadic adapter; the host refinement is still unproved. |
 
-**145 claims are connected to executed policies or streams; 11 older arithmetic
+**152 claims are connected to executed policies, streams or sparse edge steps; 11 older arithmetic
 cell contracts, five heat/error laws, 23 constructive-series claims and 24
 coefficient/path claims, 14 indexed-transport claims, 19 indexed-focus claims and
-seven exact-enclosure claims and 17 raw-row normalization claims are
+seven exact-enclosure claims, 17 raw-row normalization claims and 19
+constructive-completion claims are
 retained as separate mathematical contracts.** Stream counts
 include named termination checks as well as invariants and corollaries, not just
 one-step decisions. This does not prove all callers, filesystem effects, callback
@@ -195,6 +204,97 @@ new axioms or kernel modifications. The shared checker validates support lists,
 proves every initial and inductive case, and allows derived premises only after
 they have been checked in the same state context. Cyclic and input-dependent
 premise escapes are refused. Search is capped by time, tree visits and products.
+
+### Constructive completion certificates
+
+`proofs/completion.ts` starts the replacement's limit layer with **19 checked
+claims**, using the existing gdp-wired kernel and no foreign mathematical facts.
+Its refinement machine builds nested intervals
+`[lower / scale, (lower + width) / scale]`, doubles `scale` at every step and
+retains arbitrary checkpoints. The checked linear modulus `index >= p * width`
+implies interval width at most `1/p` for positive `p`. Checkpoint bounds apply to
+all subsequent reachable states, with no maximum precision or iteration count.
+
+Separate finite certificates establish the exact kept-rectangle/tail partition
+of a product, its bounded-factor continuity estimate, positive reciprocal width,
+and two-sided error composition. A positive rational gap `g/d` is separated at
+precision `d+1`; testing only finitely many earlier precisions does not establish
+equality. Tests retain that deliberately false variant, missing product terms,
+nonshrinking denominators and invalid refinements, with independent BigInt oracles.
+
+These are supporting **finite certificates for constructive completion**. They
+are not by themselves the operator identity: that argument also needs the
+producer/consumer links, finite reindexing and all-later-prefix estimates below.
+Rational-gap separation is not a decision procedure for equality of arbitrary
+real limits. The public `check:completion` command and the composed
+`check:operator-identity` command are part of `check:proofs`; their sources and
+checkers are receipt-bound. The broader 28-claim Lean development is retained as
+an optional independent audit, not silently relabeled as equivalent.
+
+### Finite binomial cancellation
+
+`proofs/residual.ts` constructs the fixed Pascal row and the actual signed
+coefficients of every `(P-I)^j`, then accumulates them with `choose(m,j)`.
+Its coefficient laws prove, for arbitrary natural `m` and every coefficient `k`,
+
+```
+sum(j=0..m, choose(m,j) * coefficient(k, (P-I)^j)) = (k == m ? 1 : 0).
+```
+
+The telescoping invariant and boundary coefficients are checked rather than
+supplied as assumptions. The proof reuses 19 checked Pascal claims. Positive-factor
+cancellation needed bounded products of linear inequalities in the **untrusted
+search**, not a new axiom: the unchanged gdp-wired kernel validates each product
+certificate. The option is disabled for other proof groups.
+
+### Composed finite-rational operator identity
+
+`check:operator-identity` checks 114 distinct operator claims, including the
+coefficient laws above. Prerequisite Pascal and indexed-focus claims retain
+their original ledger entries. For a finite rational row-stochastic `P`, with
+the induced infinity norm, and nonnegative rational `t=a/b` (`b>0`), define
+
+```
+E_N = sum(j=0..N, t^j/j!)
+S_N = sum(j=0..N, t^j/j! P^j)
+A_N = sum(j=0..N, t^j/j! (P-I)^j).
+```
+
+The checked components are:
+
+- `cauchy-product.ts`: finite signed sums preserve their exact total when
+  rectangular product terms are grouped by `i+j`; diagonal bounds and their
+  inverse match the truncated rectangle. Power multiplication and factorial
+  coefficient scaling are checked separately, without assumed `exp` functions.
+- `residual.ts`: the actual signed coefficient producer, its bounded evaluation,
+  and exact low-degree cancellation. `operator-identification.ts` checks the
+  actual series-admission guard on its output, and the actual indexed stochastic
+  gather's output against the evaluator's basis guard. A caller's assertion
+  that two independently chosen models agree is not accepted.
+- `residual-series.ts` and `residual-link.ts`: exact assembly, positive `E_N`,
+  and a refinement into the Taylor-tail recurrence with arbitrary row
+  denominators. This yields the finite residual estimate
+  `||E_N A_N-S_N|| <= sum(m=N+1..2N, (3t)^m/m!)`, and both unnormalized and
+  normalized precision bounds for **every later prefix**, not a fixed sample.
+- `operator-limit.ts`: a terminating computation of `C=(3a)^d`, `d=6a+1`,
+  bound to the actual Taylor recurrence's initial majorant. The explicit
+  cutoff `K(q)=d+q*d*d*C` works for every positive natural precision `q`.
+  The checked three-error inequality transfers the Cauchy property and equality
+  of the two names; rational separation rules out a positive gap.
+
+Consequently the constructive Cauchy names `A_N` and `S_N/E_N` represent the
+same limit. Here the operator exponential is **defined by the Taylor name**;
+this is the finite-rational Poisson identity, not a claim of equivalence to
+Lean's theorem over every complete normed real algebra. Completion uses the
+usual identification of Cauchy names whose difference tends to zero; no
+finite-prefix agreement is substituted for that universal condition.
+
+The rational matrix tests are independent examples, not the proof. Quantified
+invariant reuse is instantiated through the kernel's native `assumed` operation;
+tests reject a different key, an omitted instantiation, cyclic dependencies,
+changed grouped sums, and a nonterminating precision plan. No gdp-wired kernel
+or mathematical axiom was changed. The Float64/CSR refinement, numerical codec
+and full fast-solver error theorem remain separate obligations.
 
 ### Finite Poisson coefficients and normalized paths
 
@@ -345,39 +445,50 @@ The production certificate therefore retains its conditional assumptions.
 
 `proofs/ports.json` accounts for all 28 retained Lean claims. `check:ports` verifies
 that each is tracked exactly once and that every cited gdp-wired claim exists.
-Currently six have runtime specializations, eighteen have constructive rational
-counterparts, and four are explicitly open. No entry claims full equivalence.
-The open entries are real exponential embedding/identity/nonnegativity and the
-remaining list-shift correspondence. Rational row normalization is now covered;
-its IEEE/CSR implementation correspondence remains a separate boundary.
+Currently six have runtime specializations, nineteen have constructive rational
+counterparts, and three are explicitly open. No entry claims full equivalence.
+The open entries are real exponential embedding/nonnegativity and the remaining
+list-shift correspondence. The finite-rational Poisson identity and rational row
+normalization have constructive counterparts; their IEEE/CSR implementation
+correspondence remains a separate boundary.
 
-The executable policies do not call Lean. However, the proof gate still checks
-the retained Lean receipt and dedicated CI still checks those Lean theorems.
-Making Lean merely an optional third check is the goal, **not yet the verified
-state**. Replacing a general real theorem with a rational protocol without
-recording that difference would silently weaken coverage.
+The executable policies do not call Lean. The required proof gate checks the
+gdp-wired construction and its own source/output receipt. The retained Lean
+receipt belongs to an optional, manually triggered independent audit. The
+ledger records the stricter finite-rational scope rather than claiming
+equivalence to the more general real-algebra theorem.
 
-### What still keeps Lean in the pipeline
+### Remaining obligations outside the constructive model
 
 The earlier assertion that this route necessarily required a new real-number
 kernel was too strong. The checked constructive Cauchy model demonstrates a
-route using the existing natural-number kernel. However, a Cauchy presentation
-alone is not yet the matrix-exponential theorem promised by `certifyDiffusion`.
-Remaining work includes:
+route using the existing natural-number kernel. The finite-rational operator
+argument is now checked, but that is not a full implementation theorem for
+`certifyDiffusion`. Remaining work includes:
 
-1. Lift the checked finite signed-coefficient identity to the Cauchy limit,
-   including the product/reindexing argument that identifies the Poisson
-   operator series with `exp(t(P-I))` on indexed vectors.
-2. Connect the checked indexed transport protocol to the CSR row/column
+1. Connect the checked indexed transport protocol to the CSR row/column
    traversal and its interval implementation. The exact finite-map forward/L1 and focus/infinity-norm bounds
    now hold through arbitrary rounds; the production refinement is not proved.
-3. The remaining host packing, outer arithmetic loops, interval operations and
+2. The remaining host packing, outer arithmetic loops, interval operations and
    IEEE conversion bridge described below.
 
-The 28 Lean model theorems and their CI/release gate therefore remain. No
-certificate assumption has been removed on the strength of the new model.
+The 28 stronger Lean model theorems remain available for independent audit.
+They do not discharge those host obligations either. No runtime certificate
+assumption has been removed on the strength of the constructive model.
 
+### Exact sparse execution
 
+The direct `solveDiffusion` / `solveHeat` path and the existing candidate verifier
+now share the u32-limb core in `exact-operator.ts`, `exact-heat.ts` and
+`exact-series.ts`. Seven additional checked laws cover the generated
+`sparseEdgeStep`: admission, strict cursor advancement, cursor/coordinate bounds,
+refusal and gather/scatter direction. These are executed decisions, not a second
+mathematical traversal. Scalar and limb operations are also shared.
+
+The host loops, array indexing, representation codecs and complete numerical
+refinement are still explicitly conditional; this change does not assert that
+seven control laws prove the entire sparse algorithm. See [the exact heat core](exact-heat.md)
+for precision, budget, compatibility and performance details.
 
 ### Stateful host obligations
 
@@ -429,11 +540,11 @@ export of the generated JavaScript. `proofs/lean/ledger.json` names every requir
 theorem and its scope. `proofs/lean/receipt.json` explicitly records
 `correspondence: "not-proved"`; the gate rejects a receipt claiming otherwise.
 
-| Module | Theorems | Proven scope |
-|---|---:|---|
-| `Fovea/Arithmetic.lean` | 7 | Unbounded digit-list addition, scaling, multiplication, shifts and division reconstruction/remainder bounds. These are algorithm models, not the indexed TypeScript loops. |
-| `Fovea/Analysis.lean` | 14 | Banach-algebra Poisson identity, geometric/Poisson tails, coefficient recurrence, normalized rows (including isolates), stochastic one-/infinity-norm and iterate bounds. |
-| `Fovea/Intervals.lean` | 7 | Natural floor/ceiling bounds, real interval addition/product/division, signed subtraction and the endpoint-distance implication used for acceptance. No IEEE-754 codec theorem is claimed. |
+| Module                  | Theorems | Proven scope                                                                                                                                                                               |
+| ----------------------- | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Fovea/Arithmetic.lean` |        7 | Unbounded digit-list addition, scaling, multiplication, shifts and division reconstruction/remainder bounds. These are algorithm models, not the indexed TypeScript loops.                 |
+| `Fovea/Analysis.lean`   |       14 | Banach-algebra Poisson identity, geometric/Poisson tails, coefficient recurrence, normalized rows (including isolates), stochastic one-/infinity-norm and iterate bounds.                  |
+| `Fovea/Intervals.lean`  |        7 | Natural floor/ceiling bounds, real interval addition/product/division, signed subtraction and the endpoint-distance implication used for acceptance. No IEEE-754 codec theorem is claimed. |
 
 `check:lean` compiles all three modules, then independently prints and checks the
 axioms of **every** ledger theorem. Only `propext`, `Classical.choice` and
@@ -457,10 +568,11 @@ bun run proofs:generate
 bun run check:fast
 ```
 
-CI and releases run the full Lean check. Normal `check:proofs`, `check:fast`,
-prepack and CLI builds verify the model receipt without loading Lean. Both
-published distributions carry the source-bound receipt and model sources, not
-the Lean toolchain or mathlib. Cached mathlib artifacts and the Lean kernel are
+The manually triggered Lean CI job runs the full independent check. Normal
+`check:proofs`, `check:fast`, prepack and CLI builds neither run Lean nor require
+its model receipt to be fresh. The Pi distribution retains the optional audit
+sources and receipt; the CLI-only archive carries its required gdp-wired proof
+sources and receipt. Neither includes the Lean toolchain or mathlib. Cached mathlib artifacts and the Lean kernel are
 part of the proof-checking environment, not part of the installed product.
 A freshness receipt alone is not a proof certificate or an adversarial-security
 boundary; the full check is what establishes the listed model theorems.
@@ -636,8 +748,9 @@ and its projection, requiring the autoprover to refuse each change.
 `tests/lean-proofs.test.ts` rejects stale model sources, missing theorems, altered
 axiom audits, proof escapes and claimed TypeScript correspondence. With
 `FOVEA_MATHLIB_ROOT` set, it also gives Lean a false unbounded addition theorem
-and requires failure before the receipt can be overwritten. CI runs that full
-check separately from the compiler-free affected tests.
+and requires failure before the receipt can be overwritten. The manually
+triggered Lean CI job runs that independent audit; normal push/PR checks use
+gdp-wired and do not depend on the Lean receipt.
 
 `tests/proofs.test.ts` mutates policies, imports, ABI and artifacts and requires
 refusal without writes. `tests/verified-kernels.test.ts` checks ABI boundaries and

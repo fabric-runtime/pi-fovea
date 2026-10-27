@@ -59,7 +59,27 @@ export const work = fun("numericWork")
     admit: used.plus(amount).atMost(limit),
     used: when(used.plus(amount).atMost(limit), used.plus(amount), used),
   }));
-export const limbs = { addWord, subtractWord, multiplyCell, divisionCell, rounding, work };
+// One actual CSR edge transition: bounded cursor advancement and direction.
+export const sparseEdge = fun("sparseEdge")
+  .inputs({ row: U32, nodes: U32, at: U32, end: U32, total: U32, to: U32, forward: bool })
+  .returns((e) => {
+    const admit = e.row.lt(e.nodes).and(e.to.lt(e.nodes), e.at.lt(e.end), e.end.atMost(e.total));
+    return {
+      admit,
+      next: when(admit, e.at.plus(1), e.at),
+      origin: when(e.forward, e.row, e.to),
+      destination: when(e.forward, e.to, e.row),
+    };
+  });
+export const limbs = {
+  addWord,
+  subtractWord,
+  multiplyCell,
+  divisionCell,
+  rounding,
+  work,
+  sparseEdge,
+};
 export function limbLaws({
   addWord: a,
   subtractWord: s,
@@ -67,8 +87,44 @@ export function limbLaws({
   divisionCell: d,
   rounding: r,
   work: w,
+  sparseEdge: edge,
 }: typeof limbs) {
   return [
+    edge.law(
+      "sparse_edge_advances",
+      () => [],
+      (o, e) => o.admit.implies(o.next.eq(e.at.plus(1))),
+    ),
+    edge.law(
+      "sparse_edge_cursor_bounded",
+      () => [],
+      (o, e) => o.admit.implies(o.next.atMost(e.end).and(o.next.atMost(e.total))),
+    ),
+    edge.law(
+      "sparse_edge_coordinates_bounded",
+      () => [],
+      (o, e) => o.admit.implies(o.origin.lt(e.nodes).and(o.destination.lt(e.nodes))),
+    ),
+    edge.law(
+      "sparse_edge_refusal_unchanged",
+      () => [],
+      (o, e) => o.admit.not().implies(o.next.eq(e.at)),
+    ),
+    edge.law(
+      "sparse_edge_forward_direction",
+      (e) => e.forward,
+      (o, e) => o.origin.eq(e.row).and(o.destination.eq(e.to)),
+    ),
+    edge.law(
+      "sparse_edge_focus_direction",
+      (e) => e.forward.not(),
+      (o, e) => o.origin.eq(e.to).and(o.destination.eq(e.row)),
+    ),
+    edge.law(
+      "sparse_edge_valid_admitted",
+      (e) => e.row.lt(e.nodes).and(e.to.lt(e.nodes), e.at.lt(e.end), e.end.atMost(e.total)),
+      (o) => o.admit,
+    ),
     w.law(
       "numeric_work_never_exceeds_limit",
       () => [],

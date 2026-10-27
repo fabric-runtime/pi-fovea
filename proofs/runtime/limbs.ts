@@ -6,6 +6,9 @@ declare const multiplyCell: DecisionMachine<"out.total">;
 declare const divisionCell: DecisionMachine<"out.valid">;
 declare const work: DecisionMachine<"out.used" | "out.admit">;
 declare const rounding: DecisionMachine<"out.increment">;
+declare const sparseEdge: DecisionMachine<
+  "out.admit" | "out.next" | "out.origin" | "out.destination"
+>;
 const run = <Output extends string>(m: DecisionMachine<Output>, input: Record<string, number>) =>
   m.step({}, m.init({}), input).scalars;
 export function addCell(a: number, b: number, carry: number): { word: number; carry: number } {
@@ -40,6 +43,24 @@ export function numericWorkStep(
   const s = run(work, { used, amount, limit });
   return { used: s["out.used"], admit: !!s["out.admit"] };
 }
+export function sparseEdgeStep(
+  row: number,
+  nodes: number,
+  at: number,
+  end: number,
+  total: number,
+  to: number,
+  forward: boolean,
+): { admit: boolean; next: number; origin: number; destination: number } {
+  const s = run(sparseEdge, { row, nodes, at, end, total, to, forward: +forward });
+  return {
+    admit: !!s["out.admit"],
+    next: s["out.next"],
+    origin: s["out.origin"],
+    destination: s["out.destination"],
+  };
+}
+
 export function roundingIncrement(
   mode: number,
   guard: boolean,

@@ -1,52 +1,19 @@
 // Positive scalar certificates, using the shared outward u32 interval engine.
 import {
-  add,
   byInt,
-  divide,
   dyadic,
   enclose,
   fixed,
-  geometricTail,
   mul,
   nextDown,
   nextUp,
-  FIXED_BITS,
   SCALE,
   type Interval,
   type NumericBounds,
 } from "./interval.js";
-import {
-  addWords,
-  compareWords,
-  multiplyWords,
-  shiftLeft,
-  shiftRight,
-  subtractWords,
-  type Words,
-} from "./u32.js";
+import { compareWords, multiplyWords, shiftLeft } from "./u32.js";
+import { positiveSeries as sumSeries, expNegativeFixed } from "./exact-series.js";
 export type { NumericBounds } from "./interval.js";
-const TARGET = shiftRight(SCALE, 100);
-// Subsequent term ratios decrease. Test the exact geometric bound before division.
-const smallTail = (next: Words, ratio: Words): Words | undefined => {
-  if (compareWords(ratio, SCALE) >= 0) return undefined;
-  const denominator = subtractWords(SCALE, ratio),
-    numerator = shiftLeft(next, FIXED_BITS);
-  if (compareWords(numerator, multiplyWords(TARGET, denominator)) > 0) return undefined;
-  return geometricTail(next, ratio);
-};
-const sumSeries = (initial: Interval, ratio: (m: number) => Interval): Interval => {
-  let term = initial,
-    sum = initial;
-  for (let m = 0; m < 512; m++) {
-    const r = ratio(m),
-      next = mul(term, r),
-      remainder = smallTail(next[1], r[1]);
-    if (remainder !== undefined) return [sum[0], addWords(sum[1], remainder)];
-    term = next;
-    sum = add(sum, term);
-  }
-  throw new RangeError("Scalar series certificate did not converge within its work cap");
-};
 interface Coefficients {
   t: Interval;
   inverseExp: Interval;
@@ -62,21 +29,15 @@ const coefficients = (t: number): Coefficients => {
     cache.set(t, hit);
     return hit;
   }
-  const x = fixed(t),
-    exp = sumSeries([SCALE, SCALE], (m) => byInt(x, m + 1));
+  const x = fixed(t);
   const result = {
     t: x,
-    inverseExp: divide([SCALE, SCALE], exp),
+    inverseExp: expNegativeFixed(x),
     values: new Map<number, Interval>(),
   };
   cache.set(t, result);
   if (cache.size > 4) cache.delete(cache.keys().next().value!);
   return result;
-};
-/** Internal immutable interval for exp(-t), shared by the independent Poisson evaluator. */
-export const expNegativeInterval = (t: number): Interval => {
-  const [lower, upper] = coefficients(t).inverseExp;
-  return [lower.slice(), upper.slice()];
 };
 const bessel = (k: number, c: Coefficients): Interval => {
   if (!Number.isSafeInteger(k) || k < 0 || k > 512)

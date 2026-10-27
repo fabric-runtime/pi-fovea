@@ -23,8 +23,8 @@ describe("honest Lean portability inventory", () => {
   it("tracks all 28 claims without claiming full equivalence", () => {
     expect(verifyPortMap(root)).toEqual({
       "runtime-specialization": 6,
-      "constructive-rational": 18,
-      open: 4,
+      "constructive-rational": 19,
+      open: 3,
     });
   });
   it.each(["missing", "duplicate", "unknown evidence", "false equivalence"] as const)(

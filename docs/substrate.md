@@ -3,7 +3,12 @@
 `pi-fovea/substrate` is a small, session-free entrypoint for graph consumers. It does not enroll roots, discover files, read project rules, perform extraction, or inspect the current working tree.
 
 ```ts
-import { SUBSTRATE_VERSION, assembleFactGraph, diffuseMass, type SnapshotFacts } from "pi-fovea/substrate";
+import {
+  SUBSTRATE_VERSION,
+  assembleFactGraph,
+  diffuseMass,
+  type SnapshotFacts,
+} from "pi-fovea/substrate";
 
 if (SUBSTRATE_VERSION !== 1) throw new Error("Unsupported substrate version");
 const facts = new Map<string, SnapshotFacts>();
@@ -19,6 +24,29 @@ const fields = diffuseMass(graph, source, [0.5, 2, 8]);
 The resulting `Graph` retains nodes, typed relationship evidence, file/name indexes, and import coverage. Callers can select or reweight relationships without introducing a second graph resolver. Navigation conductances are not calibrated defect probabilities.
 
 `diffuseMass` accepts a graph, a finite nonnegative source vector matching the node count, and finite times in [0,64]. Results are `{ time, mass: Float64Array }` in requested order. It shares Chebyshev recurrence vectors across times and applies the forward random-walk conjugation of the symmetric heat kernel. Isolates retain their original mass. Floating-point conservation is approximate; tests cover it against existing solver paths, whose independent reference tests remain in the core suite.
+
+## Direct interval solve
+
+```ts
+import { solveDiffusion } from "pi-fovea/substrate";
+
+const result = await solveDiffusion(graph, source, 8, {
+  absoluteTolerance: 1e-8,
+  maxWork: 100_000,
+});
+if (!result.withinTolerance) throw new Error("Insufficient enclosure precision");
+// result.value is computed from the u32 interval enclosure, not Chebyshev.
+```
+
+`solveDiffusion` uses exact rational edge normalization and the shared u32-limb
+Poisson core. It does not run the Float64 candidate solver. Input/output arrays
+remain Float64 for API compatibility; arithmetic after decoding uses integer
+limbs and outward intervals. It returns the same certificate shape, including
+`precisionBits`, `lower`, `upper`, `maxAbsoluteError`, and explicit assumptions.
+The existing `diffuseMass` remains the fast multi-time path, and
+`certifyDiffusion` continues to verify that path's actual result.
+
+See [exact heat](exact-heat.md) for execution and proof boundaries.
 
 ## Opt-in interval verification
 

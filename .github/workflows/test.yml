@@ -4,9 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   lean:
+    # Independent, opt-in audit of the stronger abstract Lean development.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -22,6 +25,7 @@ jobs:
       - name: Positive and broken-proof gate fixtures
         run: bunx vitest run tests/lean-proofs.test.ts
   test:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

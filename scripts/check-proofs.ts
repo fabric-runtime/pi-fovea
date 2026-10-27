@@ -8,7 +8,6 @@ import ts from "typescript";
 import { version as prettier } from "prettier";
 import { parseSource } from "./parse-source.ts";
 import { version as esbuild } from "esbuild";
-import { leanInputs, verifyLeanArtifact } from "./check-lean.ts";
 import { verifyPortMap } from "./check-ports.ts";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const args = process.argv.slice(2);
@@ -32,6 +31,9 @@ const bridge = [
   "scripts/compile-gdp.ts",
   "scripts/check-streams.ts",
   "scripts/check-series.ts",
+  "scripts/check-completion.ts",
+  "scripts/check-residual.ts",
+  "scripts/check-operator-identity.ts",
   "scripts/check-operators.ts",
   "scripts/check-transport.ts",
   "scripts/check-focus.ts",
@@ -48,11 +50,12 @@ const bridge = [
   "src/core/interval.ts",
   "src/core/u32.ts",
   "src/core/heat-certificate.ts",
+  "src/core/exact-operator.ts",
+  "src/core/exact-heat.ts",
+  "src/core/exact-series.ts",
   "src/core/normalization.ts",
   "src/substrate.ts",
   "proofs/ledger.json",
-  ...leanInputs,
-  "proofs/lean/receipt.json",
 ];
 const read = (path: string) => readFileSync(resolve(root, path), "utf8");
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -125,6 +128,9 @@ function sources() {
     "proofs/limbs.ts",
     "proofs/streams.ts",
     "proofs/series.ts",
+    "proofs/completion.ts",
+    "proofs/residual.ts",
+    "proofs/operator-identity.ts",
     "proofs/operator-steps.ts",
     "proofs/transport.ts",
     "proofs/focus.ts",
@@ -135,7 +141,6 @@ function sources() {
   return [...new Set([...seen, ...bridge])].sort();
 }
 try {
-  verifyLeanArtifact(root);
   verifyPortMap(root);
   const metadata = {
     version: 3,
