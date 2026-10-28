@@ -571,6 +571,33 @@ A law implemented in the same file shares its definition's symbol. Built-in
 `Base`, hub packages, and out-of-root imports remain unresolved. Operator/desugared
 calls and proof checking are not modeled; Bend 1/HVM syntax is not supported.
 
+**R (`.R`, `.r`)** uses a native source reader (no ast-grep binary or grammar
+required): `name <- function(...)` and `name = function(...)` definitions —
+including backtick and quoted names (`%+%`, `"%>%"`), assignments split
+across lines, and right assignment (`->`) — S4
+`setClass`/`setGeneric`/`setMethod`, R6 classes (including `R6::R6Class`) with their list-entry methods,
+`pkg::fun` and `obj$method` calls, both quote styles plus R 4.0 raw strings
+(`r"(...)"`, dash and bracket variants, multi-line), and
+`library()`/`require()`/`requireNamespace()` dependencies, including named and multiline arguments. Package imports
+resolve to installed packages, not repo files, and stay unresolved by design;
+`source("file.R")` includes resolve relative to the importing script, and
+base R packages are labeled as such rather than missing DESCRIPTION entries.
+Dynamic `source()` paths and computed package arguments are not evaluated;
+`DESCRIPTION`-only edits refresh dependency labels in existing sessions.
+Base mega-hubs (`apply` family, `data.frame`, coercion) are excluded from
+call edges, and testthat conventions (`tests/testthat/`, `test-*.R`) wire
+test edges. `# Section ----` markers (any hash depth, `-`/`=`/`#`
+terminators) become navigation symbols, and `renv/` and `packrat/` vendored
+libraries are skipped like `node_modules`.
+
+**Quarto and R Markdown (`.qmd`, `.Rmd`)** index fenced `{r}` and `{python}`
+chunks as first-class facts: R chunk bodies reuse the native R reader at
+absolute line numbers and carry their chunk labels (`file.qmd#chunk-label:10`);
+python chunks record imports, including comma-separated module lists. Header
+labels and Quarto `#| label:` options are preserved. Fence length, indentation, and tilde variants
+are honored, and markdown examples that merely display a chunk header are
+skipped. Prose and other engines are ignored.
+
 ## Development
 
 ```sh

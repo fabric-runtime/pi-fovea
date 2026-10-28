@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { hasAstGrepAsync, langOf } from "./astgrep.js";
+import { isNativeLang } from "./extract.js";
 import {
   clearPersistTimer,
   discoverFiles,
@@ -12,7 +13,7 @@ import {
   refreshFacts,
 } from "./build.js";
 import type { DiscoveryReport, ExtractionReport, FactStore, FileFacts } from "./build.js";
-import { assembleGraphWithIndex } from "./graph.js";
+import { assembleGraphWithIndex, readPackageMetadata, type PackageMetadata } from "./graph.js";
 import { gitOut, gitProbe, gitReflogAction } from "./git.js";
 import { ROOT_CACHE_LIMIT, envInt, trimMap, yieldToLoop } from "./asyncutil.js";
 import { loadRepoRules } from "./anchors.js";
@@ -26,6 +27,8 @@ export interface RepoState {
   version: string;
   /** Identity of the ordered weighted graph backing index-addressed session vectors. */
   generation: string;
+  /** Snapshot of external dependency metadata used to assemble this graph. */
+  packageMetadataKey?: string;
   graph: Graph;
   csr: Csr;
   joinIndex: JoinIndex;
@@ -166,13 +169,19 @@ const assembleState = async (
   gitKind: "git" | "plain",
   head: string | undefined,
   dirty: Set<string>,
+  packageMetadata: PackageMetadata = readPackageMetadata(root),
 ): Promise<RepoState> => {
   // Snapshot the generation: refresh replaces fact records wholesale, so the
   // Record view stays a stable witness for baselines (sync).
   const facts: Record<string, FileFacts> = {};
   for (const [k, v] of store.facts) facts[k] = v;
   await yieldToLoop();
-  const { graph, joinIndex } = await assembleGraphWithIndex(root, files, store.facts);
+  const { graph, joinIndex } = await assembleGraphWithIndex(
+    root,
+    files,
+    store.facts,
+    packageMetadata,
+  );
   const generation = graphGeneration(graph);
   const version = stateVersion(facts, generation, files, store.rulesSha, extraction, discovery);
   await yieldToLoop();
@@ -213,6 +222,7 @@ const assembleState = async (
     root,
     version,
     generation,
+    packageMetadataKey: packageMetadata.key,
     graph,
     csr,
     joinIndex,
@@ -233,11 +243,11 @@ const assembleState = async (
 };
 
 const requireExtractionBackend = async (files: readonly string[]): Promise<void> => {
-  // Bend and config/protocol readers are native; do not even probe a binary
-  // until discovery finds a language whose facts depend on ast-grep.
+  // Bend, R, and config/protocol readers are native; do not even probe a
+  // binary until discovery finds a language whose facts depend on ast-grep.
   const needed = files.some((file) => {
     const language = langOf(file);
-    return language !== undefined && language !== "Bend";
+    return language !== undefined && !isNativeLang(language);
   });
   if (needed && !(await hasAstGrepAsync())) {
     throw new Error(
@@ -455,7 +465,9 @@ const refreshState = async (
     }
   }
 
-  if (!changed.length && !deleted.length && files === state.files) {
+  const packageMetadata = readPackageMetadata(state.root);
+  const metadataChanged = packageMetadata.key !== state.packageMetadataKey;
+  if (!metadataChanged && !changed.length && !deleted.length && files === state.files) {
     state.probedAt = Date.now();
     return state;
   }
@@ -464,6 +476,7 @@ const refreshState = async (
     refreshFacts(state.root, store, files, [...new Set(changed)], [...new Set(deleted)]),
   );
   const noDelta =
+    !metadataChanged &&
     !stats.reExtracted.length &&
     !stats.deleted.length &&
     !stats.added.length &&
@@ -492,6 +505,7 @@ const refreshState = async (
     state.gitKind,
     state.head,
     state.dirty,
+    packageMetadata,
   );
   if (checkout) fresh.checkout = true;
   states.set(state.root, fresh);

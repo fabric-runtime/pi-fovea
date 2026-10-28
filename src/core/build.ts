@@ -42,6 +42,7 @@ import {
   extractImports,
   extractLiterals,
   extractSymbols,
+  isNativeLang,
 } from "./extract.js";
 import { assembleGraphWithIndex as assembleGraph } from "./graph.js";
 import {
@@ -71,7 +72,7 @@ export interface FileFacts {
   sigs?: FileSigs;
 }
 
-const CACHE_VERSION = 16; // v16: native Bend 2 facts and explicit module aliases
+const CACHE_VERSION = 25; // v25: R dependencies in guarded and same-line expressions
 
 // Honest coverage: what the extractor could NOT see. Tools and status render
 // this so a thin graph never reads as a small repo; omissions are explicit.
@@ -117,6 +118,7 @@ export interface FileDiscovery {
   report: DiscoveryReport;
 }
 
+// R dependency vendoring (renv/library, packrat/lib-*) mirrors node_modules.
 const IGNORE_DIRS = new Set([
   ".git",
   "node_modules",
@@ -136,6 +138,8 @@ const IGNORE_DIRS = new Set([
   ".tox",
   "Pods",
   ".cargo",
+  "renv",
+  "packrat",
 ]);
 // File count is also a resident-graph budget, not just a discovery limit.
 // Override deliberately for giant monorepos; normal roots stay bounded.
@@ -536,8 +540,9 @@ const emptyFileFacts = (sha1: string): FileFacts => ({
 const pendingFileFacts = (file: string, sha1: string, text: string): FileFacts => {
   const facts = emptyFileFacts(sha1);
   const language = langOf(file);
-  // Implicit route rules target ast-grep; native Bend facts have no grammar.
-  if (!language || language === "Bend") return facts;
+  // Implicit route rules target ast-grep; native readers (Bend, R) have no
+  // grammar.
+  if (!language || isNativeLang(language)) return facts;
   const sigs = harvestFile(language, text);
   if (Object.keys(sigs).length) facts.sigs = sigs;
   return facts;

@@ -508,6 +508,10 @@ export const diffHunks = async (
       "-c",
       "core.quotePath=false",
       "diff",
+      // Override all prefix settings, including custom srcPrefix/dstPrefix,
+      // so path parsing never invents renames or falls back to coarse seeds.
+      "--src-prefix=a/",
+      "--dst-prefix=b/",
       "--unified=0",
       "--no-color",
       "--no-ext-diff",

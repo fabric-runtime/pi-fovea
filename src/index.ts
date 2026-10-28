@@ -160,6 +160,8 @@ const NODE_KINDS = new Set<NodeKind>([
   "decl",
   "file",
   "anchor",
+  "package",
+  "section",
 ]);
 const focusKind = (value: string | undefined): NodeKind | undefined =>
   value && NODE_KINDS.has(value as NodeKind) ? (value as NodeKind) : undefined;
@@ -722,7 +724,10 @@ export default function fovea(pi: ExtensionAPI) {
         Type.String({ description: "Optional repo-relative file or directory scope." }),
       ),
       language: Type.Optional(
-        Type.String({ description: "Optional ast-grep language scope, such as TypeScript or Go." }),
+        Type.String({
+          description:
+            'Optional language scope: TypeScript, Go, R, Quarto, ... A leading "lang:r " query prefix does the same.',
+        }),
       ),
       kind: Type.Optional(
         Type.Union(
@@ -736,6 +741,8 @@ export default function fovea(pi: ExtensionAPI) {
             "decl",
             "file",
             "anchor",
+            "package",
+            "section",
           ].map((kind) => Type.Literal(kind)),
           { description: "Optional node-kind scope." },
         ),
