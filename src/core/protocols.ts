@@ -103,7 +103,12 @@ const declarationBlocks = (text: string, pattern: RegExp): SyntaxBlock[] => {
       const char = text[i];
       if ((char === "\n" || char === "\r") && parentheses === 0 && brackets === 0) {
         const nextLine = text.slice(i + 1);
-        if (/^\s*(?:(?:extend\s+)?(?:type|interface|input|enum|scalar|union)|schema|query|mutation|subscription|fragment)\b/.test(nextLine)) break;
+        if (
+          /^\s*(?:(?:extend\s+)?(?:type|interface|input|enum|scalar|union)|schema|query|mutation|subscription|fragment)\b/.test(
+            nextLine,
+          )
+        )
+          break;
       }
       if (char === "(") parentheses++;
       else if (char === ")") parentheses = Math.max(0, parentheses - 1);
@@ -140,7 +145,13 @@ const lineLookup = (text: string): ((index: number) => number) => {
   };
 };
 
-const anchor = (file: string, line: number, id: string, kind: string, ruleId: string): AnchorDraft => ({
+const anchor = (
+  file: string,
+  line: number,
+  id: string,
+  kind: string,
+  ruleId: string,
+): AnchorDraft => ({
   id,
   kind,
   label: id,
@@ -151,15 +162,40 @@ const anchor = (file: string, line: number, id: string, kind: string, ruleId: st
 });
 
 const PROTO_SCALARS = new Set([
-  "double", "float", "int32", "int64", "uint32", "uint64", "sint32", "sint64",
-  "fixed32", "fixed64", "sfixed32", "sfixed64", "bool", "string", "bytes",
+  "double",
+  "float",
+  "int32",
+  "int64",
+  "uint32",
+  "uint64",
+  "sint32",
+  "sint64",
+  "fixed32",
+  "fixed64",
+  "sfixed32",
+  "sfixed64",
+  "bool",
+  "string",
+  "bytes",
 ]);
 
 // Statement keywords the field grammar can otherwise misread as a type
 // (`option allow_alias = true;`); none of them can name a message.
 const PROTO_STATEMENT_KEYWORDS = new Set([
-  "option", "oneof", "reserved", "extensions", "extend", "message", "enum",
-  "rpc", "service", "syntax", "package", "import", "stream", "group",
+  "option",
+  "oneof",
+  "reserved",
+  "extensions",
+  "extend",
+  "message",
+  "enum",
+  "rpc",
+  "service",
+  "syntax",
+  "package",
+  "import",
+  "stream",
+  "group",
 ]);
 
 const protoAnchors = (file: string, source: string): AnchorDraft[] => {
@@ -181,13 +217,17 @@ const protoAnchors = (file: string, source: string): AnchorDraft[] => {
     addMessage(message.match[1]!, message.match.index, "proto-message-declaration");
     const bodyOffset = message.open + 1;
     const body = masked.slice(bodyOffset, message.close);
-    for (const field of body.matchAll(/(?:^|[;{}])\s*(?:(?:repeated|optional|required)\s+)?(\.?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s+[A-Za-z_]\w*\s*=/gm)) {
+    for (const field of body.matchAll(
+      /(?:^|[;{}])\s*(?:(?:repeated|optional|required)\s+)?(\.?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s+[A-Za-z_]\w*\s*=/gm,
+    )) {
       const type = field[1]!;
       if (PROTO_STATEMENT_KEYWORDS.has(type)) continue;
       const local = field[0].indexOf(type);
       addMessage(type, bodyOffset + field.index! + Math.max(0, local), "proto-message-field-type");
     }
-    for (const mapField of body.matchAll(/\bmap\s*<\s*[^,>]+,\s*(\.?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*>/g)) {
+    for (const mapField of body.matchAll(
+      /\bmap\s*<\s*[^,>]+,\s*(\.?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*>/g,
+    )) {
       addMessage(mapField[1]!, bodyOffset + mapField.index!, "proto-map-value-type");
     }
   }
@@ -195,20 +235,34 @@ const protoAnchors = (file: string, source: string): AnchorDraft[] => {
   for (const service of syntaxBlocks(masked, /\bservice\s+([A-Za-z_]\w*)\s*\{/g)) {
     const serviceName = service.match[1]!;
     const qualified = qualify(serviceName);
-    out.push(anchor(file, lineOf(service.match.index), `RPC SERVICE ${qualified}`, "rpc-service", "proto-service-declaration"));
+    out.push(
+      anchor(
+        file,
+        lineOf(service.match.index),
+        `RPC SERVICE ${qualified}`,
+        "rpc-service",
+        "proto-service-declaration",
+      ),
+    );
     const bodyOffset = service.open + 1;
     const body = masked.slice(bodyOffset, service.close);
-    const rpcPattern = /\brpc\s+([A-Za-z_]\w*)\s*\(\s*(?:stream\s+)?(\.?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*\)\s*returns\s*\(\s*(?:stream\s+)?(\.?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*\)/g;
+    const rpcPattern =
+      /\brpc\s+([A-Za-z_]\w*)\s*\(\s*(?:stream\s+)?(\.?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*\)\s*returns\s*\(\s*(?:stream\s+)?(\.?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*\)/g;
     for (let rpc; (rpc = rpcPattern.exec(body));) {
       const index = bodyOffset + rpc.index;
-      out.push(anchor(file, lineOf(index), `RPC ${qualified}/${rpc[1]!}`, "rpc", "proto-rpc-declaration"));
+      out.push(
+        anchor(file, lineOf(index), `RPC ${qualified}/${rpc[1]!}`, "rpc", "proto-rpc-declaration"),
+      );
       addMessage(rpc[2]!, index + rpc[0].indexOf(rpc[2]!), "proto-rpc-request-type");
       addMessage(rpc[3]!, index + rpc[0].lastIndexOf(rpc[3]!), "proto-rpc-response-type");
     }
   }
   return out;
 };
-interface NamedSite { name: string; index: number }
+interface NamedSite {
+  name: string;
+  index: number;
+}
 
 const graphqlFields = (text: string, start: number, end: number): NamedSite[] => {
   const out: NamedSite[] = [];
@@ -346,7 +400,9 @@ const graphqlAnchors = (file: string, source: string): AnchorDraft[] => {
     out.push(anchor(file, lineOf(index), `GRAPHQL TYPE ${name}`, "graphql-type", ruleId));
   };
 
-  for (const declaration of masked.matchAll(/\b(?:extend\s+)?(type|interface|input|enum|scalar|union)\s+([_A-Za-z]\w*)/g)) {
+  for (const declaration of masked.matchAll(
+    /\b(?:extend\s+)?(type|interface|input|enum|scalar|union)\s+([_A-Za-z]\w*)/g,
+  )) {
     addType(declaration[2]!, declaration.index!, `graphql-${declaration[1]!}-declaration`);
   }
 
@@ -355,24 +411,39 @@ const graphqlAnchors = (file: string, source: string): AnchorDraft[] => {
   // still resolve; masked text keeps comments out of the name set.
   for (const union of masked.matchAll(/\b(?:extend\s+)?union\s+([_A-Za-z]\w*)/g)) {
     const unionEnd = union.index + union[0].length;
-    const boundary = /(?:[\n\r]\s*(?:(?:extend\s+)?(?:type|interface|input|enum|scalar|union|schema|directive)\b|(?:query|mutation|subscription|fragment)\b)|[{])/.exec(masked.slice(unionEnd));
+    const boundary =
+      /(?:[\n\r]\s*(?:(?:extend\s+)?(?:type|interface|input|enum|scalar|union|schema|directive)\b|(?:query|mutation|subscription|fragment)\b)|[{])/.exec(
+        masked.slice(unionEnd),
+      );
     const regionEnd = boundary ? unionEnd + boundary.index : masked.length;
     for (const member of masked.slice(unionEnd, regionEnd).matchAll(/[_A-Za-z]\w*/g)) {
       addType(member[0], unionEnd + member.index!, "graphql-union-member");
     }
   }
 
-  for (const type of declarationBlocks(masked, /\b(?:extend\s+)?(?:type|interface|input)\s+([_A-Za-z]\w*)/g)) {
+  for (const type of declarationBlocks(
+    masked,
+    /\b(?:extend\s+)?(?:type|interface|input)\s+([_A-Za-z]\w*)/g,
+  )) {
     const operation = roots.get(type.match[1]!);
     if (operation) {
       for (const field of graphqlFields(masked, type.open + 1, type.close)) {
-        out.push(anchor(file, lineOf(field.index), `GRAPHQL ${operation} ${field.name}`, "graphql", "graphql-root-field"));
+        out.push(
+          anchor(
+            file,
+            lineOf(field.index),
+            `GRAPHQL ${operation} ${field.name}`,
+            "graphql",
+            "graphql-root-field",
+          ),
+        );
       }
     }
     const header = masked.slice(type.match.index, type.open);
     const implementsMatch = /implements\s+([_A-Za-z][\w\s&|,]*)/.exec(header);
     if (implementsMatch) {
-      const base = type.match.index + implementsMatch.index + implementsMatch[0].indexOf(implementsMatch[1]!);
+      const base =
+        type.match.index + implementsMatch.index + implementsMatch[0].indexOf(implementsMatch[1]!);
       for (const reference of implementsMatch[1]!.matchAll(/[_A-Za-z]\w*/g)) {
         addType(reference[0], base + reference.index!, "graphql-implements-type");
       }
@@ -386,11 +457,20 @@ const graphqlAnchors = (file: string, source: string): AnchorDraft[] => {
 
   const operationPattern = /(?:^|[\n\r])\s*(query|mutation|subscription)\b(?:\s+([_A-Za-z]\w*))?/g;
   for (const operation of declarationBlocks(masked, operationPattern)) {
-    const operationKind = operation.match[1]!.toUpperCase() as "QUERY" | "MUTATION" | "SUBSCRIPTION";
+    const operationKind = operation.match[1]!.toUpperCase() as
+      "QUERY" | "MUTATION" | "SUBSCRIPTION";
     const operationName = operation.match[2];
     const operationIndex = operation.match.index + operation.match[0].indexOf(operation.match[1]!);
     if (operationName) {
-      out.push(anchor(file, lineOf(operationIndex), `GRAPHQL OPERATION ${operationKind} ${operationName}`, "graphql-operation", "graphql-operation-declaration"));
+      out.push(
+        anchor(
+          file,
+          lineOf(operationIndex),
+          `GRAPHQL OPERATION ${operationKind} ${operationName}`,
+          "graphql-operation",
+          "graphql-operation-declaration",
+        ),
+      );
     }
     const rootType = [...roots].find(([, kind]) => kind === operationKind)?.[0];
     if (rootType) addType(rootType, operationIndex, "graphql-operation-root");
@@ -405,14 +485,30 @@ const graphqlAnchors = (file: string, source: string): AnchorDraft[] => {
     }
     const field = firstOperationField(masked, bodyOffset, operation.close);
     if (field) {
-      out.push(anchor(file, lineOf(field.index), `GRAPHQL ${operationKind} ${field.name}`, "graphql", "graphql-operation"));
+      out.push(
+        anchor(
+          file,
+          lineOf(field.index),
+          `GRAPHQL ${operationKind} ${field.name}`,
+          "graphql",
+          "graphql-operation",
+        ),
+      );
     }
   }
 
   const fragmentPattern = /(?:^|[\n\r])\s*fragment\s+([_A-Za-z]\w*)\s+on\s+([_A-Za-z]\w*)/g;
   for (const fragment of declarationBlocks(masked, fragmentPattern)) {
     const fragmentIndex = fragment.match.index + fragment.match[0].indexOf("fragment");
-    out.push(anchor(file, lineOf(fragmentIndex), `GRAPHQL FRAGMENT ${fragment.match[1]!}`, "graphql-fragment", "graphql-fragment-declaration"));
+    out.push(
+      anchor(
+        file,
+        lineOf(fragmentIndex),
+        `GRAPHQL FRAGMENT ${fragment.match[1]!}`,
+        "graphql-fragment",
+        "graphql-fragment-declaration",
+      ),
+    );
     addType(fragment.match[2]!, fragmentIndex, "graphql-fragment-type");
   }
   return out;
@@ -421,7 +517,9 @@ export const extractProtocolAnchors = async (
   files: readonly string[],
   source: FileSource,
 ): Promise<AnchorDraft[]> => {
-  const protocolFiles = files.filter((file) => PROTOCOL_EXTENSIONS.has(extname(file).toLowerCase()));
+  const protocolFiles = files.filter((file) =>
+    PROTOCOL_EXTENSIONS.has(extname(file).toLowerCase()),
+  );
   const texts = await readAll(protocolFiles, source);
   const out: AnchorDraft[] = [];
   for (const file of [...protocolFiles].sort()) {
@@ -430,7 +528,13 @@ export const extractProtocolAnchors = async (
     if (file.endsWith(".proto")) out.push(...protoAnchors(file, text));
     else out.push(...graphqlAnchors(file, text));
   }
-  out.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.id.localeCompare(b.id) || (a.ruleId ?? "").localeCompare(b.ruleId ?? ""));
+  out.sort(
+    (a, b) =>
+      a.file.localeCompare(b.file) ||
+      a.line - b.line ||
+      a.id.localeCompare(b.id) ||
+      (a.ruleId ?? "").localeCompare(b.ruleId ?? ""),
+  );
   const seen = new Set<string>();
   return out.filter((item) => {
     const key = `${item.id}|${item.file}|${item.line}`;

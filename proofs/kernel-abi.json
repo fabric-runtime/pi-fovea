@@ -1,6 +1,6 @@
 {
   "disclosure": [["scope", "boolean"], ["excluded", "boolean"], ["seen", "boolean"], ["repeat", "boolean"], ["nucleus", "boolean"], "DisclosureDecision"],
-  "shownCount": [["total", "bigint"], ["requested", "bigint"], "bigint"],
-  "remainingCount": [["total", "bigint"], ["requested", "bigint"], "bigint"],
-  "basisStep": [["have", "bigint"], ["order", "bigint"], "BasisStep"]
+  "shownCount": [["total", "number"], ["requested", "number"], "number"],
+  "remainingCount": [["total", "number"], ["requested", "number"], "number"],
+  "basisStep": [["have", "number"], ["order", "number"], "BasisStep"]
 }

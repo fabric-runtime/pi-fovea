@@ -4,8 +4,24 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasAstGrep, langOf, scanRules } from "../src/core/astgrep.js";
 import { extractR } from "../src/core/r.js";
-import { cachePathFor, clearPersistTimer, filterSupported, loadFacts, refreshFacts, type FileFacts } from "../src/core/build.js";
-import { coreFactsFromScan, coreScanRules, extractCalls, extractImports, extractLiterals, extractSymbols, isTestFile, supportsImportExtraction } from "../src/core/extract.js";
+import {
+  cachePathFor,
+  clearPersistTimer,
+  filterSupported,
+  loadFacts,
+  refreshFacts,
+  type FileFacts,
+} from "../src/core/build.js";
+import {
+  coreFactsFromScan,
+  coreScanRules,
+  extractCalls,
+  extractImports,
+  extractLiterals,
+  extractSymbols,
+  isTestFile,
+  supportsImportExtraction,
+} from "../src/core/extract.js";
 import { assembleGraphWithIndex } from "../src/core/graph.js";
 import { ensureState, evictState, focus, sketch } from "../src/core/ops.js";
 import { resetSessions } from "../src/core/session.js";
@@ -47,49 +63,79 @@ describe("R source reader", () => {
   it("registers .R as source with import coverage, testthat conventions and no ast-grep rules", () => {
     expect(langOf("stats.R")).toBe("R");
     expect(langOf("MAIN.R")).toBe("R");
-    expect(filterSupported(["stats.R", "helpers.r", "unknown.xyz"])).toEqual(["stats.R", "helpers.r"]);
+    expect(filterSupported(["stats.R", "helpers.r", "unknown.xyz"])).toEqual([
+      "stats.R",
+      "helpers.r",
+    ]);
     expect(supportsImportExtraction("R")).toBe(true);
     expect(isTestFile("tests/testthat/test-stats.R")).toBe(true);
     expect(isTestFile("tests/testthat.R")).toBe(true);
     expect(isTestFile("tests/testthat/helper-data.R")).toBe(true);
     expect(isTestFile("R/stats.R")).toBe(false);
     expect(coreScanRules(["stats.R"])).toEqual([]);
-    expect(coreScanRules(["stats.R", "api.ts"]).every((rule) => rule.language === "TypeScript")).toBe(true);
+    expect(
+      coreScanRules(["stats.R", "api.ts"]).every((rule) => rule.language === "TypeScript"),
+    ).toBe(true);
   });
 
   it("extracts functions, S4 generics, R6 methods and exact lines", () => {
     const facts = extractR("stats.R", program);
     expect(facts.symbols.map(({ name, kind, line }) => [name, kind, line])).toEqual([
-      ["trim_price", "function", 8], ["fit_model", "function", 13],
-      ["summary_stats", "function", 18], ["Account", "class", 22],
-      ["deposit", "function", 23], ["Wallet", "class", 31],
-      ["Wallet.initialize", "method", 34], ["Wallet.deposit", "method", 37],
+      ["trim_price", "function", 8],
+      ["fit_model", "function", 13],
+      ["summary_stats", "function", 18],
+      ["Account", "class", 22],
+      ["deposit", "function", 23],
+      ["Wallet", "class", 31],
+      ["Wallet.initialize", "method", 34],
+      ["Wallet.deposit", "method", 37],
       ["run_report", "function", 44],
     ]);
     expect(facts.symbols.every((symbol) => symbol.lang === "R")).toBe(true);
     expect(facts.imports).toEqual([
-      { file: "stats.R", line: 3, spec: "dplyr" },
-      { file: "stats.R", line: 4, spec: "stringr" },
-      { file: "stats.R", line: 5, spec: "tibble" },
-      { file: "stats.R", line: 6, spec: "./helpers.R" },
+      { file: "stats.R", line: 3, spec: "dplyr", form: "r-package" },
+      { file: "stats.R", line: 4, spec: "stringr", form: "r-package" },
+      { file: "stats.R", line: 5, spec: "tibble", form: "r-package" },
+      { file: "stats.R", line: 6, spec: "./helpers.R", form: "r-source" },
     ]);
     expect(facts.calls.map(({ callee, line }) => [callee, line])).toEqual([
-      ["glm", 14], ["setClass", 22], ["setGeneric", 23], ["standardGeneric", 23],
-      ["setMethod", 24], ["signature", 25], ["R6Class", 31], ["invisible", 39],
-      ["read.csv", 45], ["trim_price", 46], ["dplyr::mutate", 47], ["str_detect", 49],
+      ["glm", 14],
+      ["setClass", 22],
+      ["setGeneric", 23],
+      ["standardGeneric", 23],
+      ["setMethod", 24],
+      ["signature", 25],
+      ["R6Class", 31],
+      ["invisible", 39],
+      ["read.csv", 45],
+      ["trim_price", 46],
+      ["dplyr::mutate", 47],
+      ["str_detect", 49],
     ]);
     expect(facts.literals.map((site) => [site.text, site.line])).toEqual([
-      ["stringr", 4], ["tibble", 5], ["./helpers.R", 6],
-      ["NA", 8], ["USD", 10], ["Account", 22], ["character", 22], ["numeric", 22],
-      ["deposit", 23], ["deposit", 24], ["Account", 25], ["Wallet", 31],
-      ["/api/report", 44], ["EUR", 47], ["total: ", 48], ["^\\d+", 49],
+      ["stringr", 4],
+      ["tibble", 5],
+      ["./helpers.R", 6],
+      ["NA", 8],
+      ["USD", 10],
+      ["Account", 22],
+      ["character", 22],
+      ["numeric", 22],
+      ["deposit", 23],
+      ["deposit", 24],
+      ["Account", 25],
+      ["Wallet", 31],
+      ["/api/report", 44],
+      ["EUR", 47],
+      ["total: ", 48],
+      ["^\\d+", 49],
     ]);
   });
 
   it("masks comments, escaped quotes and base mega-hub noise", () => {
     const text = [
       "#!/usr/bin/env Rscript",
-      "x <- \"quoted # not a comment\" # real() comment",
+      'x <- "quoted # not a comment" # real() comment',
       "eq == function(x) x",
       "c(1, 2)",
       "sapply(x, function(i) i)",
@@ -103,7 +149,8 @@ describe("R source reader", () => {
     ]);
     expect(facts.calls).toEqual([]);
     expect(facts.literals.map((site) => site.text)).toEqual([
-      "quoted # not a comment", 'single "quoted"',
+      "quoted # not a comment",
+      'single "quoted"',
     ]);
   });
 
@@ -158,12 +205,7 @@ describe("R source reader", () => {
   });
 
   it("does not let a closed single-line R6Class swallow the next section", () => {
-    const text = [
-      'Base <- R6Class("Base")',
-      "",
-      "# Helpers ----",
-      "f <- function(x) x",
-    ].join("\n");
+    const text = ['Base <- R6Class("Base")', "", "# Helpers ----", "f <- function(x) x"].join("\n");
     const facts = extractR("r6one.R", text);
     expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
       ["Base", "class"],
@@ -197,10 +239,14 @@ describe("R source reader", () => {
     ].join("\n");
     const facts = extractR("raw.R", text);
     expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
-      ["sql", "decl"], ["real_fn", "function"], ["label", "decl"], ["other", "function"],
+      ["sql", "decl"],
+      ["real_fn", "function"],
+      ["label", "decl"],
+      ["other", "function"],
     ]);
     expect(facts.literals.map((site) => site.text)).toEqual([
-      'SELECT a " b ( c FROM t', "contains ] bracket",
+      'SELECT a " b ( c FROM t',
+      "contains ] bracket",
     ]);
   });
 
@@ -212,9 +258,12 @@ describe("R source reader", () => {
     ].join("\n");
     const facts = extractR("rawml.R", text);
     expect(facts.symbols.map(({ name, kind, line }) => [name, kind, line])).toEqual([
-      ["query", "decl", 1], ["after", "function", 3],
+      ["query", "decl", 1],
+      ["after", "function", 3],
     ]);
-    expect(facts.literals).toEqual([{ file: "rawml.R", line: 1, text: "SELECT [col]  FROM t WHERE x = 1" }]);
+    expect(facts.literals).toEqual([
+      { file: "rawml.R", line: 1, text: "SELECT [col]  FROM t WHERE x = 1" },
+    ]);
   });
 
   it("records backtick and quoted operator definitions", () => {
@@ -225,7 +274,9 @@ describe("R source reader", () => {
     ].join("\n");
     const facts = extractR("ops.R", text);
     expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
-      ["%+%", "function"], ["%>%", "function"], ["%||%", "function"],
+      ["%+%", "function"],
+      ["%>%", "function"],
+      ["%||%", "function"],
     ]);
   });
 
@@ -243,7 +294,9 @@ describe("R source reader", () => {
     ].join("\n");
     const facts = extractR("split.R", text);
     expect(facts.symbols.map(({ name, kind, line }) => [name, kind, line])).toEqual([
-      ["long_name", "function", 1], ["delayed", "function", 5], ["Wallet", "class", 8],
+      ["long_name", "function", 1],
+      ["delayed", "function", 5],
+      ["Wallet", "class", 8],
     ]);
   });
 
@@ -255,39 +308,39 @@ describe("R source reader", () => {
     ].join("\n");
     const facts = extractR("right.R", text);
     expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
-      ["make_id", "function"], ["cap", "decl"], ["fn", "function"],
+      ["make_id", "function"],
+      ["cap", "decl"],
+      ["fn", "function"],
     ]);
   });
 
   it("accepts deeper hash headers and hash terminators for sections", () => {
-    const text = [
-      "### Deep section ----",
-      "f <- function(x) x",
-      "# Data ####",
-    ].join("\n");
+    const text = ["### Deep section ----", "f <- function(x) x", "# Data ####"].join("\n");
     const facts = extractR("deep.R", text);
     expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
-      ["Deep section", "section"], ["f", "function"], ["Data", "section"],
+      ["Deep section", "section"],
+      ["f", "function"],
+      ["Data", "section"],
     ]);
   });
 
   it("does not emit section markers from inside multi-line strings", () => {
-    const text = [
-      'sql <- "SELECT 1',
-      "# Query ----",
-      '"',
-      "real <- function(x) x",
-    ].join("\n");
+    const text = ['sql <- "SELECT 1', "# Query ----", '"', "real <- function(x) x"].join("\n");
     const facts = extractR("strsec.R", text);
     expect(facts.symbols.map(({ name, kind }) => [name, kind])).toEqual([
-      ["sql", "decl"], ["real", "function"],
+      ["sql", "decl"],
+      ["real", "function"],
     ]);
   });
 
   it("never resolves calls to section markers", async () => {
-    const graph = await graphFor({ "a.R": "# Fit ----\nFit <- function(x) x\nrun <- function() Fit(1)\n" });
+    const graph = await graphFor({
+      "a.R": "# Fit ----\nFit <- function(x) x\nrun <- function() Fit(1)\n",
+    });
     const invokes = graph.edges.filter((edge) => edge.kind === "invokes");
-    expect(invokes.map((edge) => [graph.nodes[edge.a]!.id, graph.nodes[edge.b]!.id])).toEqual([["run@a.R", "Fit@a.R"]]);
+    expect(invokes.map((edge) => [graph.nodes[edge.a]!.id, graph.nodes[edge.b]!.id])).toEqual([
+      ["run@a.R", "Fit@a.R"],
+    ]);
   });
 
   it("keeps standalone and consolidated facts identical without a grammar", async () => {
@@ -300,7 +353,9 @@ describe("R source reader", () => {
     expect(await extractCalls(files, root, source)).toEqual(native.calls);
     expect(await extractLiterals(files, root, source)).toEqual(native.literals);
     expect(await coreFactsFromScan(files, root, source, [])).toEqual({
-      imports: native.imports, calls: native.calls, literals: native.literals,
+      imports: native.imports,
+      calls: native.calls,
+      literals: native.literals,
     });
   });
 
@@ -320,7 +375,12 @@ describe("R source reader", () => {
       ["main", "prepare@R/helpers.R"],
     ]);
     expect(invokes[0]!.evidence?.strategy).toBe("imported-symbol");
-    expect(graph.importCoverage).toMatchObject({ sites: 2, resolved: 1, unresolved: 1, unsupportedLanguages: [] });
+    expect(graph.importCoverage).toMatchObject({
+      sites: 2,
+      resolved: 1,
+      unresolved: 1,
+      unsupportedLanguages: [],
+    });
   });
 
   it("wires testthat files to their subjects through source() imports", async () => {
@@ -351,7 +411,11 @@ describe("R graph integration", () => {
     const state = await ensureState(root);
     expect(state.files).toEqual(["helpers.R", "main.R"]);
     expect(state.extraction.failed).toEqual([]);
-    const trimmed = await focus(root, "trim_price", 1200, { language: "R", kind: "function", fresh: true });
+    const trimmed = await focus(root, "trim_price", 1200, {
+      language: "R",
+      kind: "function",
+      fresh: true,
+    });
     expect(trimmed.text).toContain("main.R:8");
   });
 
@@ -367,13 +431,18 @@ describe("R graph integration", () => {
     writeFileSync(join(root, "new.R"), "added <- function() 2\n");
     expect((await ensureState(root, { hints: ["new.R"], force: true })).files).toContain("new.R");
     writeFileSync(join(root, "api.ts"), "export const api = 1;\n");
-    await expect(ensureState(root, { hints: ["api.ts"], force: true })).rejects.toThrow("no usable ast-grep binary");
+    await expect(ensureState(root, { hints: ["api.ts"], force: true })).rejects.toThrow(
+      "no usable ast-grep binary",
+    );
     rmSync(join(root, "api.ts"));
     expect((await ensureState(root, { force: true })).extraction.failed).toEqual([]);
   });
 
   it("still rejects a mixed-language cold build when ast-grep is missing", async () => {
-    const root = fixture({ "main.R": "main <- function() 1\n", "api.ts": "export const api = 1;\n" });
+    const root = fixture({
+      "main.R": "main <- function() 1\n",
+      "api.ts": "export const api = 1;\n",
+    });
     vi.stubEnv("FOVEA_AST_GREP", join(root, "missing-ast-grep"));
     await expect(ensureState(root)).rejects.toThrow("no usable ast-grep binary");
   });
@@ -390,14 +459,23 @@ describe("R graph integration", () => {
   });
 
   it.skipIf(!hasAstGrep())("keeps mixed-language scans on the consolidated path", async () => {
-    const root = fixture({ "stats.R": program, "api.ts": 'export function run() { return fetch("/api/report"); }' });
+    const root = fixture({
+      "stats.R": program,
+      "api.ts": 'export function run() { return fetch("/api/report"); }',
+    });
     const files = ["stats.R", "api.ts"];
     const matches = await scanRules(coreScanRules(files), files, root);
     expect(matches).toBeDefined();
     const facts = await coreFactsFromScan(files, root, makeFileSource(root), matches!);
-    expect(facts.calls.some((site) => site.file === "api.ts" && site.callee === "fetch")).toBe(true);
-    expect(facts.calls.some((site) => site.file === "stats.R" && site.callee === "trim_price")).toBe(true);
-    expect(facts.imports.some((site) => site.file === "stats.R" && site.spec === "dplyr")).toBe(true);
+    expect(facts.calls.some((site) => site.file === "api.ts" && site.callee === "fetch")).toBe(
+      true,
+    );
+    expect(
+      facts.calls.some((site) => site.file === "stats.R" && site.callee === "trim_price"),
+    ).toBe(true);
+    expect(facts.imports.some((site) => site.file === "stats.R" && site.spec === "dplyr")).toBe(
+      true,
+    );
   });
 
   it("never promotes R path calls into unsupported ast-grep rules or tier-3 sigs", async () => {
@@ -416,7 +494,10 @@ describe("R graph integration", () => {
   });
 
   it("persists and refreshes edited R facts", async () => {
-    const sources = { "main.R": "source('./helpers.R')\nmain <- function() prepare(1)\n", "helpers.R": "prepare <- function(x) x\n" };
+    const sources = {
+      "main.R": "source('./helpers.R')\nmain <- function() prepare(1)\n",
+      "helpers.R": "prepare <- function(x) x\n",
+    };
     const root = fixture(sources);
     const files = Object.keys(sources);
     const first = await loadFacts(root, files);
@@ -447,10 +528,19 @@ describe("R package edges", () => {
       "R/plot.R": ["library(ggplot2)", "plot_it <- function(x) x"].join("\n"),
     });
     const pkgs = graph.nodes.filter((n) => n.kind === "package");
-    expect(pkgs.map((p) => p.id).sort()).toEqual(["pkg:dplyr", "pkg:ggplot2", "pkg:stats", "pkg:tibble"]);
+    expect(pkgs.map((p) => p.id).sort()).toEqual([
+      "pkg:dplyr",
+      "pkg:ggplot2",
+      "pkg:stats",
+      "pkg:tibble",
+    ]);
     const pkgEdges = graph.edges
       .filter((edge) => graph.nodes[edge.b]!.kind === "package")
-      .map((edge) => [graph.nodes[edge.a]!.file, graph.nodes[edge.b]!.name, edge.evidence?.strategy])
+      .map((edge) => [
+        graph.nodes[edge.a]!.file,
+        graph.nodes[edge.b]!.name,
+        edge.evidence?.strategy,
+      ])
       .sort();
     expect(pkgEdges).toEqual([
       ["R/main.R", "dplyr", "package-import"],
@@ -464,10 +554,7 @@ describe("R package edges", () => {
 
   it("admits dotted CRAN package names while file-like specs stay rejected", async () => {
     const graph = await graphFor({
-      "R/dotted.R": [
-        "library(data.tree)",
-        "source('helpers.R')",
-      ].join("\n"),
+      "R/dotted.R": ["library(data.tree)", "source('helpers.R')"].join("\n"),
     });
     const pkgs = graph.nodes.filter((n) => n.kind === "package");
     expect(pkgs.map((p) => p.id)).toEqual(["pkg:data.tree"]);
@@ -480,7 +567,8 @@ describe("R package edges", () => {
     });
     const { store } = await loadFacts(root, ["R/a.R"]);
     const { graph } = await assembleGraphWithIndex(root, ["R/a.R"], store.facts);
-    const sig = (name: string): string | undefined => graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
+    const sig = (name: string): string | undefined =>
+      graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
     expect(sig("testthat")).toBe("R package testthat · declared in DESCRIPTION");
     expect(graph.nodes.some((n) => n.id === "pkg:missing.R")).toBe(false);
   });
@@ -492,7 +580,8 @@ describe("R package edges", () => {
     });
     const { store } = await loadFacts(root, ["R/a.R"]);
     const { graph } = await assembleGraphWithIndex(root, ["R/a.R"], store.facts);
-    const sig = (name: string): string | undefined => graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
+    const sig = (name: string): string | undefined =>
+      graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
     expect(sig("ggplot2")).toBe("R package ggplot2 · declared in DESCRIPTION");
     expect(sig("seqinr")).toBe("R package seqinr · used without DESCRIPTION entry");
     // Declared but unused (methods) creates no node: nodes come from usage.
@@ -506,7 +595,8 @@ describe("R package edges", () => {
     });
     const { store } = await loadFacts(root, ["R/a.R"]);
     const { graph } = await assembleGraphWithIndex(root, ["R/a.R"], store.facts);
-    const sig = (name: string): string | undefined => graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
+    const sig = (name: string): string | undefined =>
+      graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
     expect(sig("dplyr")).toBe("R package dplyr · declared in DESCRIPTION");
     expect(sig("stats")).toBe("R package stats · base package");
   });
@@ -565,9 +655,13 @@ describe("R package edges", () => {
       ].join("\n"),
     });
     const tests = graph.edges.filter((edge) => edge.kind === "tests");
-    expect(tests.map((edge) => [graph.nodes[edge.a]!.file, graph.nodes[edge.b]!.file, edge.evidence?.strategy])).toEqual([
-      ["tests/testthat/test-stats.R", "R/stats.R", "test-naming-convention"],
-    ]);
+    expect(
+      tests.map((edge) => [
+        graph.nodes[edge.a]!.file,
+        graph.nodes[edge.b]!.file,
+        edge.evidence?.strategy,
+      ]),
+    ).toEqual([["tests/testthat/test-stats.R", "R/stats.R", "test-naming-convention"]]);
   });
 
   it("scopes focus by an inline lang: prefix or a language option", async () => {
@@ -582,24 +676,32 @@ describe("R package edges", () => {
     expect(rOnly.text).toContain("enrichment_run");
     expect(rOnly.text).not.toContain("fetch_enrichment_data");
     // "Quarto" also matches notebook symbols (their lang is the chunk engine).
-    const root2 = fixture({ "nb.qmd": "```{r}\nprep <- function(df) df\n```", "plain.R": "prep <- function(x) x" });
+    const root2 = fixture({
+      "nb.qmd": "```{r}\nprep <- function(df) df\n```",
+      "plain.R": "prep <- function(x) x",
+    });
     const fo2 = await focus(root2, "prep", 700, { language: "Quarto", fresh: true });
     expect(fo2.text).toContain("nb.qmd");
     expect(fo2.text).not.toContain("plain.R");
     // An explicit option wins over the inline prefix.
-    const pyOption = await focus(root, "lang:r enrichment", 700, { language: "Python", fresh: true });
+    const pyOption = await focus(root, "lang:r enrichment", 700, {
+      language: "Python",
+      fresh: true,
+    });
     expect(pyOption.text).toContain("fetch_enrichment_data");
     expect(pyOption.text).not.toContain("enrichment_run");
   });
 
   it("describes mixed-language region composition in sketch", async () => {
     const sources: Record<string, string> = {
-      "ana/define_sets.py": 'gene_sets = load("gene_sets")\ndef export_sets():\n    return gene_sets\n',
+      "ana/define_sets.py":
+        'gene_sets = load("gene_sets")\ndef export_sets():\n    return gene_sets\n',
       "ana/fetch_sets.py": 'def fetch_sets():\n    return "gene_sets"\n',
     };
     for (let i = 1; i <= 30; i++) {
       const n = String(i).padStart(2, "0");
-      sources[`ana/calc_${n}.R`] = `read_sets <- function(x) "gene_sets"\nplot_${n} <- function(df) df\n`;
+      sources[`ana/calc_${n}.R`] =
+        `read_sets <- function(x) "gene_sets"\nplot_${n} <- function(df) df\n`;
     }
     const root = fixture(sources);
     await ensureState(root);

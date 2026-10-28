@@ -3,13 +3,32 @@
 // rendering), focus centers the fovea on a query, dwell advances diffusion
 // time and returns the delta, impact seeds from changed files.
 
+import { resetFocus } from "../verified/generated/control.js";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
 import { diffHunks, prFiles, uncommittedFiles } from "./git.js";
-import { chebyshevVectors, chooseOrder, extendChebyshevVectors, forwardHeat, heatField } from "./heat.js";
-import { formatNodeLocation, revealFoveated, revealGroups, tokenEstimate, type GroupLine, type RevealedNode } from "./render.js";
-import { clearSessionFocus, getSession, observeSessionPaths, retainSessionVectors } from "./session.js";
+import {
+  chebyshevVectors,
+  chooseOrder,
+  extendChebyshevVectors,
+  forwardHeat,
+  heatField,
+} from "./heat.js";
+import {
+  formatNodeLocation,
+  revealFoveated,
+  revealGroups,
+  tokenEstimate,
+  type GroupLine,
+  type RevealedNode,
+} from "./render.js";
+import {
+  clearSessionFocus,
+  getSession,
+  observeSessionPaths,
+  retainSessionVectors,
+} from "./session.js";
 import { detectBasins } from "./basins.js";
 import { classifyLiteral, normalizeLiteral } from "./join.js";
 import { isTestFile } from "./extract.js";
@@ -32,9 +51,11 @@ const extractionSuffix = (state: RepoState): string => {
   const parts: string[] = [];
   if (state.discovery.capped) {
     const omitted = state.discovery.omittedSupported;
-    parts.push(omitted === null
-      ? `!file cap ${state.discovery.maxFiles} reached`
-      : `!file cap omitted ${omitted}`);
+    parts.push(
+      omitted === null
+        ? `!file cap ${state.discovery.maxFiles} reached`
+        : `!file cap omitted ${omitted}`,
+    );
   }
   if (state.discovery.unreadableDirectoriesSeen) {
     parts.push(`!${state.discovery.unreadableDirectoriesSeen} directories unreadable`);
@@ -45,10 +66,14 @@ const extractionSuffix = (state: RepoState): string => {
   if (state.discovery.unavailableFilesSeen) {
     parts.push(`!${state.discovery.unavailableFilesSeen} listed files unavailable`);
   }
-  if (state.extraction.failed.length) parts.push(`!${state.extraction.failed.length} files failed extraction`);
-  if (state.extraction.unreadable.length) parts.push(`!${state.extraction.unreadable.length} files unreadable`);
-  if (state.extraction.oversized.length) parts.push(`!${state.extraction.oversized.length} files over size cap`);
-  if (state.extraction.generated.length) parts.push(`!${state.extraction.generated.length} generated files skipped`);
+  if (state.extraction.failed.length)
+    parts.push(`!${state.extraction.failed.length} files failed extraction`);
+  if (state.extraction.unreadable.length)
+    parts.push(`!${state.extraction.unreadable.length} files unreadable`);
+  if (state.extraction.oversized.length)
+    parts.push(`!${state.extraction.oversized.length} files over size cap`);
+  if (state.extraction.generated.length)
+    parts.push(`!${state.extraction.generated.length} generated files skipped`);
   return parts.length ? ` · ${parts.join(", ")}` : "";
 };
 
@@ -62,11 +87,15 @@ const extractionDetails = (state: RepoState): Record<string, unknown> => ({
     unreadableFiles: state.extraction.unreadable,
     oversizedFiles: state.extraction.oversized,
     generatedFiles: state.extraction.generated,
-    ...(state.graph.importCoverage ? { imports: {
-      ...state.graph.importCoverage,
-      unsupportedLanguages: [...state.graph.importCoverage.unsupportedLanguages],
-      examples: state.graph.importCoverage.examples.map((example) => ({ ...example })),
-    } } : {}),
+    ...(state.graph.importCoverage
+      ? {
+          imports: {
+            ...state.graph.importCoverage,
+            unsupportedLanguages: [...state.graph.importCoverage.unsupportedLanguages],
+            examples: state.graph.importCoverage.examples.map((example) => ({ ...example })),
+          },
+        }
+      : {}),
   },
   // Legacy flat fields remain additive compatibility for tool consumers.
   extractionFailures: state.extraction.failed.length,
@@ -82,21 +111,34 @@ export const coverageSummary = (details: Record<string, unknown>): string => {
   const indexed = Number(report?.indexedFiles ?? details.files ?? 0);
   if (!report) return `${indexed} indexed files`;
   const supported = Number(report.supportedFilesSeen ?? indexed);
-  const parts = [`${indexed}/${supported} supported files selected (${report.source ?? "unknown"}/${report.recording ?? "unknown"})`];
+  const parts = [
+    `${indexed}/${supported} supported files selected (${report.source ?? "unknown"}/${report.recording ?? "unknown"})`,
+  ];
   if (report.unsupportedFilesSeen) parts.push(`${report.unsupportedFilesSeen} unsupported`);
   if (report.excludedEntriesSeen) parts.push(`${report.excludedEntriesSeen} excluded`);
-  if (report.capped) parts.push(report.omittedSupported === null
-    ? `!more omitted at cap ${report.maxFiles}`
-    : `!${report.omittedSupported ?? 0} omitted at cap ${report.maxFiles}`);
+  if (report.capped)
+    parts.push(
+      report.omittedSupported === null
+        ? `!more omitted at cap ${report.maxFiles}`
+        : `!${report.omittedSupported ?? 0} omitted at cap ${report.maxFiles}`,
+    );
   if (report.closedBoundariesSeen) parts.push(`!${report.closedBoundariesSeen} boundaries closed`);
-  if (report.unreadableDirectoriesSeen) parts.push(`!${report.unreadableDirectoriesSeen} directories unreadable`);
-  if (report.unavailableFilesSeen) parts.push(`!${report.unavailableFilesSeen} listed files unavailable`);
+  if (report.unreadableDirectoriesSeen)
+    parts.push(`!${report.unreadableDirectoriesSeen} directories unreadable`);
+  if (report.unavailableFilesSeen)
+    parts.push(`!${report.unavailableFilesSeen} listed files unavailable`);
   return parts.join(", ");
 };
 
 const looksLikeRepoPath = (query: string): boolean => {
   const value = query.trim();
-  return !value.startsWith("/") && (value.startsWith("@") || value.startsWith("./") || value.includes("/") || /\.[A-Za-z0-9]+$/.test(value));
+  return (
+    !value.startsWith("/") &&
+    (value.startsWith("@") ||
+      value.startsWith("./") ||
+      value.includes("/") ||
+      /\.[A-Za-z0-9]+$/.test(value))
+  );
 };
 
 // Seed resolution.
@@ -124,15 +166,53 @@ export interface FocusOptions {
 }
 
 const SHORT_LANG: Record<string, string> = {
-  TypeScript: "ts", Tsx: "tsx", JavaScript: "js", Python: "py", R: "R", Quarto: "qmd",
-  Go: "go", Rust: "rs", Bend: "bend", Lua: "lua", Php: "php", Java: "java",
-  Kotlin: "kt", C: "c", "C++": "cpp", Ruby: "rb", Elixir: "ex", Swift: "swift",
-  Scala: "scala", Haskell: "hs", Bash: "sh",
+  TypeScript: "ts",
+  Tsx: "tsx",
+  JavaScript: "js",
+  Python: "py",
+  R: "R",
+  Quarto: "qmd",
+  Go: "go",
+  Rust: "rs",
+  Bend: "bend",
+  Lua: "lua",
+  Php: "php",
+  Java: "java",
+  Kotlin: "kt",
+  C: "c",
+  "C++": "cpp",
+  Ruby: "rb",
+  Elixir: "ex",
+  Swift: "swift",
+  Scala: "scala",
+  Haskell: "hs",
+  Bash: "sh",
 };
 
 const QUERY_STOP_WORDS = new Set([
-  "a", "an", "and", "are", "do", "does", "find", "for", "happen", "happens", "how",
-  "in", "is", "of", "on", "please", "the", "this", "to", "what", "where", "which", "with",
+  "a",
+  "an",
+  "and",
+  "are",
+  "do",
+  "does",
+  "find",
+  "for",
+  "happen",
+  "happens",
+  "how",
+  "in",
+  "is",
+  "of",
+  "on",
+  "please",
+  "the",
+  "this",
+  "to",
+  "what",
+  "where",
+  "which",
+  "with",
 ]);
 
 const stemIdentifier = (term: string): string => {
@@ -210,13 +290,21 @@ const focusScope = (options: FocusOptions): ((node: NodeRec) => boolean) => {
   const pathScope = options.path?.replace(/^@/, "").replace(/^\.\//, "").replace(/\/$/, "");
   const language = options.language?.toLowerCase();
   const kind = options.kind;
-  return (node) => (!pathScope || node.file === pathScope || node.file.startsWith(`${pathScope}/`)) &&
+  return (node) =>
+    (!pathScope || node.file === pathScope || node.file.startsWith(`${pathScope}/`)) &&
     // "Quarto" also matches notebook symbols, whose lang is the chunk
     // engine (R/python) while only the file node says "Quarto".
-    (!language || node.lang.toLowerCase() === language || (language === "quarto" && node.chunk !== undefined)) && (!kind || node.kind === kind);
+    (!language ||
+      node.lang.toLowerCase() === language ||
+      (language === "quarto" && node.chunk !== undefined)) &&
+    (!kind || node.kind === kind);
 };
 
-export const resolveSeeds = (state: RepoState, query: string, options: FocusOptions = {}): SeedResolution => {
+export const resolveSeeds = (
+  state: RepoState,
+  query: string,
+  options: FocusOptions = {},
+): SeedResolution => {
   const g = state.graph;
   const matches = focusScope(options);
   const allows = (idx: number): boolean => matches(g.nodes[idx]!);
@@ -227,14 +315,16 @@ export const resolveSeeds = (state: RepoState, query: string, options: FocusOpti
   };
   const q = query.trim();
   let normalizedQuery: string[] | undefined;
-  const queryTerms = () => normalizedQuery ??= identifierTerms(q);
+  const queryTerms = () => (normalizedQuery ??= identifierTerms(q));
   const terms = q.split(/\s+/).filter((t) => t.length > 1);
 
   // Full feature ids are exact seeds for routes and non-HTTP protocols alike.
   // Once named exactly, do not dilute the nucleus with fuzzy symbol matches.
   const featureId = q.toLowerCase();
   const exactFeatures = g.nodes
-    .map((node, index) => node.kind === "anchor" && node.name.toLowerCase() === featureId && allows(index) ? index : -1)
+    .map((node, index) =>
+      node.kind === "anchor" && node.name.toLowerCase() === featureId && allows(index) ? index : -1,
+    )
     .filter((index) => index >= 0);
   if (exactFeatures.length) {
     return {
@@ -288,7 +378,11 @@ export const resolveSeeds = (state: RepoState, query: string, options: FocusOpti
   }
   if (scored.size === 0) {
     g.nodes.forEach((node, i) => {
-      if (node.kind !== "file" && node.kind !== "anchor" && sameIdentifierTerms(queryTerms(), node)) {
+      if (
+        node.kind !== "file" &&
+        node.kind !== "anchor" &&
+        sameIdentifierTerms(queryTerms(), node)
+      ) {
         bump(i, 0.7);
       }
     });
@@ -305,39 +399,50 @@ export const resolveSeeds = (state: RepoState, query: string, options: FocusOpti
     .sort((a, b) => b[1] - a[1] || g.nodes[a[0]]!.file.localeCompare(g.nodes[b[0]]!.file))
     .slice(0, 16);
   const seeds = ranked.map(([i]) => i);
-  const names = ranked.slice(0, 4).map(([i, score]) => `${g.nodes[i]!.name}${score < 1 ? " (approximate)" : ""}`);
+  const names = ranked
+    .slice(0, 4)
+    .map(([i, score]) => `${g.nodes[i]!.name}${score < 1 ? " (approximate)" : ""}`);
   const note = seeds.length
     ? `${seeds.length} match${seeds.length === 1 ? "" : "es"}: ${names.join(", ")}${seeds.length > 4 ? ", …" : ""}`
     : "no graph match";
   const suggestions = seeds.length
     ? []
     : g.nodes
-      .flatMap((node, index) => {
-        if (!allows(index) || node.kind === "file" || node.kind === "anchor") return [];
-        const score = symbolSimilarity(queryTerms(), node);
-        return score >= 0.34 ? [{ node, index, score }] : [];
-      })
-      .sort((a, b) => b.score - a.score || a.node.name.localeCompare(b.node.name) || a.node.file.localeCompare(b.node.file))
-      .slice(0, 5)
-      .map(({ node, index, score }) => ({
-        index,
-        name: node.name,
-        file: node.file,
-        line: node.line,
-        lineApproximate: node.lineApproximate,
-        score,
-      }));
+        .flatMap((node, index) => {
+          if (!allows(index) || node.kind === "file" || node.kind === "anchor") return [];
+          const score = symbolSimilarity(queryTerms(), node);
+          return score >= 0.34 ? [{ node, index, score }] : [];
+        })
+        .sort(
+          (a, b) =>
+            b.score - a.score ||
+            a.node.name.localeCompare(b.node.name) ||
+            a.node.file.localeCompare(b.node.file),
+        )
+        .slice(0, 5)
+        .map(({ node, index, score }) => ({
+          index,
+          name: node.name,
+          file: node.file,
+          line: node.line,
+          lineApproximate: node.lineApproximate,
+          score,
+        }));
   return { seeds, note, suggestions };
 };
 
-const suggestedReads = (nodes: RevealedNode[]): Array<{ path: string; offset: number; limit: number; reason: string }> => {
+const suggestedReads = (
+  nodes: RevealedNode[],
+): Array<{ path: string; offset: number; limit: number; reason: string }> => {
   const out: Array<{ path: string; offset: number; limit: number; reason: string }> = [];
   for (const node of nodes) {
     if (node.line <= 0 || node.lineApproximate) continue;
     const offset = Math.max(1, node.line - 5);
     const end = offset + 24;
-    const existing = out.find((read) =>
-      read.path === node.file && offset <= read.offset + read.limit && end + 1 >= read.offset);
+    const existing = out.find(
+      (read) =>
+        read.path === node.file && offset <= read.offset + read.limit && end + 1 >= read.offset,
+    );
     if (existing) {
       const mergedEnd = Math.max(existing.offset + existing.limit - 1, end);
       existing.offset = Math.min(existing.offset, offset);
@@ -349,7 +454,7 @@ const suggestedReads = (nodes: RevealedNode[]): Array<{ path: string; offset: nu
       path: node.file,
       offset,
       limit: 25,
-      reason: node.role === "focus" ? "matched focus" : node.relation ?? `${node.role} neighbor`,
+      reason: node.role === "focus" ? "matched focus" : (node.relation ?? `${node.role} neighbor`),
     });
     if (out.length === 5) break;
   }
@@ -403,7 +508,6 @@ const overflowArtifact = (op: string, key: string): string =>
 export const isTestScope = (file: string): boolean =>
   isTestFile(file) || /(^|\/)(tests?|__tests__|fixtures?)(\/|$)/i.test(file);
 
-
 export const sketch = async (root: string, budget?: number): Promise<OpResult> => {
   const state = await ensureState(root);
   const g = state.graph;
@@ -412,12 +516,26 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
   // Production anchors and hubs define the opening silhouette. Tests remain
   // in the graph for focus/impact, but do not crowd out the code being shipped.
   const conductance = state.csr.deg;
-  const closureFor = (i: number): number[] => [i, ...(state.adjacency.get(i) ?? []).map((edge) => edge.to)];
-  const anchorIdx = g.nodes.map((node, i) => (node.kind === "anchor" ? i : -1)).filter((i) => i >= 0);
-  const topologyKinds = new Set(["graphql-type", "graphql-fragment", "graphql-operation", "rpc-message"]);
+  const closureFor = (i: number): number[] => [
+    i,
+    ...(state.adjacency.get(i) ?? []).map((edge) => edge.to),
+  ];
+  const anchorIdx = g.nodes
+    .map((node, i) => (node.kind === "anchor" ? i : -1))
+    .filter((i) => i >= 0);
+  const topologyKinds = new Set([
+    "graphql-type",
+    "graphql-fragment",
+    "graphql-operation",
+    "rpc-message",
+  ]);
   const anchorKinds = new Map(g.anchors.map((anchor) => [anchor.id, anchor.kind]));
-  const mapAnchorIdx = anchorIdx.filter((i) => !topologyKinds.has(anchorKinds.get(g.nodes[i]!.name) ?? ""));
-  const productionAnchorIdx = mapAnchorIdx.filter((i) => closureFor(i).some((j) => !isTestScope(g.nodes[j]!.file)));
+  const mapAnchorIdx = anchorIdx.filter(
+    (i) => !topologyKinds.has(anchorKinds.get(g.nodes[i]!.name) ?? ""),
+  );
+  const productionAnchorIdx = mapAnchorIdx.filter((i) =>
+    closureFor(i).some((j) => !isTestScope(g.nodes[j]!.file)),
+  );
   const productionAnchorSet = new Set(productionAnchorIdx);
   const testAnchorIdx = mapAnchorIdx.filter((i) => !productionAnchorSet.has(i));
   const productionHubIdx = g.nodes
@@ -427,7 +545,10 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
     .slice(0, 24);
   const fallbackHubIdx = productionHubIdx.length
     ? productionHubIdx
-    : g.nodes.map((_, i) => i).sort((a, b) => conductance[b]! - conductance[a]!).slice(0, 24);
+    : g.nodes
+        .map((_, i) => i)
+        .sort((a, b) => conductance[b]! - conductance[a]!)
+        .slice(0, 24);
   const seeds = [...new Set([...productionAnchorIdx, ...fallbackHubIdx])].slice(0, 64);
   const s = seedVector(g.nodes.length, seeds);
   const t = 16;
@@ -436,7 +557,11 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
   for (let i = 0; i < field.length; i++) if (field[i]! > vmax) vmax = field[i]!;
   if (vmax <= 0) {
     const text = `fovea sketch: empty graph (no supported files matched)${extractionSuffix(state)}`;
-    return { text, tokens: tokenEstimate(text), details: { files: 0, ...extractionDetails(state) } };
+    return {
+      text,
+      tokens: tokenEstimate(text),
+      details: { files: 0, ...extractionDetails(state) },
+    };
   }
 
   // Feature groups: anchors first; where the repo declares few routes,
@@ -461,17 +586,25 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
     const counts = langCounts(files);
     if (counts.size <= 1) return "";
     const short = (lang: string): string => SHORT_LANG[lang] ?? lang.toLowerCase().slice(0, 4);
-    return ` [${[...counts.entries()].sort((a, b2) => b2[1] - a[1]).map(([lang, n]) => `${short(lang)}${n}`).join("/")}]`;
+    return ` [${[...counts.entries()]
+      .sort((a, b2) => b2[1] - a[1])
+      .map(([lang, n]) => `${short(lang)}${n}`)
+      .join("/")}]`;
   };
-  const basins = productionAnchorIdx.length < 6 && g.nodes.length >= 48
-    ? detectBasins(
-        state.adjacency,
-        conductance,
-        g.nodes.length,
-        (i) => g.nodes[i]!.kind !== "file" && g.nodes[i]!.kind !== "anchor" && g.nodes[i]!.kind !== "package" && !isTestScope(g.nodes[i]!.file),
-        (i) => g.nodes[i]!.kind !== "package" && !isTestScope(g.nodes[i]!.file),
-      )
-    : [];
+  const basins =
+    productionAnchorIdx.length < 6 && g.nodes.length >= 48
+      ? detectBasins(
+          state.adjacency,
+          conductance,
+          g.nodes.length,
+          (i) =>
+            g.nodes[i]!.kind !== "file" &&
+            g.nodes[i]!.kind !== "anchor" &&
+            g.nodes[i]!.kind !== "package" &&
+            !isTestScope(g.nodes[i]!.file),
+          (i) => g.nodes[i]!.kind !== "package" && !isTestScope(g.nodes[i]!.file),
+        )
+      : [];
   for (const b of basins) {
     let mass = 0;
     const bfiles = new Set<string>();
@@ -535,12 +668,24 @@ export const sketch = async (root: string, budget?: number): Promise<OpResult> =
   }
 
   // Directory groups over the rest (depth-2 prefixes).
-  const dirAgg = new Map<string, { mass: number; files: Set<string>; top: Array<[number, number]> }>();
+  const dirAgg = new Map<
+    string,
+    { mass: number; files: Set<string>; top: Array<[number, number]> }
+  >();
   g.nodes.forEach((n, i) => {
     if (claimed.has(i) || n.kind === "anchor" || n.kind === "package") return;
     const parts = n.file.split("/");
-    const dir = parts.length === 1 ? "(root)" : parts.length === 2 ? `${parts[0]}/` : `${parts.slice(0, 2).join("/")}/`;
-    const agg = dirAgg.get(dir) ?? { mass: 0, files: new Set<string>(), top: [] as Array<[number, number]> };
+    const dir =
+      parts.length === 1
+        ? "(root)"
+        : parts.length === 2
+          ? `${parts[0]}/`
+          : `${parts.slice(0, 2).join("/")}/`;
+    const agg = dirAgg.get(dir) ?? {
+      mass: 0,
+      files: new Set<string>(),
+      top: [] as Array<[number, number]>,
+    };
     dirAgg.set(dir, agg);
     agg.mass += field[i]!;
     agg.files.add(n.file);
@@ -630,7 +775,9 @@ export const focus = async (
       return [
         ...coverageGaps,
         ...(state.extraction.failed.length
-          ? [`! ${state.extraction.failed.length} files failed extraction; matches may be incomplete.`]
+          ? [
+              `! ${state.extraction.failed.length} files failed extraction; matches may be incomplete.`,
+            ]
           : []),
         `fovea focus "${query}": ${note}.`,
         ...(nearby.length ? ["Nearby symbols:", ...nearby] : []),
@@ -645,22 +792,34 @@ export const focus = async (
       tokens: tokenEstimate(text),
       details: {
         seeds: 0,
-        suggestions: suggestions.slice(0, shown).map(({ name, file, line, lineApproximate, score }) => ({
-          name,
-          file,
-          line,
-          lineApproximate,
-          score: Number(score.toFixed(3)),
-        })),
+        suggestions: suggestions
+          .slice(0, shown)
+          .map(({ name, file, line, lineApproximate, score }) => ({
+            name,
+            file,
+            line,
+            lineApproximate,
+            score: Number(score.toFixed(3)),
+          })),
         scope: { path: options.path, language: options.language, kind: options.kind },
         requestedCoverage,
         ...extractionDetails(state),
       },
     };
   }
-  const scopeKey = [options.path ?? "", options.language?.toLowerCase() ?? "", options.kind ?? ""].join("|");
+  const scopeKey = [
+    options.path ?? "",
+    options.language?.toLowerCase() ?? "",
+    options.kind ?? "",
+  ].join("|");
   const key = `${state.generation}:${[...seeds].sort((a, b) => a - b).join(",")}:${scopeKey}`;
-  if (options.fresh || session.generation !== state.generation || session.focusKey !== key) {
+  if (
+    resetFocus(
+      options.fresh ?? false,
+      session.generation === state.generation,
+      session.focusKey === key,
+    )
+  ) {
     clearSessionFocus(session);
     session.focusKey = key;
     session.scope = { path: options.path, language: options.language, kind: options.kind };
@@ -668,16 +827,21 @@ export const focus = async (
   session.generation = state.generation;
   if (session.tkKey !== key) {
     retainSessionVectors(root);
-    session.tk = chebyshevVectors(state.csr, seedVector(g.nodes.length, seeds), chooseOrder(session.t));
+    session.tk = chebyshevVectors(
+      state.csr,
+      seedVector(g.nodes.length, seeds),
+      chooseOrder(session.t),
+    );
     session.tkKey = key;
   }
   session.seeds = seeds;
   session.seedNote = note;
   const t = session.t;
   const field = heatField(session.tk, t, g.nodes.length);
-  const scopedIds = options.path || options.language || options.kind
-    ? new Set(g.nodes.filter(focusScope(options)).map((node) => node.id))
-    : undefined;
+  const scopedIds =
+    options.path || options.language || options.kind
+      ? new Set(g.nodes.filter(focusScope(options)).map((node) => node.id))
+      : undefined;
   const fit = revealFoveated(g, field, {
     header: `fovea focus "${query}" · ${note}${extractionSuffix(state)}`,
     include: scopedIds,
@@ -688,7 +852,10 @@ export const focus = async (
     overflowTo: overflowArtifact("focus", `${root}|${query}`),
   });
   for (const id of fit.revealedIds) session.disclosed.add(id);
-  observeSessionPaths(root, fit.revealed.map((node) => node.file));
+  observeSessionPaths(
+    root,
+    fit.revealed.map((node) => node.file),
+  );
   return {
     text: fit.text,
     tokens: fit.tokens,
@@ -715,7 +882,14 @@ export const dwell = async (root: string, factor?: number, budget?: number): Pro
   const g = state.graph;
   const session = getSession(root);
   const B = clampBudget(budget, 512);
-  if (session.seeds.length && (session.generation !== state.generation || (session.tk.length > 0 && session.tk[0]?.length !== g.nodes.length))) {
+  if (
+    session.seeds.length &&
+    resetFocus(
+      false,
+      session.generation === state.generation,
+      session.tk.length === 0 || session.tk[0]?.length === g.nodes.length,
+    )
+  ) {
     const previousGeneration = session.generation || "unknown";
     clearSessionFocus(session);
     const text = `fovea dwell: focus expired because the graph changed (${previousGeneration} → ${state.generation}). Call fovea_focus again; no stale vector was applied.`;
@@ -726,12 +900,21 @@ export const dwell = async (root: string, factor?: number, budget?: number): Pro
     };
   }
   if (!session.seeds.length) {
-    const text = "fovea dwell: no focus yet. Call fovea_focus with a symbol, feature id, route, or file first; dwell then deepens that field.";
-    return { text, tokens: tokenEstimate(text), details: { seeds: 0, ...extractionDetails(state) } };
+    const text =
+      "fovea dwell: no focus yet. Call fovea_focus with a symbol, feature id, route, or file first; dwell then deepens that field.";
+    return {
+      text,
+      tokens: tokenEstimate(text),
+      details: { seeds: 0, ...extractionDetails(state) },
+    };
   }
   if (!session.tk.length) {
     retainSessionVectors(root);
-    session.tk = chebyshevVectors(state.csr, seedVector(g.nodes.length, session.seeds), chooseOrder(session.t));
+    session.tk = chebyshevVectors(
+      state.csr,
+      seedVector(g.nodes.length, session.seeds),
+      chooseOrder(session.t),
+    );
     session.tkKey = session.focusKey;
   }
   const from = session.t;
@@ -743,9 +926,10 @@ export const dwell = async (root: string, factor?: number, budget?: number): Pro
   }
   const field = heatField(session.tk, to, g.nodes.length);
   const scope = session.scope ?? {};
-  const scopedIds = scope.path || scope.language || scope.kind
-    ? new Set(g.nodes.filter(focusScope(scope)).map((node) => node.id))
-    : undefined;
+  const scopedIds =
+    scope.path || scope.language || scope.kind
+      ? new Set(g.nodes.filter(focusScope(scope)).map((node) => node.id))
+      : undefined;
   const fit = revealFoveated(g, field, {
     header: `fovea dwell · context widened ${Number((to / from).toFixed(1))}× · new results${extractionSuffix(state)}`,
     include: scopedIds,
@@ -755,7 +939,10 @@ export const dwell = async (root: string, factor?: number, budget?: number): Pro
     overflowTo: overflowArtifact("dwell", root),
   });
   for (const id of fit.revealedIds) session.disclosed.add(id);
-  observeSessionPaths(root, fit.revealed.map((node) => node.file));
+  observeSessionPaths(
+    root,
+    fit.revealed.map((node) => node.file),
+  );
   return {
     text: fit.text,
     tokens: fit.tokens,
@@ -789,16 +976,21 @@ export interface ImpactArgs {
 // key so the surprise gate weighs it the same as it ever weighed the edge.
 const COCHANGE_REASON = "co-change history";
 
-export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState): Promise<OpResult> => {
+export const impact = async (
+  root: string,
+  args: ImpactArgs,
+  ensured?: RepoState,
+): Promise<OpResult> => {
   const state = ensured ?? (await ensureState(root));
   const g = state.graph;
   const B = clampBudget(args.budget, 512);
-  const requestedCoverage = args.files?.length
-    ? await explainPathCoverage(state, args.files)
-    : [];
-  const files = new Set<string>((args.files ?? []).map((file) => file.startsWith("@") ? file.slice(1) : file));
+  const requestedCoverage = args.files?.length ? await explainPathCoverage(state, args.files) : [];
+  const files = new Set<string>(
+    (args.files ?? []).map((file) => (file.startsWith("@") ? file.slice(1) : file)),
+  );
   if (args.base) for (const f of await prFiles(root, args.base)) files.add(f);
-  if (args.includeUncommitted !== false && !args.base) for (const f of await uncommittedFiles(root)) files.add(f);
+  if (args.includeUncommitted !== false && !args.base)
+    for (const f of await uncommittedFiles(root)) files.add(f);
 
   // Explicit what-if/sync files with Git discovery disabled may not describe
   // the current HEAD patch (notably a semantic revert that is clean again),
@@ -815,7 +1007,8 @@ export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState
     if (fileNode === undefined || seededFileNodes.has(fileNode)) continue;
     seededFileNodes.add(fileNode);
     const graphFile = g.nodes[fileNode]!.file;
-    const parsed = hunksByFile?.get(graphFile) ?? hunksByFile?.get(normalized) ?? hunksByFile?.get(rel);
+    const parsed =
+      hunksByFile?.get(graphFile) ?? hunksByFile?.get(normalized) ?? hunksByFile?.get(rel);
 
     // byFile is line-ordered. Collapse same-line declarations to the last
     // node, matching an upper-bound enclosing-symbol lookup deterministically.
@@ -824,7 +1017,8 @@ export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState
       const node = g.nodes[i]!;
       if (node.kind === "file" || node.kind === "anchor" || node.line < 1) continue;
       const previous = symbols[symbols.length - 1];
-      if (previous !== undefined && g.nodes[previous]!.line === node.line) symbols[symbols.length - 1] = i;
+      if (previous !== undefined && g.nodes[previous]!.line === node.line)
+        symbols[symbols.length - 1] = i;
       else symbols.push(i);
     }
 
@@ -859,7 +1053,8 @@ export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState
           const node = symbols[at]!;
           const next = symbols[at + 1];
           const segmentEnd = Math.min(end, next === undefined ? end : g.nodes[next]!.line);
-          if (segmentEnd > cursor) touched.set(node, (touched.get(node) ?? 0) + segmentEnd - cursor);
+          if (segmentEnd > cursor)
+            touched.set(node, (touched.get(node) ?? 0) + segmentEnd - cursor);
           cursor = segmentEnd;
           at++;
         }
@@ -881,7 +1076,7 @@ export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState
     let assigned = 0.2;
     for (let i = 0; i < scored.length; i++) {
       const [node, score] = scored[i]!;
-      const weight = i === scored.length - 1 ? 1 - assigned : 0.8 * score / scoreTotal;
+      const weight = i === scored.length - 1 ? 1 - assigned : (0.8 * score) / scoreTotal;
       seedSet.add(node);
       s[node]! += weight;
       assigned += weight;
@@ -970,12 +1165,17 @@ export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState
   const reasonByFile = new Map<string, Set<string>>();
   type ImpactEvidence = EdgeEvidence & { kind: Graph["edges"][number]["kind"] };
   const evidenceByFile = new Map<string, ImpactEvidence[]>();
-  const noteEvidence = (file: string, kind: Graph["edges"][number]["kind"], evidence: EdgeEvidence | undefined): void => {
+  const noteEvidence = (
+    file: string,
+    kind: Graph["edges"][number]["kind"],
+    evidence: EdgeEvidence | undefined,
+  ): void => {
     if (!evidence) return;
     const list = evidenceByFile.get(file) ?? [];
     const item: ImpactEvidence = { kind, ...evidence };
     const key = JSON.stringify(item);
-    if (list.length < 3 && !list.some((existing) => JSON.stringify(existing) === key)) list.push(item);
+    if (list.length < 3 && !list.some((existing) => JSON.stringify(existing) === key))
+      list.push(item);
     evidenceByFile.set(file, list);
   };
   // Per-NODE first-encounter reasons: the verdict memory is charged and aged
@@ -985,33 +1185,47 @@ export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState
   const noteNode = (node: number, reasons: string[]): void => {
     if (!reasonByNode.has(node) && reasons.length) reasonByNode.set(node, reasons);
   };
-  const reasonFor = (kind: Graph["edges"][number]["kind"], evidence?: EdgeEvidence): string | undefined => {
+  const reasonFor = (
+    kind: Graph["edges"][number]["kind"],
+    evidence?: EdgeEvidence,
+  ): string | undefined => {
     if (kind === "imports" && evidence?.possible) return "possible import target";
     switch (kind) {
-      case "invokes": return "call dependency";
-      case "imports": return "import dependency";
-      case "tests": return "test dependency";
-      case "inherits": return "inheritance";
-      case "join": return "shared literal";
-      case "anchors": return "shared route";
-      case "contains": return undefined;
+      case "invokes":
+        return "call dependency";
+      case "imports":
+        return "import dependency";
+      case "tests":
+        return "test dependency";
+      case "inherits":
+        return "inheritance";
+      case "join":
+        return "shared literal";
+      case "anchors":
+        return "shared route";
+      case "contains":
+        return undefined;
     }
   };
   for (const edge of g.edges) {
     const aFile = g.nodes[edge.a]!.file;
     const bFile = g.nodes[edge.b]!.file;
     if (aFile === bFile) continue;
-    const target = seedFiles.has(aFile) && !seedFiles.has(bFile)
-      ? bFile
-      : seedFiles.has(bFile) && !seedFiles.has(aFile)
-        ? aFile
-        : undefined;
+    const target =
+      seedFiles.has(aFile) && !seedFiles.has(bFile)
+        ? bFile
+        : seedFiles.has(bFile) && !seedFiles.has(aFile)
+          ? aFile
+          : undefined;
     const reason = reasonFor(edge.kind, edge.evidence);
     if (!reason) continue;
     // 1-hop: the non-seed endpoint inherits the channel directly.
-    const farNode = seedFiles.has(aFile) && !seedFiles.has(bFile) ? edge.b
-      : seedFiles.has(bFile) && !seedFiles.has(aFile) ? edge.a
-      : undefined;
+    const farNode =
+      seedFiles.has(aFile) && !seedFiles.has(bFile)
+        ? edge.b
+        : seedFiles.has(bFile) && !seedFiles.has(aFile)
+          ? edge.a
+          : undefined;
     if (farNode !== undefined) noteNode(farNode, [reason]);
     if (!target || !fileAgg.has(target)) continue;
     noteEvidence(target, edge.kind, edge.evidence);
@@ -1024,19 +1238,28 @@ export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState
   // shortest paths once from all seeds, preserving semantic edge kinds while
   // omitting same-file containment hops from the user-facing reason.
   const visited = new Set(seeds);
-  const queue = seeds.map((node) => ({ node, reasons: [] as string[], evidence: [] as ImpactEvidence[] }));
+  const queue = seeds.map((node) => ({
+    node,
+    reasons: [] as string[],
+    evidence: [] as ImpactEvidence[],
+  }));
   for (let head = 0; head < queue.length; head++) {
     const current = queue[head]!;
     for (const edge of state.adjacency.get(current.node) ?? []) {
       if (visited.has(edge.to)) continue;
       visited.add(edge.to);
       const reason = reasonFor(edge.kind as Graph["edges"][number]["kind"], edge.evidence);
-      const reasons = reason && !current.reasons.includes(reason)
-        ? [...current.reasons, reason]
-        : current.reasons;
-      const evidence = edge.evidence && current.evidence.length < 3
-        ? [...current.evidence, { kind: edge.kind as Graph["edges"][number]["kind"], ...edge.evidence }]
-        : current.evidence;
+      const reasons =
+        reason && !current.reasons.includes(reason)
+          ? [...current.reasons, reason]
+          : current.reasons;
+      const evidence =
+        edge.evidence && current.evidence.length < 3
+          ? [
+              ...current.evidence,
+              { kind: edge.kind as Graph["edges"][number]["kind"], ...edge.evidence },
+            ]
+          : current.evidence;
       noteNode(edge.to, reasons);
       queue.push({ node: edge.to, reasons, evidence });
       const file = g.nodes[edge.to]!.file;
@@ -1078,17 +1301,22 @@ export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState
       if (exclude.has(n.id) || seedFiles.has(n.file)) return;
       const v = field[i]!;
       if (v <= 1e-6) return;
-      warmed.push([`${n.kind}|${n.id}`, {
-        file: n.file,
-        m: Number(v.toFixed(6)),
-        r: reasonByNode.get(i) ?? [],
-      }]);
+      warmed.push([
+        `${n.kind}|${n.id}`,
+        {
+          file: n.file,
+          m: Number(v.toFixed(6)),
+          r: reasonByNode.get(i) ?? [],
+        },
+      ]);
     });
     warmed.sort((a, b) => b[1].m - a[1].m);
     for (const [k, v] of warmed.slice(0, 2000)) warmedNodes[k] = v;
   }
 
-  const fileEntries = [...fileAgg.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const fileEntries = [...fileAgg.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
   const fileGroups: GroupLine[] = [];
   for (const [file, mass] of fileEntries) {
     const top = (fileTop.get(file) ?? [])
@@ -1104,7 +1332,10 @@ export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState
     });
   }
   const groups: GroupLine[] = [...anchorHits, ...fileGroups];
-  const seedNames = seeds.slice(0, 5).map((i) => g.nodes[i]!.file).join(", ");
+  const seedNames = seeds
+    .slice(0, 5)
+    .map((i) => g.nodes[i]!.file)
+    .join(", ");
   const fit = revealGroups(groups, {
     header: `fovea impact · changed: ${seedNames}${seeds.length > 5 ? ", …" : ""} · likely review order${extractionSuffix(state)}`,
     budget: B,
@@ -1132,12 +1363,18 @@ export const impact = async (root: string, args: ImpactArgs, ensured?: RepoState
       // on these masses; the file list alone cannot rank a drizzle against a
       // real cascade. Rounded so the warm-cache path and the inline path
       // carry bit-identical payloads.
-      warmedMass: Object.fromEntries(fileEntries.map(([file, mass]) => [file, Number(mass.toFixed(6))])),
-      warmedReasons: Object.fromEntries(fileEntries.map(([file]) => [
-        file,
-        [...(reasonByFile.get(file) ?? new Set(["graph path"]))],
-      ])),
-      warmedEvidence: Object.fromEntries(fileEntries.map(([file]) => [file, evidenceByFile.get(file) ?? []])),
+      warmedMass: Object.fromEntries(
+        fileEntries.map(([file, mass]) => [file, Number(mass.toFixed(6))]),
+      ),
+      warmedReasons: Object.fromEntries(
+        fileEntries.map(([file]) => [
+          file,
+          [...(reasonByFile.get(file) ?? new Set(["graph path"]))],
+        ]),
+      ),
+      warmedEvidence: Object.fromEntries(
+        fileEntries.map(([file]) => [file, evidenceByFile.get(file) ?? []]),
+      ),
       warmedNodes,
       // Deterministic omitted-edit alarm, strongest first, capped.
       expectedButUnchanged: [...companionResiduals.entries()]

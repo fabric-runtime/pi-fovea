@@ -1,0 +1,215 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { build, version as esbuild } from "esbuild";
+import ts from "typescript";
+import { format, version as prettier } from "prettier";
+import type { Machine } from "gdp-wired/machine";
+import { parseSource } from "./parse-source.ts";
+import { compileJs } from "gdp-wired/machine";
+import { crossCheckDecision, proveDecision, proveFold } from "gdp-wired";
+import { proveRatRule } from "gdp-wired/rationals";
+import { kernels } from "../proofs/kernel.ts";
+import { limbs, limbLaws } from "../proofs/limbs.ts";
+import { controls } from "../proofs/controls.ts";
+import { kernelLaws, controlLaws } from "../proofs/laws.ts";
+import { heatLaws, singletonLaw, errors, errorLaw } from "../proofs/heat.ts";
+import { streams, streamLawNames } from "../proofs/streams.ts";
+import { checkStreams } from "./check-streams.ts";
+import { seriesLawNames } from "../proofs/series.ts";
+import { checkSeries } from "./check-series.ts";
+import { completionLawNames } from "../proofs/completion.ts";
+import { checkCompletion } from "./check-completion.ts";
+import { operatorIdentityLawNames } from "../proofs/operator-identity.ts";
+import { checkOperatorIdentity } from "./check-operator-identity.ts";
+import { operatorLawNames } from "../proofs/operator-steps.ts";
+import { checkOperators } from "./check-operators.ts";
+import { transportLawNames } from "../proofs/transport.ts";
+import { checkTransport } from "./check-transport.ts";
+import { focusLawNames } from "../proofs/focus.ts";
+import { checkFocus } from "./check-focus.ts";
+import { enclosureLawNames } from "../proofs/enclosures.ts";
+import { checkEnclosures } from "./check-enclosures.ts";
+import { normalizationLawNames } from "../proofs/normalization.ts";
+import { checkNormalization } from "./check-normalization.ts";
+
+export const toolchain = { gdpWired: "0.30.1", esbuild, typescript: ts.version, prettier };
+const requireProof = (
+  name: string,
+  result: { proven: boolean; checked?: boolean; assumes?: unknown },
+) => {
+  if (!result.proven || !result.checked || result.assumes)
+    throw new Error(`${name}: proof refused ${JSON.stringify(result)}`);
+};
+export function checkLaws(root: string) {
+  const decisions = [
+    ...kernelLaws(kernels),
+    ...controlLaws(controls),
+    ...limbLaws(limbs),
+    singletonLaw,
+  ];
+  const names = [
+    ...decisions.map((law) => law.name),
+    ...heatLaws.map(([, law]) => law.name),
+    errorLaw.name,
+    ...streamLawNames,
+    ...seriesLawNames,
+    ...completionLawNames,
+    ...operatorIdentityLawNames,
+    ...operatorLawNames,
+    ...transportLawNames,
+    ...focusLawNames,
+    ...enclosureLawNames,
+    ...normalizationLawNames,
+  ].sort();
+  const ledger = JSON.parse(readFileSync(join(root, "proofs/ledger.json"), "utf8"));
+  if (new Set(names).size !== names.length || JSON.stringify(names) !== JSON.stringify(ledger))
+    throw new Error("Proof ledger mismatch: a required law is missing or duplicated");
+  for (const law of decisions) {
+    requireProof(law.name, proveDecision(law));
+    const checked = crossCheckDecision(law, { trials: 100 });
+    if (checked.failure) throw new Error(`${law.name}: ${checked.failure}`);
+  }
+  for (const [fold, law] of heatLaws) requireProof(law.name, proveFold(fold, [law]));
+  requireProof(errorLaw.name, proveRatRule(errors, [errorLaw], { ms: 3000 }));
+  return (
+    decisions.length +
+    heatLaws.length +
+    1 +
+    checkStreams() +
+    checkSeries() +
+    checkCompletion() +
+    checkOperators() +
+    checkTransport() +
+    checkFocus() +
+    checkEnclosures() +
+    checkNormalization() +
+    checkOperatorIdentity()
+  );
+}
+const machineSource = (name: string, fn: { rule: { machine: Machine } }) => {
+  const machine = fn.rule.machine;
+  if (Object.keys(machine.fns ?? {}).length)
+    throw new Error(`${name}: foreign functions forbidden`);
+  const source = compileJs(machine);
+  const ast = parseSource("machine.js", source, ts.ScriptKind.JS);
+  const exports = ast.statements.filter(
+    (s) =>
+      ts.canHaveModifiers(s) &&
+      ts.getModifiers(s)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword),
+  );
+  const functions = exports.filter(ts.isFunctionDeclaration);
+  if (
+    exports.length !== 3 ||
+    functions.length !== exports.length ||
+    functions.map((s) => s.name?.text).join(",") !== "init,fork,step"
+  )
+    throw new Error("Unrecognized gdp-wired generated module");
+  return `const ${name}=(()=>{\n${source.replace(/^export /gm, "")}\nreturn {init,step};\n})();\n`;
+};
+async function emit(
+  machines: Record<string, { rule: { machine: Machine } }>,
+  root: string,
+  bridge: string,
+) {
+  const source =
+    Object.entries(machines)
+      .map(([name, fn]) => machineSource(name === "disclosure" ? "disclosureMachine" : name, fn))
+      .join("") + readFileSync(join(root, bridge), "utf8");
+  const result = await build({
+    stdin: { contents: source, sourcefile: "gdp-kernel.ts", loader: "ts" },
+    bundle: true,
+    write: false,
+    format: "esm",
+    platform: "neutral",
+    target: "es2022",
+    treeShaking: true,
+    minify: false,
+    legalComments: "none",
+    banner: {
+      js: "// Generated by gdp-wired 0.30.1; do not edit. See proofs/ and docs/proofs.md.\n// gdp-wired generated runtime: MIT, Copyright (c) 2026 Tom X Nguyen.",
+    },
+  });
+  const code = result.outputFiles![0]!.text;
+  const ast = parseSource("kernel.js", code, ts.ScriptKind.JS);
+  if (
+    ast.statements.some(ts.isImportDeclaration) ||
+    /\b(?:process|globalThis|console|fetch|eval|Function|require|__require)\b/.test(code)
+  )
+    throw new Error("Effectful runtime escaped into generated kernel");
+  return format(code, { parser: "babel", printWidth: 100 });
+}
+async function declarations(root: string, path: string): Promise<string> {
+  const source = readFileSync(join(root, path), "utf8");
+  const result = ts.transpileDeclaration(source, {
+    fileName: path,
+    reportDiagnostics: true,
+    compilerOptions: { isolatedDeclarations: true },
+  });
+  if (result.diagnostics?.some((d) => d.category === ts.DiagnosticCategory.Error))
+    throw new Error(`${path}: invalid runtime declarations`);
+  if (parseSource(path, result.outputText).statements.some(ts.isImportDeclaration))
+    throw new Error(`${path}: runtime declarations must be self-contained`);
+  return (
+    "// Generated runtime ABI; do not edit.\n" +
+    (await format(result.outputText, { parser: "typescript", printWidth: 100 }))
+  );
+}
+export async function compileKernel(root: string): Promise<Record<string, string>> {
+  const abi = JSON.parse(readFileSync(join(root, "proofs/kernel-abi.json"), "utf8")) as Record<
+    string,
+    unknown
+  >;
+  const signatures: Record<string, { parameters: [string, string][]; result: string }> = {};
+  const expected = { disclosure: 5, shownCount: 2, remainingCount: 2, basisStep: 2 };
+  if (Object.keys(abi).sort().join() !== Object.keys(expected).sort().join())
+    throw new Error("Incompatible kernel ABI exports");
+  for (const [name, arity] of Object.entries(expected)) {
+    const inputType = name === "disclosure" ? "boolean" : "number";
+    const resultType =
+      name === "disclosure" ? "DisclosureDecision" : name === "basisStep" ? "BasisStep" : "number";
+    const signature = abi[name];
+    if (
+      !Array.isArray(signature) ||
+      signature.length - 1 !== arity ||
+      !signature
+        .slice(0, -1)
+        .every(
+          (arg) =>
+            Array.isArray(arg) &&
+            arg.length === 2 &&
+            typeof arg[0] === "string" &&
+            arg[1] === inputType,
+        ) ||
+      signature.at(-1) !== resultType
+    )
+      throw new Error(`Incompatible kernel ABI: ${name}`);
+    signatures[name] = {
+      parameters: signature.slice(0, -1) as [string, string][],
+      result: resultType,
+    };
+  }
+  const types =
+    "// Generated ABI; see proofs/kernel-abi.json.\n" +
+    readFileSync(join(root, "proofs/kernel-types.d.ts"), "utf8") +
+    "\n" +
+    Object.entries(signatures)
+      .map(
+        ([name, sig]) =>
+          `export declare function ${name}(${sig.parameters.map(([arg, type]) => `${arg}: ${type}`).join(", ")}): ${sig.result};`,
+      )
+      .join("\n") +
+    "\n";
+  return {
+    "src/verified/generated/kernel.js": await emit(kernels, root, "proofs/runtime/kernel.ts"),
+    "src/verified/generated/kernel.d.ts": await format(types, {
+      parser: "typescript",
+      printWidth: 100,
+    }),
+    "src/verified/generated/control.js": await emit(controls, root, "proofs/runtime/control.ts"),
+    "src/verified/generated/control.d.ts": await declarations(root, "proofs/runtime/control.ts"),
+    "src/verified/generated/limbs.js": await emit(limbs, root, "proofs/runtime/limbs.ts"),
+    "src/verified/generated/limbs.d.ts": await declarations(root, "proofs/runtime/limbs.ts"),
+    "src/verified/generated/streams.js": await emit(streams, root, "proofs/runtime/streams.ts"),
+    "src/verified/generated/streams.d.ts": await declarations(root, "proofs/runtime/streams.ts"),
+  };
+}

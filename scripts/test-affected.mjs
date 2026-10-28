@@ -59,7 +59,16 @@ if (rangeMode) {
   }
   const untracked = (() => {
     try {
-      return git(["ls-files", "--others", "--exclude-standard", "--", "src", "tests", "cli.ts", "scripts"])
+      return git([
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        "--",
+        "src",
+        "tests",
+        "cli.ts",
+        "scripts",
+      ])
         .split("\n")
         .filter(Boolean);
     } catch {
@@ -79,7 +88,9 @@ const direct = files.filter(isTestFile);
 const related = files.filter((file) => isCode(file) && !isTestFile(file) && !isHarnessConfig(file));
 
 if (direct.length === 0 && related.length === 0) {
-  console.log(`${base ? `vs ${base}` : "dirty tree"}: no changed source/test files; nothing to run`);
+  console.log(
+    `${base ? `vs ${base}` : "dirty tree"}: no changed source/test files; nothing to run`,
+  );
   process.exit(0);
 }
 

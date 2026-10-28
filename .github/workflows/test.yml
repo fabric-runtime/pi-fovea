@@ -4,9 +4,28 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
+  lean:
+    # Independent, opt-in audit of the stronger abstract Lean development.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: ./.github/actions/setup-lean
+      - run: bun install --frozen-lockfile
+      - name: Full Lean kernel check and axiom audit
+        run: bun run check:lean
+      - name: Positive and broken-proof gate fixtures
+        run: bunx vitest run tests/lean-proofs.test.ts
   test:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,18 +40,14 @@ jobs:
       - name: ast-grep
         run: npm i -g @ast-grep/cli@0.45.3
       - run: bun install --frozen-lockfile
-      - name: Install Bend 2.0.26 (pinned archive)
-        run: |
-          curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/bend.tar.gz" https://github.com/bendlang/bend/releases/download/v2.0.26/bend-2.0.26-linux-x64.tar.gz
-          echo "5edcc8e5c12d525655431ab02659ddf88e362aafbe7c7bb7f783a1ffaeb6165c  $RUNNER_TEMP/bend.tar.gz" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/bend.tar.gz" -C "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/bend/bin" >> "$GITHUB_PATH"
       - name: Laws, executable artifact, and proof bridge boundaries
         run: |
           bun run check:proofs
           bunx vitest run tests/proofs.test.ts tests/verified-kernels.test.ts
       - name: Type check
         run: bun run typecheck
+      - name: Readable authored source
+        run: bun run format:check
       - name: Affected tests
         env:
           # Pull requests compare against the target branch; pushes compare

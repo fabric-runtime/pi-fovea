@@ -10,9 +10,18 @@ import type { EdgeEvidence, LiteralSite } from "./types.js";
 
 export type LitClass = "path" | "env" | "word";
 
-interface LitOccurrence { node: number; line: number; file: string; }
+interface LitOccurrence {
+  node: number;
+  line: number;
+  file: string;
+}
 
-interface JoinEdge { a: number; b: number; w: number; evidence: EdgeEvidence; }
+interface JoinEdge {
+  a: number;
+  b: number;
+  w: number;
+  evidence: EdgeEvidence;
+}
 
 const PLACEHOLDER_SEGMENT = /^(?::[^/]+|\{[^}/]*\}|\$\{[^}/]*\}|\$[A-Za-z_]\w*|<[^/>]+>|\*+)$/; // $x = Kotlin template shorthand
 const WORD_RE = /^[A-Za-z][\w$.\-]{6,63}$/;
@@ -24,7 +33,14 @@ export const classifyLiteral = (text: string): LitClass | undefined => {
   if (ENV_TOKEN_RE.test(t)) return "env";
   const body = t.replace(URLISH_RE, "");
   if (PATH_TOKEN_RE.test(body)) return "path";
-  if (WORD_RE.test(t) && (t.includes(".") || t.includes("::") || t.includes("-") || t.includes("_") || /[A-Z][a-z]/.test(t.slice(1)))) {
+  if (
+    WORD_RE.test(t) &&
+    (t.includes(".") ||
+      t.includes("::") ||
+      t.includes("-") ||
+      t.includes("_") ||
+      /[A-Z][a-z]/.test(t.slice(1)))
+  ) {
     return "word";
   }
   return undefined;
@@ -38,9 +54,7 @@ export const normalizeLiteral = (text: string, cls: LitClass): string => {
   if (cls === "env") return t.toUpperCase();
   if (cls === "word") return t;
   const body = t.replace(URLISH_RE, "");
-  const segments = body
-    .split("/")
-    .map((s) => (PLACEHOLDER_SEGMENT.test(s) ? "{*}" : s));
+  const segments = body.split("/").map((s) => (PLACEHOLDER_SEGMENT.test(s) ? "{*}" : s));
   let joined = segments.join("/");
   if (joined.length > 1 && joined.endsWith("/")) joined = joined.slice(0, -1);
   return joined;
@@ -65,7 +79,10 @@ export const buildJoinIndex = (
 ): JoinIndex => {
   // One occurrence per (key, file): repetition inside a single file must not
   // inflate document frequency, or lockfile-ish files dominate the bridge.
-  const grouped = new Map<string, { cls: LitClass; occ: LitOccurrence[]; seenFiles: Set<string> }>();
+  const grouped = new Map<
+    string,
+    { cls: LitClass; occ: LitOccurrence[]; seenFiles: Set<string> }
+  >();
   let total = 0;
   for (const s of sites) {
     const cls = classifyLiteral(s.text);
@@ -106,7 +123,11 @@ export const buildJoinIndex = (
           key,
         };
         const previous = pairBest.get(pk);
-        if (!previous || w > previous.w || (w === previous.w && key.localeCompare(previous.evidence.key ?? "") < 0)) {
+        if (
+          !previous ||
+          w > previous.w ||
+          (w === previous.w && key.localeCompare(previous.evidence.key ?? "") < 0)
+        ) {
           pairBest.set(pk, { w, evidence });
         }
       }

@@ -16,7 +16,9 @@ describe("literal normalization", () => {
   });
 
   it("strips URL origins and trailing slashes", () => {
-    expect(normalizeLiteral("https://api.example.com/api/users/{id}/", "path")).toBe("/api/users/{*}");
+    expect(normalizeLiteral("https://api.example.com/api/users/{id}/", "path")).toBe(
+      "/api/users/{*}",
+    );
   });
 
   it("classifies env keys, paths, and rejects noise", () => {
@@ -41,7 +43,17 @@ describe("join index", () => {
     { file: "d.ts", line: 1, text: "/health" },
   ];
   // node numbering: file order above, node index = position in `files`.
-  const files = ["server/main.go", "web/api.ts", "openapi.yaml", "worker/jobs.py", "server/config.go", "a.ts", "b.ts", "c.ts", "d.ts"];
+  const files = [
+    "server/main.go",
+    "web/api.ts",
+    "openapi.yaml",
+    "worker/jobs.py",
+    "server/config.go",
+    "a.ts",
+    "b.ts",
+    "c.ts",
+    "d.ts",
+  ];
   const resolver = (file: string) => files.indexOf(file);
 
   it("joins the same route across languages and env across languages", () => {
@@ -64,7 +76,9 @@ describe("join index", () => {
   });
 
   it("drops singletons (no spurious self-joins)", () => {
-    const idx = buildJoinIndex([{ file: "x.ts", line: 1, text: "/only/once" }], (f) => (f === "x.ts" ? 0 : undefined));
+    const idx = buildJoinIndex([{ file: "x.ts", line: 1, text: "/only/once" }], (f) =>
+      f === "x.ts" ? 0 : undefined,
+    );
     expect(idx.edges.length).toBe(0);
   });
 });

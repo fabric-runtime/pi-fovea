@@ -24,7 +24,7 @@ const NAME = BARE;
 const unquote = (name: string): string =>
   /^[`"']/.test(name) ? name.slice(1, -1).replace(/\\(.)/g, "$1") : name;
 const DEF = new RegExp(`^\\s*(${LHS})\\s*(?:<<-|<-|=)\\s*function\\s*\\(`);
-const R6_DEF = new RegExp(`^\\s*(${LHS})\\s*(?:<<-|<-|=)\\s*R6Class\\s*\\(`);
+const R6_DEF = new RegExp(`^\\s*(${LHS})\\s*(?:<<-|<-|=)\\s*(?:R6::)?R6Class\\s*\\(`);
 // Top-level data assignment: any RHS except a function literal. `==` and
 // comparisons never match: `=(?![=>])` rejects the second `=` of `==`.
 const ASSIGN = new RegExp(`^\\s*(${LHS})\\s*(?:<<-|<-|=(?![=>]))\\s*(?!function\\s*\\()(?=\\S)`);
@@ -39,52 +39,189 @@ const SET_CLASS = SET("setClass");
 const SET_GENERIC = SET("setGeneric");
 const SET_METHOD = SET("setMethod");
 // Wrapped forms still count: suppressPackageStartupMessages(library(pkg)).
-const PACKAGE = /^\s*(?:[A-Za-z.][\w.]*\s*\(\s*)*(library|require|requireNamespace)\s*\(/;
-const SOURCE = /^\s*(?:[A-Za-z.][\w.]*\s*\(\s*)*source\s*\(/;
+const DEPENDENCY =
+  /^[ \t]*(?:[A-Za-z.][\w.]*[ \t]*\([ \t]*)*(library|require|requireNamespace|source)\s*\(/gm;
 // Qualified calls keep their qualifier whole: pkg::fun(x), self$method(x).
 const CALL = new RegExp(`((?:${NAME}(?:::|\\$))+${NAME})\\s*\\(|(${NAME})\\s*\\(`, "g");
 // Keywords are syntax, and the dependency forms are recorded as imports.
 const CALL_KEYWORDS = new Set([
-  "if", "else", "for", "while", "repeat", "function", "return", "switch", "in",
-  "next", "break", "library", "require", "requireNamespace", "source",
+  "if",
+  "else",
+  "for",
+  "while",
+  "repeat",
+  "function",
+  "return",
+  "switch",
+  "in",
+  "next",
+  "break",
+  "library",
+  "require",
+  "requireNamespace",
+  "source",
 ]);
 
 // Base mega-hubs: the apply family, data constructors, coercion, plumbing.
 // Native-reader-only warding (ast-grep languages are unaffected); single-
 // letter helpers (c(), t(), I()) fall below the minimum callee length instead.
-const R_BASE_HUBS = new Set([ // native-reader-internal since the ward split
-  "sapply", "lapply", "vapply", "apply", "tapply", "mapply", "eapply", "rapply",
-  "data.frame", "as.data.frame", "matrix", "as.matrix", "as.list", "as.vector",
-  "as.numeric", "as.character", "as.integer", "as.logical", "as.factor", "as.date",
-  "cbind", "rbind", "unlist", "list", "seq", "seq_len", "seq_along", "rep", "rev",
-  "paste", "paste0", "cat", "message", "warning", "stop", "nrow", "ncol",
-  "length", "names", "dim", "rownames", "colnames", "levels", "factor", "ordered",
-  "is.na", "na.omit", "which", "unique", "duplicated", "order", "subset",
-  "aggregate", "do.call", "sort", "split", "table", "head", "tail",
-  "grep", "grepl", "sub", "gsub", "strsplit", "nchar", "toupper", "tolower",
-  "mean", "median", "var", "sd", "sum", "abs", "round", "sqrt", "exp", "log",
-  "is.null", "is.list", "is.vector", "is.character", "is.numeric", "is.factor",
-  "is.data.frame", "class", "attr", "attributes", "structure",
-  "print", "sprintf", "format", "suppressmessages", "suppresswarnings",
+const R_BASE_HUBS = new Set([
+  // native-reader-internal since the ward split
+  "sapply",
+  "lapply",
+  "vapply",
+  "apply",
+  "tapply",
+  "mapply",
+  "eapply",
+  "rapply",
+  "data.frame",
+  "as.data.frame",
+  "matrix",
+  "as.matrix",
+  "as.list",
+  "as.vector",
+  "as.numeric",
+  "as.character",
+  "as.integer",
+  "as.logical",
+  "as.factor",
+  "as.date",
+  "cbind",
+  "rbind",
+  "unlist",
+  "list",
+  "seq",
+  "seq_len",
+  "seq_along",
+  "rep",
+  "rev",
+  "paste",
+  "paste0",
+  "cat",
+  "message",
+  "warning",
+  "stop",
+  "nrow",
+  "ncol",
+  "length",
+  "names",
+  "dim",
+  "rownames",
+  "colnames",
+  "levels",
+  "factor",
+  "ordered",
+  "is.na",
+  "na.omit",
+  "which",
+  "unique",
+  "duplicated",
+  "order",
+  "subset",
+  "aggregate",
+  "do.call",
+  "sort",
+  "split",
+  "table",
+  "head",
+  "tail",
+  "grep",
+  "grepl",
+  "sub",
+  "gsub",
+  "strsplit",
+  "nchar",
+  "toupper",
+  "tolower",
+  "mean",
+  "median",
+  "var",
+  "sd",
+  "sum",
+  "abs",
+  "round",
+  "sqrt",
+  "exp",
+  "log",
+  "is.null",
+  "is.list",
+  "is.vector",
+  "is.character",
+  "is.numeric",
+  "is.factor",
+  "is.data.frame",
+  "class",
+  "attr",
+  "attributes",
+  "structure",
+  "print",
+  "sprintf",
+  "format",
+  "suppressmessages",
+  "suppresswarnings",
   "suppresspackagemessages",
   // testthat entry points and assertions
-  "test_that", "expect_equal", "expect_true", "expect_false", "expect_error",
-  "expect_warning", "expect_identical", "expect_named", "expect_length",
-  "expect_type", "expect_match", "expect_null", "expect_silent",
-  "expect_no_error", "expect_no_warning", "skip_if_not", "skip_if_not_installed",
+  "test_that",
+  "expect_equal",
+  "expect_true",
+  "expect_false",
+  "expect_error",
+  "expect_warning",
+  "expect_identical",
+  "expect_named",
+  "expect_length",
+  "expect_type",
+  "expect_match",
+  "expect_null",
+  "expect_silent",
+  "expect_no_error",
+  "expect_no_warning",
+  "skip_if_not",
+  "skip_if_not_installed",
 ]);
 
-// First call argument: a quoted name (position-masked in code) or a bare
-// package symbol. Returns the resolved text, or undefined for expressions.
+// Read one complete dependency argument from masked source. Named arguments
+// and line breaks are syntax, not package names. Never evaluate expressions;
+// source() needs a literal path and character.only needs a literal package.
 const firstArg = (
   code: string,
   from: number,
   strings: ReadonlyArray<{ start: number; text: string }>,
+  source: boolean,
+  closes: ReadonlyMap<number, number>,
 ): string | undefined => {
-  const quoted = strings.find((s) => s.start >= from);
-  if (quoted && code.slice(from, quoted.start).trim() === "") return quoted.text;
-  const bare = new RegExp(`^(${NAME})(?=[\\s,)])`).exec(code.slice(from));
-  return bare ? bare[1] : undefined;
+  const close = closes.get(from - 1);
+  if (close === undefined) return undefined;
+  let end = close;
+  for (let i = from; i < close; i++) {
+    const ch = code[i]!;
+    if ("([{".includes(ch)) {
+      const nested = closes.get(i);
+      if (nested === undefined) return undefined;
+      i = nested;
+    } else if (ch === ",") {
+      end = i;
+      break;
+    }
+  }
+  const argument = code.slice(from, end);
+  const prefix = new RegExp(`^\\s*${source ? "file" : "package"}\\s*=`).exec(argument)?.[0] ?? "";
+  const valueStart = from + prefix.length;
+  const rest = code.slice(valueStart, end).trim();
+  // Strings are ordered by opening position; binary search keeps large import
+  // lists linearithmic rather than scanning every earlier literal per call.
+  let lo = 0,
+    hi = strings.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (strings[mid]!.start < valueStart) lo = mid + 1;
+    else hi = mid;
+  }
+  const quoted = strings[lo];
+  if (!rest && quoted && quoted.start < end) return quoted.text;
+  if (source || /\bcharacter\.only\s*=\s*TRUE\b/.test(code.slice(end, close))) return undefined;
+  return new RegExp(`^${NAME}$`).test(rest) ? rest : undefined;
 };
 
 // First quoted argument after the opening paren (setClass("Foo", ...)).
@@ -111,6 +248,14 @@ export const extractR = (file: string, text: string): RFacts => {
   const classes: Array<{ name: string; at: number }> = []; // open R6Class blocks
   let pending: { name: string; line: number; sig: string } | undefined; // `name <-` split across lines
   const lines = text.split("\n");
+  const lineOffsets: number[] = [];
+  let offset = 0;
+  for (const line of lines) {
+    lineOffsets.push(offset);
+    offset += line.length + 1;
+  }
+  const maskedLines: string[] = [];
+  const sourceStrings: Array<{ start: number; text: string }> = [];
   // R string literals may span lines (SQL, glue templates): this quote
   // state persists across the line loop below so string bodies stay masked
   // and bracket counting stays honest; unterminated quotes emit nothing.
@@ -134,6 +279,7 @@ export const extractR = (file: string, text: string): RFacts => {
         facts.literals.push({ file, line: quoteLine, text: value });
       }
       strings.push({ start, text: value });
+      sourceStrings.push({ start: lineOffsets[quoteLine - 1]! + start, text: value });
       quote = "";
       rawClose = "";
     };
@@ -160,7 +306,9 @@ export const extractR = (file: string, text: string): RFacts => {
           code += " ";
           if (ch === "\\" && i + 1 < raw.length) {
             const escaped = raw[++i]!;
-            value += ({ n: "\n", r: "\r", t: "\t", "0": "\0" } as Record<string, string>)[escaped] ?? escaped;
+            value +=
+              ({ n: "\n", r: "\r", t: "\t", "0": "\0" } as Record<string, string>)[escaped] ??
+              escaped;
             code += " ";
             visible += escaped;
           } else if (ch === quote) {
@@ -203,6 +351,7 @@ export const extractR = (file: string, text: string): RFacts => {
         visible += ch;
       }
     }
+    maskedLines.push(code.padEnd(raw.length, " "));
     // Section markers live entirely in comments, so `code` is empty and
     // the shared `decl` helper below never sees them; record them directly.
     // A line that starts inside a string body is string content, not a
@@ -210,7 +359,14 @@ export const extractR = (file: string, text: string): RFacts => {
     const section = SECTION.exec(raw);
     if (section && !startsInString && depth === 0 && classes.length === 0) {
       const sig = raw.trim();
-      facts.symbols.push({ file, line, name: section[1]!.trim(), kind: "section", sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig, lang: "R" });
+      facts.symbols.push({
+        file,
+        line,
+        name: section[1]!.trim(),
+        kind: "section",
+        sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig,
+        lang: "R",
+      });
     }
     if (!code.trim()) continue;
     // A bare `name <-` defers its declaration to the next non-blank line
@@ -218,11 +374,18 @@ export const extractR = (file: string, text: string): RFacts => {
     let r6Name: string | undefined;
     if (pending) {
       const fnLine = /^\s*function\s*\(/.test(visible);
-      const r6Line = /^\s*R6Class\s*\(/.test(visible);
+      const r6Line = /^\s*(?:R6::)?R6Class\s*\(/.test(visible);
       if (fnLine || r6Line) {
         const inCls = classes.length > 0 && depth > classes.at(-1)!.at;
         const name = fnLine && inCls ? `${classes.at(-1)!.name}.${pending.name}` : pending.name;
-        facts.symbols.push({ file, line: pending.line, name, kind: fnLine ? (inCls ? "method" : "function") : "class", sig: pending.sig, lang: "R" });
+        facts.symbols.push({
+          file,
+          line: pending.line,
+          name,
+          kind: fnLine ? (inCls ? "method" : "function") : "class",
+          sig: pending.sig,
+          lang: "R",
+        });
         if (r6Line) r6Name = pending.name;
       }
       pending = undefined;
@@ -230,7 +393,14 @@ export const extractR = (file: string, text: string): RFacts => {
     const inClass = classes.length > 0 && depth > classes.at(-1)!.at;
     const sig = visible.trim();
     const decl = (name: string, kind: SymbolRec["kind"]): void => {
-      facts.symbols.push({ file, line, name, kind, sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig, lang: "R" });
+      facts.symbols.push({
+        file,
+        line,
+        name,
+        kind,
+        sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig,
+        lang: "R",
+      });
     };
     const r6 = R6_DEF.exec(visible);
     if (r6) {
@@ -250,13 +420,19 @@ export const extractR = (file: string, text: string): RFacts => {
         const setGeneric = SET_GENERIC.exec(visible);
         const setMethod = SET_METHOD.exec(visible);
         if (setClass) {
-          const name = stringArg(visible, strings) ?? (setClass[1] !== undefined ? unquote(setClass[1]) : undefined);
+          const name =
+            stringArg(visible, strings) ??
+            (setClass[1] !== undefined ? unquote(setClass[1]) : undefined);
           if (name) decl(name, "class");
         } else if (setGeneric) {
-          const name = stringArg(visible, strings) ?? (setGeneric[1] !== undefined ? unquote(setGeneric[1]) : undefined);
+          const name =
+            stringArg(visible, strings) ??
+            (setGeneric[1] !== undefined ? unquote(setGeneric[1]) : undefined);
           if (name) decl(name, "function");
         } else if (setMethod) {
-          const name = stringArg(visible, strings) ?? (setMethod[1] !== undefined ? unquote(setMethod[1]) : undefined);
+          const name =
+            stringArg(visible, strings) ??
+            (setMethod[1] !== undefined ? unquote(setMethod[1]) : undefined);
           if (name) decl(name, "method");
         } else if (depth === 0) {
           // Non-function top-level assignments are the data surface of an
@@ -274,25 +450,20 @@ export const extractR = (file: string, text: string): RFacts => {
           else if (rightFn) decl(rightFn[1]!, "function");
           else if (rightAssign) decl(rightAssign[2]!, "decl");
           else if (pendingAssign) {
-            pending = { name: unquote(pendingAssign[1]!), line, sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig };
+            pending = {
+              name: unquote(pendingAssign[1]!),
+              line,
+              sig: sig.length > 140 ? sig.slice(0, 137) + "..." : sig,
+            };
           }
         }
       }
     }
-    const pkg = PACKAGE.exec(code);
-    if (pkg) {
-      const spec = firstArg(code, pkg[0].length, strings);
-      if (spec) facts.imports.push({ file, line, spec });
-    }
-    const src = SOURCE.exec(code);
-    if (src) {
-      const spec = firstArg(code, src[0].length, strings);
-      if (spec) facts.imports.push({ file, line, spec });
-    }
     CALL.lastIndex = 0;
     for (const call of code.matchAll(CALL)) {
       const name = call[1] ?? call[2]!;
-      if (name.length <= 1 || CALL_KEYWORDS.has(name) || R_BASE_HUBS.has(name.toLowerCase())) continue;
+      if (name.length <= 1 || CALL_KEYWORDS.has(name) || R_BASE_HUBS.has(name.toLowerCase()))
+        continue;
       facts.calls.push({ file, line, callee: name });
     }
     const depthBefore = depth; // R6 blocks anchor at the pre-line depth: a
@@ -309,11 +480,52 @@ export const extractR = (file: string, text: string): RFacts => {
     // # section and poison inClass for the next function body.
     if (r6Name !== undefined && net > 0) classes.push({ name: r6Name, at: depthBefore });
   }
+  const maskedSource = maskedLines.join("\n");
+  // Pair delimiters once: malformed/nested calls must not trigger a full
+  // suffix scan for every library() site in a large source file.
+  const closes = new Map<number, number>();
+  const stack: number[] = [];
+  for (let i = 0; i < maskedSource.length; i++) {
+    const ch = maskedSource[i]!;
+    if ("([{".includes(ch)) stack.push(i);
+    else if (")]}".includes(ch)) {
+      const open = stack.pop();
+      if (open !== undefined && "([{".indexOf(maskedSource[open]!) === ")]}".indexOf(ch))
+        closes.set(open, i);
+      else stack.length = 0;
+    }
+  }
+  DEPENDENCY.lastIndex = 0;
+  let dependencyLine = 0;
+  for (const match of maskedSource.matchAll(DEPENDENCY)) {
+    const source = match[1] === "source";
+    const spec = firstArg(
+      maskedSource,
+      match.index! + match[0].length,
+      sourceStrings,
+      source,
+      closes,
+    );
+    if (spec === undefined) continue;
+    while (
+      dependencyLine + 1 < lineOffsets.length &&
+      lineOffsets[dependencyLine + 1]! <= match.index!
+    )
+      dependencyLine++;
+    facts.imports.push({
+      file,
+      line: dependencyLine + 1,
+      spec,
+      form: source ? "r-source" : "r-package",
+    });
+  }
   // A generic and its setMethod implementations share a graph identity;
   // likewise a re-assigned name keeps one symbol. First site wins.
   const symbols = new Map<string, SymbolRec>();
-  const symbolKey = (symbol: SymbolRec): string => symbol.kind === "section" ? `section:${symbol.name}` : symbol.name;
-  for (const symbol of facts.symbols) if (!symbols.has(symbolKey(symbol))) symbols.set(symbolKey(symbol), symbol);
+  const symbolKey = (symbol: SymbolRec): string =>
+    symbol.kind === "section" ? `section:${symbol.name}` : symbol.name;
+  for (const symbol of facts.symbols)
+    if (!symbols.has(symbolKey(symbol))) symbols.set(symbolKey(symbol), symbol);
   facts.symbols = [...symbols.values()].sort((a, b) => a.line - b.line);
   return facts;
 };

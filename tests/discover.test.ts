@@ -65,7 +65,9 @@ describe("integration on the mini repo", () => {
   it("tier-1-pack anchors stay first-class when discovery fires too", async () => {
     resetSessions();
     const st = await ensureState(FIXTURE);
-    const airports = st.graph.anchors.find((a) => a.id === "ANY /api/airports/{*}") ?? st.graph.anchors.find((a) => a.id === "GET /api/airports/{*}");
+    const airports =
+      st.graph.anchors.find((a) => a.id === "ANY /api/airports/{*}") ??
+      st.graph.anchors.find((a) => a.id === "GET /api/airports/{*}");
     expect(airports).toBeDefined();
     expect(airports!.implicit ?? false).toBe(false);
   });

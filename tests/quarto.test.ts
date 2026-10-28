@@ -156,8 +156,13 @@ describe("Quarto notebook reader", () => {
     const result = graph.nodes.find((n) => n.name === "result");
     expect(result && formatNodeLocation(result)).toBe("ana/gw_ana.qmd#chunk-analysis:29");
 
-    const nb = ["```{r}", 'source("./helpers.R")', "run <- function() prepare(1)", "```"].join("\n");
-    const joined = await graphFor({ "ana/run.qmd": nb, "ana/helpers.R": "prepare <- function(x) x\n" });
+    const nb = ["```{r}", 'source("./helpers.R")', "run <- function() prepare(1)", "```"].join(
+      "\n",
+    );
+    const joined = await graphFor({
+      "ana/run.qmd": nb,
+      "ana/helpers.R": "prepare <- function(x) x\n",
+    });
     const invokes = joined.edges.filter((edge) => edge.kind === "invokes");
     expect(invokes.map((edge) => [joined.nodes[edge.a]!.name, joined.nodes[edge.b]!.id])).toEqual([
       ["run", "prepare@ana/helpers.R"],
@@ -175,7 +180,9 @@ describe("Quarto notebook reader", () => {
       "```",
     ].join("\n");
     const graph = await graphFor({ "nb.qmd": nb });
-    const runs = graph.nodes.filter((n) => n.file === "nb.qmd" && n.name === "run" && n.kind === "function");
+    const runs = graph.nodes.filter(
+      (n) => n.file === "nb.qmd" && n.name === "run" && n.kind === "function",
+    );
     expect(runs.map((n) => [n.id, n.line, n.chunkLabel])).toEqual([
       ["run@nb.qmd@chunk:1", 2, "prep-a"],
       ["run@nb.qmd@chunk:2", 6, "prep-b"],
@@ -185,7 +192,9 @@ describe("Quarto notebook reader", () => {
   it("keeps notebook python imports off the TypeScript bare-specifier fallback", async () => {
     const nb = ["```{python}", "import utils", "```"].join("\n");
     const graph = await graphFor({ "ana/nb.qmd": nb, "ana/utils.ts": "export const u = 1;\n" });
-    const edges = graph.edges.filter((edge) => edge.kind === "imports" && graph.nodes[edge.b]!.file === "ana/utils.ts");
+    const edges = graph.edges.filter(
+      (edge) => edge.kind === "imports" && graph.nodes[edge.b]!.file === "ana/utils.ts",
+    );
     expect(edges).toEqual([]);
     // The bare spec still surfaces as an external package node, python-labeled.
     expect(graph.nodes.find((n) => n.id === "pkg:utils")?.sig).toBe("Python package utils");
@@ -194,7 +203,8 @@ describe("Quarto notebook reader", () => {
   it("labels python-chunk packages without R classification", async () => {
     const nb = ["```{python}", "import numpy", "import utils", "```"].join("\n");
     const graph = await graphFor({ "nb.qmd": nb });
-    const sig = (name: string): string | undefined => graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
+    const sig = (name: string): string | undefined =>
+      graph.nodes.find((n) => n.id === `pkg:${name}`)?.sig;
     expect(sig("numpy")).toBe("Python package numpy");
     expect(sig("utils")).toBe("Python package utils");
   });

@@ -12,7 +12,10 @@ export interface FileSource {
 }
 
 /** Build a source over a root; `contents` pre-seeds already-read files. */
-export const makeFileSource = (root: string, contents?: ReadonlyMap<string, string>): FileSource => {
+export const makeFileSource = (
+  root: string,
+  contents?: ReadonlyMap<string, string>,
+): FileSource => {
   const inflight = new Map<string, Promise<string | undefined>>();
   return {
     read(file: string): Promise<string | undefined> {
@@ -20,10 +23,12 @@ export const makeFileSource = (root: string, contents?: ReadonlyMap<string, stri
       if (cached !== undefined) return Promise.resolve(cached);
       const pending = inflight.get(file);
       if (pending) return pending;
-      const p = readFile(join(root, file), "utf8").then(
-        (text) => text,
-        () => undefined,
-      ).finally(() => inflight.delete(file));
+      const p = readFile(join(root, file), "utf8")
+        .then(
+          (text) => text,
+          () => undefined,
+        )
+        .finally(() => inflight.delete(file));
       inflight.set(file, p);
       return p;
     },

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+src/verified/generated/
+tests/fixtures/
+.git/
+proofs/lean/
+bun.lock

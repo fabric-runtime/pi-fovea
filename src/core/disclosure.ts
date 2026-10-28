@@ -9,12 +9,22 @@ export const disclosureDecision = (
   repeat: boolean,
   nucleus: boolean,
 ): "D" | "S" | "R" => {
-  if (typeof inScope !== "boolean" || typeof excluded !== "boolean" || typeof seen !== "boolean"
-    || typeof repeat !== "boolean" || typeof nucleus !== "boolean") throw new TypeError("Expected Boolean disclosure inputs");
+  if (
+    typeof inScope !== "boolean" ||
+    typeof excluded !== "boolean" ||
+    typeof seen !== "boolean" ||
+    typeof repeat !== "boolean" ||
+    typeof nucleus !== "boolean"
+  )
+    throw new TypeError("Expected Boolean disclosure inputs");
   switch (disclosure(inScope, excluded, seen, repeat, nucleus).$) {
-    case "Drop": return "D";
-    case "Suppress": return "S";
-    case "Reveal": return "R";
-    default: throw new Error("Invalid disclosure decision from verified kernel");
+    case "Drop":
+      return "D";
+    case "Suppress":
+      return "S";
+    case "Reveal":
+      return "R";
+    default:
+      throw new Error("Invalid disclosure decision from verified kernel");
   }
 };

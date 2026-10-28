@@ -23,7 +23,12 @@ export const gitOut = async (
           ["-c", "core.fsmonitor=false", "-C", root, ...args],
           {
             // Local analysis must not run repository hooks or lazily fetch objects.
-            env: { ...process.env, GIT_NO_LAZY_FETCH: "1", GIT_ALLOW_PROTOCOL: "", GIT_TERMINAL_PROMPT: "0" },
+            env: {
+              ...process.env,
+              GIT_NO_LAZY_FETCH: "1",
+              GIT_ALLOW_PROTOCOL: "",
+              GIT_TERMINAL_PROMPT: "0",
+            },
             encoding: "utf8",
             timeout: opts.timeout ?? GIT_TIMEOUT,
             maxBuffer: opts.maxBuffer ?? 64 * 1024 * 1024,
@@ -91,7 +96,8 @@ export const gitPrefix = async (root: string): Promise<string | undefined> => {
   const prefix = out.trim().replace(/\\/g, "/");
   gitPrefixes.delete(root);
   gitPrefixes.set(root, prefix);
-  while (gitPrefixes.size > OBSERVED_ROOT_LIMIT) gitPrefixes.delete(gitPrefixes.keys().next().value!);
+  while (gitPrefixes.size > OBSERVED_ROOT_LIMIT)
+    gitPrefixes.delete(gitPrefixes.keys().next().value!);
   return prefix;
 };
 
@@ -104,8 +110,13 @@ const gitRelativePath = (path: string, prefix: string): string | undefined => {
 export const gitProbe = async (root: string): Promise<GitProbe | undefined> => {
   let prefix = await gitPrefix(root);
   if (prefix === undefined) return undefined;
-  const marker = await stat(join(root, ".git")).then(info => info.isFile() || info.isDirectory(), () => false);
-  const overridden = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"].some(key => process.env[key] !== undefined);
+  const marker = await stat(join(root, ".git")).then(
+    (info) => info.isFile() || info.isDirectory(),
+    () => false,
+  );
+  const overridden = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"].some(
+    (key) => process.env[key] !== undefined,
+  );
   // A removed/new root marker or an explicit Git environment can change what
   // a cached prefix means. Never let that broaden a formerly nested scope.
   if ((prefix === "") !== marker || overridden) {
@@ -117,9 +128,16 @@ export const gitProbe = async (root: string): Promise<GitProbe | undefined> => {
   // a worktree root; subroots must not scan outside their selected scope.
   // This requests index metadata, not a change to any Git configuration file.
   const out = await gitOut(root, [
-    "-c", `core.untrackedCache=${process.env.FOVEA_GIT_UNTRACKED_CACHE !== "0"}`,
-    "status", "--porcelain=v2", "--branch", "--no-ahead-behind", "-z",
-    "--untracked-files=normal", "--no-renames", ...(prefix || !marker || overridden ? ["--", "."] : []),
+    "-c",
+    `core.untrackedCache=${process.env.FOVEA_GIT_UNTRACKED_CACHE !== "0"}`,
+    "status",
+    "--porcelain=v2",
+    "--branch",
+    "--no-ahead-behind",
+    "-z",
+    "--untracked-files=normal",
+    "--no-renames",
+    ...(prefix || !marker || overridden ? ["--", "."] : []),
   ]);
   if (out === undefined) return legacyProbe(root, prefix);
   let head: string | undefined;
@@ -142,9 +160,15 @@ export const gitProbe = async (root: string): Promise<GitProbe | undefined> => {
       const parts = field.split(" ");
       code = (parts[1] ?? "").replace(/\./g, " ");
       raw = parts.slice(field[0] === "1" ? 8 : 10).join(" ");
-    } else { relist = true; continue; }
+    } else {
+      relist = true;
+      continue;
+    }
     const path = gitRelativePath(raw, prefix);
-    if (!path || !/^[ MARCUD?!]{2}$/.test(code)) { relist = true; continue; }
+    if (!path || !/^[ MARCUD?!]{2}$/.test(code)) {
+      relist = true;
+      continue;
+    }
     changes.push({ code, path });
   }
   // Older Git or unexpected protocol output falls back to the existing oracle.
@@ -153,7 +177,13 @@ export const gitProbe = async (root: string): Promise<GitProbe | undefined> => {
 
 const legacyProbe = async (root: string, prefix: string): Promise<GitProbe | undefined> => {
   const out = await gitOut(root, [
-    "status", "--porcelain=v1", "-z", "--untracked-files=normal", "--no-renames", "--", ".",
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=normal",
+    "--no-renames",
+    "--",
+    ".",
   ]);
   if (out === undefined) return undefined;
   const head = (await gitHead(root)) ?? "";
@@ -197,7 +227,10 @@ export const prFiles = async (root: string, base: string): Promise<string[]> => 
   if (prefix === undefined) return [];
   const out = await gitOut(root, ["diff", "--name-only", `${base}...HEAD`, "--", "."]);
   return out
-    ? out.split("\n").map((s) => gitRelativePath(s.trim(), prefix)).filter((s): s is string => !!s)
+    ? out
+        .split("\n")
+        .map((s) => gitRelativePath(s.trim(), prefix))
+        .filter((s): s is string => !!s)
     : [];
 };
 
@@ -236,8 +269,8 @@ interface PendingDiff {
 // that deliberately small grammar; a surprise makes the section coarse rather
 // than risking attribution to the wrong source path.
 const decodeGitPath = (raw: string): string | undefined => {
-  if (!raw.startsWith("\"")) return raw;
-  if (raw.length < 2 || !raw.endsWith("\"")) return undefined;
+  if (!raw.startsWith('"')) return raw;
+  if (raw.length < 2 || !raw.endsWith('"')) return undefined;
   const bytes: number[] = [];
   const escaped: Record<string, number> = {
     a: 7,
@@ -249,7 +282,7 @@ const decodeGitPath = (raw: string): string | undefined => {
     r: 13,
     e: 27,
     "\\": 92,
-    "\"": 34,
+    '"': 34,
   };
   for (let i = 1; i < raw.length - 1; i++) {
     const ch = raw[i]!;
@@ -304,7 +337,10 @@ export const parseZeroContextDiff = (
   const merge = (path: string, hunks: DiffHunk[], fallback: boolean): void => {
     const previous = result.get(path);
     if (!previous) {
-      result.set(path, fallback ? { hunks: [], fallback: true } : { hunks: [...hunks], fallback: false });
+      result.set(
+        path,
+        fallback ? { hunks: [], fallback: true } : { hunks: [...hunks], fallback: false },
+      );
       return;
     }
     if (previous.fallback || fallback || previous.hunks.length + hunks.length > limit) {
@@ -317,13 +353,26 @@ export const parseZeroContextDiff = (
   const flush = (): void => {
     if (!pending) return;
     const renamed = !!(
-      pending.renameFrom || pending.renameTo || pending.copyFrom || pending.copyTo ||
+      pending.renameFrom ||
+      pending.renameTo ||
+      pending.copyFrom ||
+      pending.copyTo ||
       (pending.oldPath && pending.newPath && pending.oldPath !== pending.newPath)
     );
-    const fallback = pending.fallback || pending.newFile || pending.deletedFile || renamed ||
-      pending.hunkCount === 0 || pending.hunkCount > limit;
-    const primary = pending.newPath ?? pending.renameTo ?? pending.copyTo ?? pending.oldPath ??
-      pending.renameFrom ?? pending.copyFrom;
+    const fallback =
+      pending.fallback ||
+      pending.newFile ||
+      pending.deletedFile ||
+      renamed ||
+      pending.hunkCount === 0 ||
+      pending.hunkCount > limit;
+    const primary =
+      pending.newPath ??
+      pending.renameTo ??
+      pending.copyTo ??
+      pending.oldPath ??
+      pending.renameFrom ??
+      pending.copyFrom;
     if (primary) merge(primary, pending.hunks, fallback);
     // Status --no-renames can report either side, and stale callers can still
     // hold the old graph generation. Keep both names coarse for safety.
@@ -426,9 +475,14 @@ export const parseZeroContextDiff = (
     const oldLines = match[2] === undefined ? 1 : Number(match[2]);
     const newStart = Number(match[3]);
     const newLines = match[4] === undefined ? 1 : Number(match[4]);
-    const valid = [oldStart, oldLines, newStart, newLines].every(Number.isSafeInteger) &&
-      oldStart >= 0 && oldLines >= 0 && newStart >= 0 && newLines >= 0 &&
-      (newLines === 0 || newStart >= 1) && Number.isSafeInteger(newStart + newLines);
+    const valid =
+      [oldStart, oldLines, newStart, newLines].every(Number.isSafeInteger) &&
+      oldStart >= 0 &&
+      oldLines >= 0 &&
+      newStart >= 0 &&
+      newLines >= 0 &&
+      (newLines === 0 || newStart >= 1) &&
+      Number.isSafeInteger(newStart + newLines);
     if (!valid) {
       pending.hunks.length = 0;
       pending.fallback = true;
@@ -448,14 +502,29 @@ export const diffHunks = async (
   const prefix = await gitPrefix(root);
   if (prefix === undefined) return undefined;
   const range = base ? `${base}...HEAD` : "HEAD";
-  const out = await gitOut(root, [
-    "-c", "core.quotePath=false",
-    // Pin canonical a/ b/ path prefixes: user-level diff.mnemonicprefix
-    // (i/ w/ c/ o/) or diff.noprefix would rename every parsed path into
-    // a spurious rename pair and every nuclei probe would come back empty.
-    "-c", "diff.mnemonicprefix=false", "-c", "diff.noprefix=false",
-    "diff", "--unified=0", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames",
-    range, "--", ".",
-  ], { maxBuffer: DIFF_MAX_BUFFER });
+  const out = await gitOut(
+    root,
+    [
+      "-c",
+      "core.quotePath=false",
+      // Pin canonical a/ b/ path prefixes: user-level diff.mnemonicprefix
+      // (i/ w/ c/ o/) or diff.noprefix would rename every parsed path into
+      // a spurious rename pair and every nuclei probe would come back empty.
+      "-c",
+      "diff.mnemonicprefix=false",
+      "-c",
+      "diff.noprefix=false",
+      "diff",
+      "--unified=0",
+      "--no-color",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--find-renames",
+      range,
+      "--",
+      ".",
+    ],
+    { maxBuffer: DIFF_MAX_BUFFER },
+  );
   return out === undefined ? undefined : parseZeroContextDiff(out, prefix);
 };

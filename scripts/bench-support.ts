@@ -9,29 +9,43 @@ import { focus } from "../src/core/ops.js";
 import { resetSessions } from "../src/core/session.js";
 import { tokenEstimate, type RevealedNode } from "../src/core/render.js";
 
-const sorted = <T>(values: readonly T[]): T[] => [...values].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+const sorted = <T>(values: readonly T[]): T[] =>
+  [...values].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 
 // ast-grep batches may finish in a different order on independent cold builds.
 // Compare multisets, not completion order or opaque generation hashes. Keep
 // ordered nodes intact because graph endpoints and CSR columns index them.
 export const semanticSnapshot = (state: RepoState) => ({
   graph: { ...state.graph, edges: sorted(state.graph.edges), anchors: sorted(state.graph.anchors) },
-  facts: Object.fromEntries(Object.entries(state.facts).map(([file, facts]) => [file,
-    Object.fromEntries(Object.entries(facts).map(([key, value]) => [key, Array.isArray(value) ? sorted(value) : value])),
-  ])),
+  facts: Object.fromEntries(
+    Object.entries(state.facts).map(([file, facts]) => [
+      file,
+      Object.fromEntries(
+        Object.entries(facts).map(([key, value]) => [
+          key,
+          Array.isArray(value) ? sorted(value) : value,
+        ]),
+      ),
+    ]),
+  ),
   extraction: state.extraction,
   discovery: state.discovery,
   degrees: state.csr.deg,
-  operator: Array.from({ length: state.csr.n }, (_, row) => sorted(
-    Array.from({ length: state.csr.rowPtr[row + 1]! - state.csr.rowPtr[row]! }, (_, offset) => {
-      const p = state.csr.rowPtr[row]! + offset;
-      return { col: state.csr.col[p], w: state.csr.w[p] };
-    }),
-  )),
+  operator: Array.from({ length: state.csr.n }, (_, row) =>
+    sorted(
+      Array.from({ length: state.csr.rowPtr[row + 1]! - state.csr.rowPtr[row]! }, (_, offset) => {
+        const p = state.csr.rowPtr[row]! + offset;
+        return { col: state.csr.col[p], w: state.csr.w[p] };
+      }),
+    ),
+  ),
   adjacency: new Map([...state.adjacency].map(([node, edges]) => [node, sorted(edges)])),
 });
 
-export const revealedIds = (result: Awaited<ReturnType<typeof focus>>, budget: number): Set<string> => {
+export const revealedIds = (
+  result: Awaited<ReturnType<typeof focus>>,
+  budget: number,
+): Set<string> => {
   assert.equal(result.tokens, tokenEstimate(result.text), "reported token estimate drifted");
   assert.ok(result.tokens <= budget, `budget exceeded: ${result.tokens} > ${budget}`);
   assert.ok(Array.isArray(result.details.nodes), "focus must reveal structured nodes");
@@ -55,13 +69,40 @@ export const refreshProbe = async () => {
     const file = join(root, "web/api.ts");
     const source = readFileSync(file, "utf8");
     let previous = await ensureState(root);
-    assert.ok(previous.graph.nodes.some((node) => node.name === "loadUser"), "fixture extraction unavailable");
+    assert.ok(
+      previous.graph.nodes.some((node) => node.name === "loadUser"),
+      "fixture extraction unavailable",
+    );
     const scenarios = [
       { name: "unchanged", edit: () => {}, symbol: "loadUser" },
-      { name: "locations", edit: () => writeFileSync(file, `\n\n// location-only drift\n${source}`), symbol: "loadUser" },
-      { name: "semantic", edit: () => writeFileSync(file, `${source}\nexport function benchmarkAdded() { return loadUser("1"); }\n`), symbol: "benchmarkAdded" },
-      { name: "addition", edit: () => writeFileSync(join(root, "web/bench-added.ts"), 'import { loadUser } from "./api";\nexport function benchmarkCaller() { return loadUser("2"); }\n'), symbol: "benchmarkCaller" },
-      { name: "deletion", edit: () => rmSync(join(root, "web/bench-added.ts")), symbol: "benchmarkAdded" },
+      {
+        name: "locations",
+        edit: () => writeFileSync(file, `\n\n// location-only drift\n${source}`),
+        symbol: "loadUser",
+      },
+      {
+        name: "semantic",
+        edit: () =>
+          writeFileSync(
+            file,
+            `${source}\nexport function benchmarkAdded() { return loadUser("1"); }\n`,
+          ),
+        symbol: "benchmarkAdded",
+      },
+      {
+        name: "addition",
+        edit: () =>
+          writeFileSync(
+            join(root, "web/bench-added.ts"),
+            'import { loadUser } from "./api";\nexport function benchmarkCaller() { return loadUser("2"); }\n',
+          ),
+        symbol: "benchmarkCaller",
+      },
+      {
+        name: "deletion",
+        edit: () => rmSync(join(root, "web/bench-added.ts")),
+        symbol: "benchmarkAdded",
+      },
     ];
     for (const scenario of scenarios) {
       scenario.edit();
@@ -70,19 +111,37 @@ export const refreshProbe = async () => {
       const refreshMs = performance.now() - t;
       assert.ok(incremental.graph.nodes.some((node) => node.name === scenario.symbol));
       if (scenario.name === "unchanged") assert.equal(incremental.generation, previous.generation);
-      if (scenario.name === "semantic" || scenario.name === "addition" || scenario.name === "deletion") {
+      if (
+        scenario.name === "semantic" ||
+        scenario.name === "addition" ||
+        scenario.name === "deletion"
+      ) {
         assert.notEqual(incremental.generation, previous.generation);
       }
       if (scenario.name === "locations") {
-        const line = (state: RepoState) => state.graph.nodes.find((node) => node.name === "loadUser" && node.file === "web/api.ts")!.line;
+        const line = (state: RepoState) =>
+          state.graph.nodes.find((node) => node.name === "loadUser" && node.file === "web/api.ts")!
+            .line;
         assert.equal(line(incremental), line(previous) + 3, "location drift was not refreshed");
       }
       if (scenario.name === "addition") {
         const caller = incremental.graph.nodes.findIndex((node) => node.name === "benchmarkCaller");
-        const callee = incremental.graph.nodes.findIndex((node) => node.name === "loadUser" && node.file === "web/api.ts");
-        assert.ok(incremental.graph.edges.some((edge) => edge.kind === "invokes" && edge.a === caller && edge.b === callee && edge.evidence?.strategy === "imported-symbol"), "missing independently expected call evidence");
+        const callee = incremental.graph.nodes.findIndex(
+          (node) => node.name === "loadUser" && node.file === "web/api.ts",
+        );
+        assert.ok(
+          incremental.graph.edges.some(
+            (edge) =>
+              edge.kind === "invokes" &&
+              edge.a === caller &&
+              edge.b === callee &&
+              edge.evidence?.strategy === "imported-symbol",
+          ),
+          "missing independently expected call evidence",
+        );
       }
-      if (scenario.name === "deletion") assert.ok(!incremental.graph.nodes.some((node) => node.name === "benchmarkCaller"));
+      if (scenario.name === "deletion")
+        assert.ok(!incremental.graph.nodes.some((node) => node.name === "benchmarkCaller"));
       resetSessions();
       const before = await focus(root, scenario.symbol, 1000);
       assert.ok(revealedIds(before, 1000).size > 0);
@@ -91,12 +150,23 @@ export const refreshProbe = async () => {
       t = performance.now();
       const cold = await ensureState(root);
       const coldMs = performance.now() - t;
-      assert.deepEqual(semanticSnapshot(incremental), semanticSnapshot(cold), `${scenario.name}: incremental != cold`);
+      assert.deepEqual(
+        semanticSnapshot(incremental),
+        semanticSnapshot(cold),
+        `${scenario.name}: incremental != cold`,
+      );
       resetSessions();
       const after = await focus(root, scenario.symbol, 1000);
       // Cold extraction ordering can change opaque generation/version hashes.
-      const navigation = ({ details: { generation, version, ...details }, ...rest }: typeof before) => ({ ...rest, details });
-      assert.deepEqual(navigation(after), navigation(before), `${scenario.name}: navigation != cold`);
+      const navigation = ({
+        details: { generation, version, ...details },
+        ...rest
+      }: typeof before) => ({ ...rest, details });
+      assert.deepEqual(
+        navigation(after),
+        navigation(before),
+        `${scenario.name}: navigation != cold`,
+      );
       rows.push({ scenario: scenario.name, refreshMs, coldMs });
       previous = cold;
     }

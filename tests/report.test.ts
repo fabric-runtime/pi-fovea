@@ -5,7 +5,16 @@
 // broken extraction.
 
 import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -35,7 +44,10 @@ const fakeAstGrep = (): string => {
   const bin = join(dir, "sg-fail");
   // stderr text matters: grep-family CLIs exit 1 silently on zero matches,
   // so genuine failures are told apart by having something to say.
-  writeFileSync(bin, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "sg-fail 0.0.0"; exit 0; fi\necho "sg-fail: synthetic failure" >&2\nexit 1\n');
+  writeFileSync(
+    bin,
+    '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "sg-fail 0.0.0"; exit 0; fi\necho "sg-fail: synthetic failure" >&2\nexit 1\n',
+  );
   chmodSync(bin, 0o755);
   return bin;
 };
@@ -54,7 +66,10 @@ const countingAstGrep = (log: string): string => {
   const bin = join(dir, "sg-count");
   // Concurrent shell printf calls can interleave even with append redirection.
   // Keep each subprocess record separate so the scheduling count stays exact.
-  writeFileSync(bin, `#!/bin/sh\nprintf '%s\\n' "$*" > "${log}.$$"\nif [ "$1" = "--version" ]; then echo "sg-count 0.0.0"; exit 0; fi\nif [ "$1" = "scan" ] && [ "$2" = "--help" ]; then exit 0; fi\nif [ "$1" = "scan" ]; then exit 0; fi\nif [ "$1" = "outline" ] && [ "$2" = "--json=compact" ]; then printf '[]'; exit 0; fi\nif [ "$1" = "outline" ]; then exit 0; fi\nexit 2\n`);
+  writeFileSync(
+    bin,
+    `#!/bin/sh\nprintf '%s\\n' "$*" > "${log}.$$"\nif [ "$1" = "--version" ]; then echo "sg-count 0.0.0"; exit 0; fi\nif [ "$1" = "scan" ] && [ "$2" = "--help" ]; then exit 0; fi\nif [ "$1" = "scan" ]; then exit 0; fi\nif [ "$1" = "outline" ] && [ "$2" = "--json=compact" ]; then printf '[]'; exit 0; fi\nif [ "$1" = "outline" ]; then exit 0; fi\nexit 2\n`,
+  );
   chmodSync(bin, 0o755);
   return bin;
 };
@@ -87,7 +102,14 @@ describe("bounded discovery", () => {
     const root = mkdtempSync(join(tmpdir(), "fovea-cargo-"));
     try {
       writeFileSync(join(root, "top.ts"), "export const top = 1;\n");
-      const registry = join(root, ".cargo", "registry", "src", "index.crates.io-deadbeef", "aws-lc-sys-0.42.0");
+      const registry = join(
+        root,
+        ".cargo",
+        "registry",
+        "src",
+        "index.crates.io-deadbeef",
+        "aws-lc-sys-0.42.0",
+      );
       mkdirSync(registry, { recursive: true });
       writeFileSync(join(registry, "lib.rs"), "pub fn cached() {}\n");
       const checkout = join(root, ".cargo", "git", "checkouts", "some-abc123", "deadbeef");
@@ -161,7 +183,10 @@ describe("consolidated extraction scheduling", () => {
     const log = join(root, "invocations.log");
     try {
       for (let i = 0; i <= AST_GREP_CHUNK; i++) {
-        writeFileSync(join(root, `file-${String(i).padStart(3, "0")}.ts`), `export const value${i} = ${i};\n`);
+        writeFileSync(
+          join(root, `file-${String(i).padStart(3, "0")}.ts`),
+          `export const value${i} = ${i};\n`,
+        );
       }
       vi.stubEnv("FOVEA_AST_GREP", countingAstGrep(log));
       const outcome = await loadFacts(root, await listFiles(root));
@@ -211,19 +236,20 @@ describe.skipIf(!hasAstGrep())("healthy extraction", () => {
       expect(legacyOutcome.report.failed).toEqual([]);
 
       const normalize = (facts: typeof scanOutcome.store.facts) => {
-        const sort = <T>(items: T[]): T[] => [...items].sort((a, b) =>
-          JSON.stringify(a).localeCompare(JSON.stringify(b)),
-        );
-        return [...facts].sort(([a], [b]) => a.localeCompare(b)).map(([file, record]) => ({
-          file,
-          sha1: record.sha1,
-          symbols: sort(record.symbols),
-          imports: sort(record.imports),
-          calls: sort(record.calls),
-          literals: sort(record.literals),
-          anchors: sort(record.anchors),
-          sigs: record.sigs,
-        }));
+        const sort = <T>(items: T[]): T[] =>
+          [...items].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+        return [...facts]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([file, record]) => ({
+            file,
+            sha1: record.sha1,
+            symbols: sort(record.symbols),
+            imports: sort(record.imports),
+            calls: sort(record.calls),
+            literals: sort(record.literals),
+            anchors: sort(record.anchors),
+            sigs: record.sigs,
+          }));
       };
       expect(normalize(scanOutcome.store.facts)).toEqual(normalize(legacyOutcome.store.facts));
     } finally {

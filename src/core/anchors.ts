@@ -109,10 +109,21 @@ const PLACEHOLDER_ONLY = /^(:[A-Za-z_]\w*|\{[A-Za-z_]\w*\}|\[[A-Za-z_]\w*\])$/;
 // and redirect targets both resolve to GET; Django urlconfs and Rails mounts
 // accept any verb.
 const METHOD_ALIASES: Record<string, string> = {
-  PATH: "ANY", RE_PATH: "ANY", URL: "ANY", MATCH: "ANY", ROOT: "ANY",
-  REQUESTMAPPING: "ANY", RESOURCES: "ANY", FORWARD: "ANY",
-  USE: "ANY", ROUTE: "ANY", GROUP: "ANY",
-  FETCH: "GET", REDIRECT: "GET", RESPONDREDIRECT: "GET", REDIRECT_TO: "GET",
+  PATH: "ANY",
+  RE_PATH: "ANY",
+  URL: "ANY",
+  MATCH: "ANY",
+  ROOT: "ANY",
+  REQUESTMAPPING: "ANY",
+  RESOURCES: "ANY",
+  FORWARD: "ANY",
+  USE: "ANY",
+  ROUTE: "ANY",
+  GROUP: "ANY",
+  FETCH: "GET",
+  REDIRECT: "GET",
+  RESPONDREDIRECT: "GET",
+  REDIRECT_TO: "GET",
 };
 
 const deriveVerb = (method: string): string => {
@@ -135,8 +146,11 @@ const routerObjectPatterns = (slots = ROUTER_OBJECT_SLOTS): string[] => {
   const variants: string[] = [`$F({ ${pair} })`];
   for (let position = 0; position < slots; position++) {
     const dummies = position
-      ? `${Array.from({ length: position }, (_, index) =>
-          `$${String.fromCharCode(65 + index * 2)}: $${String.fromCharCode(66 + index * 2)}`).join(", ")}, `
+      ? `${Array.from(
+          { length: position },
+          (_, index) =>
+            `$${String.fromCharCode(65 + index * 2)}: $${String.fromCharCode(66 + index * 2)}`,
+        ).join(", ")}, `
       : "";
     variants.push(`$F({ ${dummies}${pair}, $$$REST })`);
   }
@@ -150,7 +164,8 @@ export const DEFAULT_PACK: AnchorRule[] = [
     id: "http-route-call",
     langs: ["TypeScript", "Tsx", "JavaScript", "Go"],
     pattern: "$R.$M($P, $$$H)",
-    methods: "^(?i:get|post|put|delete|patch|head|options|all|use|any|handle|handlefunc|route|group)$",
+    methods:
+      "^(?i:get|post|put|delete|patch|head|options|all|use|any|handle|handlefunc|route|group)$",
     kind: "route",
   },
   {
@@ -280,7 +295,7 @@ export const DEFAULT_PACK: AnchorRule[] = [
     // discovery (~93% path precision in the next.js clone corpus).
     id: "fetch-bare",
     langs: ["TypeScript", "Tsx", "JavaScript"],
-    pattern: "$M($P, $$$H)",  // trailing $$$H absorbs the options bag; zero-arg tail matches fetch("/x") too
+    pattern: "$M($P, $$$H)", // trailing $$$H absorbs the options bag; zero-arg tail matches fetch("/x") too
     methods: "^fetch$",
     kind: "route",
   },
@@ -304,7 +319,8 @@ export const DEFAULT_PACK: AnchorRule[] = [
     id: "grpc-method-path-first",
     langs: ["TypeScript", "Tsx", "JavaScript", "Python"],
     pattern: "$R.$M($P, $$$H)",
-    methods: "^(makeUnaryRequest|makeClientStreamRequest|makeServerStreamRequest|makeBidiStreamRequest|unary_unary|unary_stream|stream_unary|stream_stream)$",
+    methods:
+      "^(makeUnaryRequest|makeClientStreamRequest|makeServerStreamRequest|makeBidiStreamRequest|unary_unary|unary_stream|stream_unary|stream_stream)$",
     kind: "rpc",
     labelPrefix: "RPC",
     keyPattern: "^/[A-Za-z_]\\w*(?:\\.[A-Za-z_]\\w*)*/[A-Za-z_]\\w*$",
@@ -329,11 +345,7 @@ export const DEFAULT_PACK: AnchorRule[] = [
     // references (documenso-style split files). The receiver must root at
     // the builder `t` or a *Procedure factory; `trpc.post.list.query()`
     // client proxies fail closed instead of anchoring a nested name.
-    patterns: [
-      ...routerObjectPatterns(),
-      "const $P = $R.$M($$$A)",
-      "const $P: $T = $R.$M($$$A)",
-    ],
+    patterns: [...routerObjectPatterns(), "const $P = $R.$M($$$A)", "const $P: $T = $R.$M($$$A)"],
     methods: "^(query|mutation|subscription)$",
     kind: "trpc",
     labelPrefix: "TRPC",
@@ -356,11 +368,7 @@ export const DEFAULT_PACK: AnchorRule[] = [
     // shapes and client calls stay unlinked rather than guessed.
     id: "orpc-procedure-declaration",
     langs: ["TypeScript", "Tsx", "JavaScript"],
-    patterns: [
-      ...routerObjectPatterns(),
-      "const $P = $R.$M($$$A)",
-      "const $P: $T = $R.$M($$$A)",
-    ],
+    patterns: [...routerObjectPatterns(), "const $P = $R.$M($$$A)", "const $P: $T = $R.$M($$$A)"],
     methods: "^(route|handler)$",
     kind: "orpc",
     labelPrefix: "ORPC",
@@ -469,7 +477,8 @@ const anchorsFromGroups = (
     const prefixes = new Map<string, string>();
     for (const match of prefixMatches) {
       const prefix = match.single.P?.trim();
-      if (prefix !== undefined && !prefixes.has(match.file)) prefixes.set(match.file, unquote(prefix));
+      if (prefix !== undefined && !prefixes.has(match.file))
+        prefixes.set(match.file, unquote(prefix));
     }
     for (const match of matches) {
       // Router members after the captured first slot anchor from the $$$REST
@@ -516,7 +525,10 @@ const anchorsFromGroups = (
         const pathLike = match.single.P;
         if (!pathLike) continue;
         const prefix = prefixes.get(match.file);
-        let raw = prefix !== undefined && prefix !== "" ? joinRoute(prefix, unquote(pathLike)) : unquote(pathLike);
+        let raw =
+          prefix !== undefined && prefix !== ""
+            ? joinRoute(prefix, unquote(pathLike))
+            : unquote(pathLike);
         if (rule.mountRoot && !raw.startsWith("/")) raw = "/" + raw.replace(/^\/+/, "");
         const verbInPath = VERB_IN_PATH.exec(raw);
         let verbOverride: string | undefined;
@@ -556,8 +568,13 @@ const anchorsFromGroups = (
         if (slash > 0) {
           const serviceLabel = `RPC SERVICE ${methodPath.slice(0, slash)}`;
           out.push({
-            id: serviceLabel, kind: "rpc-service", label: serviceLabel, nodeId,
-            file: match.file, line: match.line, ruleId: `${rule.id}:service`,
+            id: serviceLabel,
+            kind: "rpc-service",
+            label: serviceLabel,
+            nodeId,
+            file: match.file,
+            line: match.line,
+            ruleId: `${rule.id}:service`,
           });
         }
       }
@@ -577,7 +594,10 @@ export interface AnchorScanPlan {
   groups: AnchorScanGroup[];
 }
 
-export const anchorScanPlan = (files: string[], pack: AnchorRule[] = DEFAULT_PACK): AnchorScanPlan => {
+export const anchorScanPlan = (
+  files: string[],
+  pack: AnchorRule[] = DEFAULT_PACK,
+): AnchorScanPlan => {
   const byLang = groupByLang(files);
   const rules: ScanRule[] = [];
   const groups: AnchorScanGroup[] = [];
@@ -656,7 +676,12 @@ export const extractAnchors = async (
       const prefixes = rule.prefixPattern?.length
         ? await patternRunAll(rule.prefixPattern, language, langFiles, cwd)
         : [];
-      const matches = await patternRunAll(rule.patterns ?? [rule.pattern!], language, langFiles, cwd);
+      const matches = await patternRunAll(
+        rule.patterns ?? [rule.pattern!],
+        language,
+        langFiles,
+        cwd,
+      );
       groups.push({ rule, prefixes, matches });
     }
   }
@@ -675,17 +700,55 @@ export interface FileRouteRule {
 }
 
 const DEFAULT_FILE_ROUTES: FileRouteRule[] = [
-  { id: "next-app-route", re: "(?:^|/)app/(.+)/route\\.(?:ts|tsx|js|jsx|mjs)$", verbs: "exports", kind: "route" },
-  { id: "next-app-page", re: "(?:^|/)app/(?:(.+)/)?page\\.(?:tsx|jsx|mdx)$", verbs: "suffix", kind: "page" },
-  { id: "next-pages-api", re: "(?:^|/)pages/api/(.+)\\.(?:ts|tsx|js|jsx)$", verbs: "suffix", pathPrefix: "/api", kind: "route" },
-  { id: "sveltekit-server", re: "(?:^|/)src/routes/(?:(.+)/)?\\+server\\.(?:ts|js)$", verbs: "exports", kind: "route" },
-  { id: "sveltekit-page", re: "(?:^|/)src/routes/(?:(.+)/)?\\+page\\.(?:svelte|md)$", verbs: "suffix", kind: "page" },
-  { id: "nuxt-server-api", re: "(?:^|/)server/api/(.+)\\.(?:ts|js|mjs)$", verbs: "suffix", pathPrefix: "/api", kind: "route" },
-  { id: "astro-endpoint", re: "(?:^|/)src/pages/(.+)\\.(?:ts|js|mjs)$", verbs: "exports", kind: "route" },
+  {
+    id: "next-app-route",
+    re: "(?:^|/)app/(.+)/route\\.(?:ts|tsx|js|jsx|mjs)$",
+    verbs: "exports",
+    kind: "route",
+  },
+  {
+    id: "next-app-page",
+    re: "(?:^|/)app/(?:(.+)/)?page\\.(?:tsx|jsx|mdx)$",
+    verbs: "suffix",
+    kind: "page",
+  },
+  {
+    id: "next-pages-api",
+    re: "(?:^|/)pages/api/(.+)\\.(?:ts|tsx|js|jsx)$",
+    verbs: "suffix",
+    pathPrefix: "/api",
+    kind: "route",
+  },
+  {
+    id: "sveltekit-server",
+    re: "(?:^|/)src/routes/(?:(.+)/)?\\+server\\.(?:ts|js)$",
+    verbs: "exports",
+    kind: "route",
+  },
+  {
+    id: "sveltekit-page",
+    re: "(?:^|/)src/routes/(?:(.+)/)?\\+page\\.(?:svelte|md)$",
+    verbs: "suffix",
+    kind: "page",
+  },
+  {
+    id: "nuxt-server-api",
+    re: "(?:^|/)server/api/(.+)\\.(?:ts|js|mjs)$",
+    verbs: "suffix",
+    pathPrefix: "/api",
+    kind: "route",
+  },
+  {
+    id: "astro-endpoint",
+    re: "(?:^|/)src/pages/(.+)\\.(?:ts|js|mjs)$",
+    verbs: "exports",
+    kind: "route",
+  },
 ];
 
 // `export async function GET`, `export const POST` — route handler verbs.
-const EXPORTED_VERB_RE = /\bexport\s+(?:(?:async\s+)?function\s+|const\s+)(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b/g;
+const EXPORTED_VERB_RE =
+  /\bexport\s+(?:(?:async\s+)?function\s+|const\s+)(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\b/g;
 const SUFFIX_VERB_RE = /\.(get|post|put|delete|patch|head|options)$/i;
 
 // Cards → concrete path. `(group)` segments vanish (Next), dynamic segments
@@ -728,7 +791,9 @@ export const extractFileRoutes = async (
       const match = re.exec(file);
       if (!match) continue;
       let stem = match[1] ?? ""; // optional dir group: route lives at the root
-      if (!stem && !rule.pathPrefix) { /* root page/endpoint: keep going, path is / */ }
+      if (!stem && !rule.pathPrefix) {
+        /* root page/endpoint: keep going, path is / */
+      }
       const verbs = new Set<string>();
       let suffixVerb: string | undefined;
       const sv = SUFFIX_VERB_RE.exec(stem);
@@ -742,14 +807,16 @@ export const extractFileRoutes = async (
         let content = texts.get(file);
         if (content === undefined) {
           try {
-            content = (source ? await source.read(file) : await readFile(joinPath(root, file), "utf8")) ?? "";
+            content =
+              (source ? await source.read(file) : await readFile(joinPath(root, file), "utf8")) ??
+              "";
           } catch {
             content = ""; // unreadable: fall through with no verbs
           }
         }
         for (const vm of content.matchAll(EXPORTED_VERB_RE)) verbs.add(vm[1]!);
       }
-      if (verbs.size === 0) verbs.add("ANY")
+      if (verbs.size === 0) verbs.add("ANY");
       const rel = (rule.pathPrefix ?? "") + toFileRoutePath(stem);
       const norm = normalizeLiteral(rel, "path");
       for (const verb of verbs) {
@@ -787,7 +854,9 @@ const DEFAULTS_SHA = createHash("sha1")
   .digest("hex");
 
 // Repo-local overrides: .fovea/rules.json = { "rules": AnchorRule[], "fileRoutes": FileRouteRule[] }.
-export const loadRepoRules = async (root: string): Promise<{ pack: AnchorRule[]; fileRoutes: FileRouteRule[]; sha: string }> => {
+export const loadRepoRules = async (
+  root: string,
+): Promise<{ pack: AnchorRule[]; fileRoutes: FileRouteRule[]; sha: string }> => {
   let raw = "";
   try {
     raw = await readFile(joinPath(root, ".fovea", "rules.json"), "utf8");
@@ -796,14 +865,26 @@ export const loadRepoRules = async (root: string): Promise<{ pack: AnchorRule[];
   }
   // Repo rules extend defaults; the defaults themselves ride in the hash,
   // so upgrading pi-fovea invalidates anchors even with no repo rules file.
-  const sha = createHash("sha1").update(DEFAULTS_SHA + raw).digest("hex");
+  const sha = createHash("sha1")
+    .update(DEFAULTS_SHA + raw)
+    .digest("hex");
   try {
     const parsed = JSON.parse(raw) as { rules?: AnchorRule[]; fileRoutes?: FileRouteRule[] };
     const rules = (parsed.rules ?? []).filter(
-      (r) => r && typeof r.pattern === "string" && typeof r.methods === "string" && Array.isArray(r.langs),
+      (r) =>
+        r &&
+        typeof r.pattern === "string" &&
+        typeof r.methods === "string" &&
+        Array.isArray(r.langs),
     );
-    const fileRoutes = (parsed.fileRoutes ?? []).filter((r) => r && typeof r.re === "string" && typeof r.verbs === "string");
-    return { pack: [...DEFAULT_PACK, ...rules], fileRoutes: [...DEFAULT_FILE_ROUTES, ...fileRoutes], sha };
+    const fileRoutes = (parsed.fileRoutes ?? []).filter(
+      (r) => r && typeof r.re === "string" && typeof r.verbs === "string",
+    );
+    return {
+      pack: [...DEFAULT_PACK, ...rules],
+      fileRoutes: [...DEFAULT_FILE_ROUTES, ...fileRoutes],
+      sha,
+    };
   } catch {
     return { pack: DEFAULT_PACK, fileRoutes: DEFAULT_FILE_ROUTES, sha };
   }

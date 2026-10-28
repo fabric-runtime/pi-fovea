@@ -3,7 +3,17 @@
 // (heat-kernel positivity, Bessel values).
 
 import { describe, expect, it } from "vitest";
-import { besselI, buildCsr, chebyshevVectors, chooseOrder, extendChebyshevVectors, heatField, heatAt, taylorReference, type Csr } from "../src/core/heat.js";
+import {
+  besselI,
+  buildCsr,
+  chebyshevVectors,
+  chooseOrder,
+  extendChebyshevVectors,
+  heatField,
+  heatAt,
+  taylorReference,
+  type Csr,
+} from "../src/core/heat.js";
 import type { Graph, NodeRec } from "../src/core/types.js";
 
 const mulberry32 = (seed: number) => () => {
@@ -17,7 +27,13 @@ const mulberry32 = (seed: number) => () => {
 const randomGraph = (n: number, p: number, seed: number): Graph => {
   const rnd = mulberry32(seed);
   const nodes: NodeRec[] = Array.from({ length: n }, (_, i) => ({
-    id: `n${i}@f${i % 5}`, name: `n${i}`, kind: "function", file: `f${i % 5}`, line: i, sig: `n${i}`, lang: "t",
+    id: `n${i}@f${i % 5}`,
+    name: `n${i}`,
+    kind: "function",
+    file: `f${i % 5}`,
+    line: i,
+    sig: `n${i}`,
+    lang: "t",
   }));
   const edges: Graph["edges"] = [];
   for (let i = 0; i < n; i++) {
@@ -37,7 +53,8 @@ const legacyVectors = (csr: Csr, s: Float64Array, K: number): Float64Array[] => 
     const y = new Float64Array(csr.n);
     for (let i = 0; i < csr.n; i++) {
       let acc = 0;
-      for (let p = csr.rowPtr[i]!; p < csr.rowPtr[i + 1]!; p++) acc += csr.w[p]! * inv[csr.col[p]!]! * x[csr.col[p]!]!;
+      for (let p = csr.rowPtr[i]!; p < csr.rowPtr[i + 1]!; p++)
+        acc += csr.w[p]! * inv[csr.col[p]!]! * x[csr.col[p]!]!;
       y[i] = -inv[i]! * acc;
     }
     return y;
@@ -55,9 +72,13 @@ const legacyVectors = (csr: Csr, s: Float64Array, K: number): Float64Array[] => 
 
 describe("heat diffusion", () => {
   it("extends only missing orders and preserves exact recurrence prefixes", () => {
-    for (const [n, p] of [[0, 0], [1, 0], [25, 0.2]]) {
+    for (const [n, p] of [
+      [0, 0],
+      [1, 0],
+      [25, 0.2],
+    ]) {
       const csr = buildCsr(randomGraph(n!, p!, 7));
-      const seed = Float64Array.from({ length: csr.n }, (_, i) => i % 2 ? 0 : 1);
+      const seed = Float64Array.from({ length: csr.n }, (_, i) => (i % 2 ? 0 : 1));
       const basis = chebyshevVectors(csr, seed, 0);
       for (const order of [3, 21, 42, 98]) {
         const prefix = [...basis];
@@ -68,23 +89,32 @@ describe("heat diffusion", () => {
       expect(extendChebyshevVectors(csr, basis, 2)).toBe(basis);
       expect(basis).toHaveLength(99);
     }
-    expect(() => extendChebyshevVectors(buildCsr(randomGraph(0, 0, 1)), [], 2)).toThrow("empty Chebyshev basis");
+    expect(() => extendChebyshevVectors(buildCsr(randomGraph(0, 0, 1)), [], 2)).toThrow(
+      "empty Chebyshev basis",
+    );
   });
 
   it("demand-driven orders produce exactly the former eager heat fields", () => {
     const csr = buildCsr(randomGraph(36, 0.2, 9));
-    const seed = Float64Array.from({ length: csr.n }, (_, i) => i === 2 ? 1 : 0);
+    const seed = Float64Array.from({ length: csr.n }, (_, i) => (i === 2 ? 1 : 0));
     const full = chebyshevVectors(csr, seed, 98);
     for (const t of [0, 0.01, 0.5, 1.2, 2, 4, 8, 16, 24, 28, 32, 48, 64]) {
-      expect(heatField(full.slice(0, chooseOrder(t) + 1), t, csr.n)).toEqual(heatField(full, t, csr.n));
+      expect(heatField(full.slice(0, chooseOrder(t) + 1), t, csr.n)).toEqual(
+        heatField(full, t, csr.n),
+      );
     }
   });
 
-
   it("preserves every recurrence vector exactly, including empty and disconnected graphs", () => {
-    for (const [n, p] of [[0, 0], [1, 0], [15, 0], [60, 0.08], [25, 1]]) {
+    for (const [n, p] of [
+      [0, 0],
+      [1, 0],
+      [15, 0],
+      [60, 0.08],
+      [25, 1],
+    ]) {
       const csr = buildCsr(randomGraph(n!, p!, 42));
-      const seed = Float64Array.from({ length: csr.n }, (_, i) => i % 3 === 0 ? 0.5 : 0);
+      const seed = Float64Array.from({ length: csr.n }, (_, i) => (i % 3 === 0 ? 0.5 : 0));
       const before = seed.slice();
       for (const K of [0, 1, 2, 90]) {
         const got = chebyshevVectors(csr, seed, K);
@@ -101,7 +131,7 @@ describe("heat diffusion", () => {
 
   it("does not retain normalization across CSR mutations or roots", () => {
     const csr = buildCsr(randomGraph(20, 0.2, 7));
-    const seed = Float64Array.from({ length: csr.n }, (_, i) => i === 0 ? 1 : 0);
+    const seed = Float64Array.from({ length: csr.n }, (_, i) => (i === 0 ? 1 : 0));
     const first = chebyshevVectors(csr, seed, 12);
     const snapshot = first.map((v) => v.slice());
     csr.deg[0]! *= 2;
@@ -148,7 +178,9 @@ describe("heat diffusion", () => {
     expect(v[3]!).toBeGreaterThan(0.3);
     // unreached isolated/seedless regions stay cold at small t
     let maxOther = 0;
-    v.forEach((x, i) => { if (i !== 3) maxOther = Math.max(maxOther, x); });
+    v.forEach((x, i) => {
+      if (i !== 3) maxOther = Math.max(maxOther, x);
+    });
     expect(maxOther).toBeLessThan(v[3]!);
   });
 
@@ -157,7 +189,8 @@ describe("heat diffusion", () => {
     const csr = buildCsr(g);
     const s = new Float64Array(80);
     s[0] = 1;
-    const lit = (t: number) => heatAt(csr, s, t).filter((x) => x > 0.02 * Math.max(...heatAt(csr, s, t))).length;
+    const lit = (t: number) =>
+      heatAt(csr, s, t).filter((x) => x > 0.02 * Math.max(...heatAt(csr, s, t))).length;
     expect(lit(1)).toBeLessThanOrEqual(lit(8));
   });
 
@@ -173,10 +206,10 @@ describe("heat diffusion", () => {
     const seed = new Float64Array([0, 1, 0]);
     // Both independent evaluators witness this; it is not Chebyshev ringing.
     for (const evaluate of [heatAt, taylorReference]) {
-      const lit = [8, 64].map(t => {
+      const lit = [8, 64].map((t) => {
         const field = evaluate(csr, seed, t);
         const cutoff = 0.02 * Math.max(...field);
-        return field.filter(value => value > cutoff).length;
+        return field.filter((value) => value > cutoff).length;
       });
       expect(lit).toEqual([3, 2]);
     }

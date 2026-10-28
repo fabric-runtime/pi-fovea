@@ -15,21 +15,35 @@ import { dirname, join, resolve } from "node:path";
 import { SPAWN_CONCURRENCY, envInt, mapLimit, spawnGate } from "./asyncutil.js";
 
 export const LANG_BY_EXT: Record<string, string> = {
-  ts: "TypeScript", tsx: "Tsx", mts: "TypeScript", cts: "TypeScript",
-  js: "JavaScript", jsx: "Tsx", mjs: "JavaScript", cjs: "JavaScript",
+  ts: "TypeScript",
+  tsx: "Tsx",
+  mts: "TypeScript",
+  cts: "TypeScript",
+  js: "JavaScript",
+  jsx: "Tsx",
+  mjs: "JavaScript",
+  cjs: "JavaScript",
   py: "Python",
   go: "Go",
   rs: "Rust",
   bend: "Bend", // Native source readers; never sent to ast-grep patterns.
   r: "R",
-  qmd: "Quarto", rmd: "Quarto",
+  qmd: "Quarto",
+  rmd: "Quarto",
   // Second tier: symbols via ast-grep outline; name derivation is heuristic.
-  ex: "Elixir", exs: "Elixir",
+  ex: "Elixir",
+  exs: "Elixir",
   rb: "Ruby",
-  c: "C", h: "C",
-  cc: "C++", cpp: "C++", cxx: "C++", hpp: "C++", hh: "C++",
+  c: "C",
+  h: "C",
+  cc: "C++",
+  cpp: "C++",
+  cxx: "C++",
+  hpp: "C++",
+  hh: "C++",
   java: "Java",
-  kt: "Kotlin", kts: "Kotlin",
+  kt: "Kotlin",
+  kts: "Kotlin",
   lua: "Lua",
   php: "Php",
   swift: "Swift",
@@ -45,16 +59,25 @@ export const isBinaryExt = (file: string): boolean =>
 
 // Non-code files: literals are regex-extracted so config/spec files can join.
 const CONFIG_EXTS = new Set([
-  "yaml", "yml", "json", "toml", "env", "tf", "hcl", "md",
+  "yaml",
+  "yml",
+  "json",
+  "toml",
+  "env",
+  "tf",
+  "hcl",
+  "md",
   // Parsed by the exact protocol readers; kept out of ast-grep language scans.
-  "proto", "graphql", "gql",
+  "proto",
+  "graphql",
+  "gql",
 ]);
 
 export interface AgMatch {
-  file: string;                    // as passed to ast-grep (repo-relative)
-  line: number;                    // 1-indexed
-  text: string;                    // full matched node text
-  single: Record<string, string>;  // $VAR -> text (single metavars)
+  file: string; // as passed to ast-grep (repo-relative)
+  line: number; // 1-indexed
+  text: string; // full matched node text
+  single: Record<string, string>; // $VAR -> text (single metavars)
   /** Line (1-indexed) of each single capture; 0 when the raw match lacks ranges. */
   singleLines: Record<string, number>;
   multi: Record<string, Array<{ text: string; line: number }>>; // $$$VAR -> occurrences
@@ -134,10 +157,15 @@ const packagedAstGrep = (): string | undefined => {
   try {
     const pkgPath = createRequire(import.meta.url).resolve("@ast-grep/cli/package.json");
     const dir = dirname(pkgPath);
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { bin?: Record<string, string> | string };
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as {
+      bin?: Record<string, string> | string;
+    };
     const rel = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.["ast-grep"];
     if (rel) {
-      for (const candidate of [join(dirname(dirname(dir)), ".bin", "ast-grep"), resolve(dir, rel)]) {
+      for (const candidate of [
+        join(dirname(dirname(dir)), ".bin", "ast-grep"),
+        resolve(dir, rel),
+      ]) {
         try {
           accessSync(candidate, fsConstants.X_OK);
           packagedBinary = candidate;
@@ -177,16 +205,25 @@ export const hasAstGrepAsync = (): Promise<boolean> => {
   if (hit && (hit.ok || Date.now() - hit.at < FAILURE_TTL_MS)) return Promise.resolve(hit.ok);
   const pending = availabilityInflight.get(bin);
   if (pending) return pending;
-  const probe = spawnGate.run(
-    () => new Promise<boolean>((resolve) => {
-      execFile(bin, ["--version"], { encoding: "utf8", timeout: 5000, maxBuffer: 1024 * 1024 }, (error) => {
-        resolve(!error);
-      });
-    }),
-  ).then((ok) => {
-    availability.set(bin, { ok, at: Date.now() });
-    return ok;
-  }).finally(() => availabilityInflight.delete(bin));
+  const probe = spawnGate
+    .run(
+      () =>
+        new Promise<boolean>((resolve) => {
+          execFile(
+            bin,
+            ["--version"],
+            { encoding: "utf8", timeout: 5000, maxBuffer: 1024 * 1024 },
+            (error) => {
+              resolve(!error);
+            },
+          );
+        }),
+    )
+    .then((ok) => {
+      availability.set(bin, { ok, at: Date.now() });
+      return ok;
+    })
+    .finally(() => availabilityInflight.delete(bin));
   availabilityInflight.set(bin, probe);
   return probe;
 };
@@ -208,14 +245,19 @@ const failures: ExtractionFailure[] = [];
 const recordFailure = (op: ExtractionFailure["op"], files: string[], lang?: string): void => {
   failures.push({ op, lang, files });
 };
-export const drainExtractionFailures = (): ExtractionFailure[] => failures.splice(0, failures.length);
+export const drainExtractionFailures = (): ExtractionFailure[] =>
+  failures.splice(0, failures.length);
 
 const RUN_TIMEOUT = 120_000;
 // 160-file chunks answer a few MB typically; the cap exists so a pathological
 // JSON dump fails one chunk instead of inflating the gate's resident set.
 const RUN_MAX_BUFFER = 16 * 1024 * 1024;
 
-interface RunResult { ok: boolean; stdout: string; split: boolean }
+interface RunResult {
+  ok: boolean;
+  stdout: string;
+  split: boolean;
+}
 
 const run = async (args: string[], cwd: string): Promise<RunResult> =>
   spawnGate.run(
@@ -228,7 +270,10 @@ const run = async (args: string[], cwd: string): Promise<RunResult> =>
           (error, stdout, stderr) => {
             // A maxBuffer breach is a memory guard, not an extraction error:
             // rerun smaller chunks until each response fits the same ceiling.
-            if (error && (error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" || error.code === "E2BIG")) {
+            if (
+              error &&
+              (error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" || error.code === "E2BIG")
+            ) {
               resolve({ ok: false, stdout: "", split: true });
               return;
             }
@@ -310,8 +355,11 @@ const runChunked = async (
   cwd: string,
 ): Promise<Array<{ chunk: string[]; result: RunResult }>> => {
   const chunks: string[][] = [];
-  for (let i = 0; i < files.length; i += AST_GREP_CHUNK) chunks.push(files.slice(i, i + AST_GREP_CHUNK));
-  const adaptive = async (chunk: string[]): Promise<Array<{ chunk: string[]; result: RunResult }>> => {
+  for (let i = 0; i < files.length; i += AST_GREP_CHUNK)
+    chunks.push(files.slice(i, i + AST_GREP_CHUNK));
+  const adaptive = async (
+    chunk: string[],
+  ): Promise<Array<{ chunk: string[]; result: RunResult }>> => {
     const result = await run(chunkArgs(chunk), cwd);
     if (!result.split || chunk.length === 1) return [{ chunk, result }];
     const middle = Math.ceil(chunk.length / 2);
@@ -328,7 +376,11 @@ const runChunked = async (
 // Expanded JSON preserves each member's own range and signature. Return
 // undefined when the installed ast-grep predates this interface so callers can
 // fall back without presenting parent locations as exact member locations.
-export const outlineStructured = async (files: string[], _lang: string, cwd: string): Promise<OutlineFile[] | undefined> => {
+export const outlineStructured = async (
+  files: string[],
+  _lang: string,
+  cwd: string,
+): Promise<OutlineFile[] | undefined> => {
   const out: OutlineFile[] = [];
   // A subprocess failure here is NOT recorded: extractSymbols falls back to
   // the text outline for old ast-grep versions, and that text run is what
@@ -374,7 +426,9 @@ interface RawMatch {
   };
 }
 
-interface RawScanMatch extends RawMatch { ruleId: string }
+interface RawScanMatch extends RawMatch {
+  ruleId: string;
+}
 
 const fromRawMatch = (m: RawMatch): AgMatch => {
   const single: Record<string, string> = {};
@@ -385,7 +439,10 @@ const fromRawMatch = (m: RawMatch): AgMatch => {
     singleLines[key] = value.range ? value.range.start.line + 1 : 0;
   }
   for (const [key, value] of Object.entries(m.metaVariables?.multi ?? {}))
-    multi[key] = value.map((item) => ({ text: item.text, line: item.range ? item.range.start.line + 1 : 0 }));
+    multi[key] = value.map((item) => ({
+      text: item.text,
+      line: item.range ? item.range.start.line + 1 : 0,
+    }));
   return { file: m.file, line: m.range.start.line + 1, text: m.text, single, singleLines, multi };
 };
 
@@ -398,79 +455,97 @@ const hasRuleScan = (): Promise<boolean> => {
   if (hit && (hit.ok || Date.now() - hit.at < FAILURE_TTL_MS)) return Promise.resolve(hit.ok);
   const pending = scanSupportInflight.get(bin);
   if (pending) return pending;
-  const probe = spawnGate.run(
-    () => new Promise<boolean>((resolve) => {
-      execFile(bin, ["scan", "--help"], { encoding: "utf8", timeout: 5000, maxBuffer: 1024 * 1024 }, (error) => {
-        resolve(!error);
-      });
-    }),
-  ).then((ok) => {
-    scanSupport.set(bin, { ok, at: Date.now() });
-    return ok;
-  }).finally(() => scanSupportInflight.delete(bin));
+  const probe = spawnGate
+    .run(
+      () =>
+        new Promise<boolean>((resolve) => {
+          execFile(
+            bin,
+            ["scan", "--help"],
+            { encoding: "utf8", timeout: 5000, maxBuffer: 1024 * 1024 },
+            (error) => {
+              resolve(!error);
+            },
+          );
+        }),
+    )
+    .then((ok) => {
+      scanSupport.set(bin, { ok, at: Date.now() });
+      return ok;
+    })
+    .finally(() => scanSupportInflight.delete(bin));
   scanSupportInflight.set(bin, probe);
   return probe;
 };
 
-const ruleDocuments = (rules: readonly ScanRule[]): string => rules.map(({ id, language, pattern, constraints }) => {
-  const live = constraints ? liveConstraints(pattern, constraints) : undefined;
-  return JSON.stringify({ id, language, rule: { pattern }, ...(live ? { constraints: live } : {}) });
-}).join("\n---\n");
+const ruleDocuments = (rules: readonly ScanRule[]): string =>
+  rules
+    .map(({ id, language, pattern, constraints }) => {
+      const live = constraints ? liveConstraints(pattern, constraints) : undefined;
+      return JSON.stringify({
+        id,
+        language,
+        rule: { pattern },
+        ...(live ? { constraints: live } : {}),
+      });
+    })
+    .join("\n---\n");
 
 const scanChunk = (
   rulePath: string,
   files: string[],
   cwd: string,
-): Promise<ScanMatch[] | undefined> => spawnGate.run(
-  () => new Promise<ScanMatch[] | undefined>((resolve) => {
-    const child = spawn(
-      binary(),
-      ["scan", "--rule", rulePath, "--json=stream", ...files],
-      { cwd, stdio: ["ignore", "pipe", "pipe"] },
-    );
-    const matches: ScanMatch[] = [];
-    let carry = "";
-    let parseFailed = false;
-    let timedOut = false;
-    let settled = false;
-    const finish = (value: ScanMatch[] | undefined): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(value);
-    };
-    const accept = (line: string): void => {
-      if (!line || parseFailed) return;
-      try {
-        const raw = JSON.parse(line) as RawScanMatch;
-        if (!raw.ruleId || !raw.range?.start || typeof raw.file !== "string") {
-          parseFailed = true;
-          return;
-        }
-        matches.push({ ...fromRawMatch(raw), ruleId: raw.ruleId });
-      } catch {
-        parseFailed = true;
-      }
-    };
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      const lines = (carry + chunk).split("\n");
-      carry = lines.pop() ?? "";
-      for (const line of lines) accept(line);
-    });
-    child.stderr.resume();
-    child.on("error", () => finish(undefined));
-    child.on("close", (code) => {
-      if (carry.trim()) accept(carry);
-      finish(code === 0 && !timedOut && !parseFailed ? matches : undefined);
-    });
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill();
-    }, RUN_TIMEOUT);
-    timer.unref?.();
-  }),
-);
+): Promise<ScanMatch[] | undefined> =>
+  spawnGate.run(
+    () =>
+      new Promise<ScanMatch[] | undefined>((resolve) => {
+        const child = spawn(binary(), ["scan", "--rule", rulePath, "--json=stream", ...files], {
+          cwd,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        const matches: ScanMatch[] = [];
+        let carry = "";
+        let parseFailed = false;
+        let timedOut = false;
+        let settled = false;
+        const finish = (value: ScanMatch[] | undefined): void => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        };
+        const accept = (line: string): void => {
+          if (!line || parseFailed) return;
+          try {
+            const raw = JSON.parse(line) as RawScanMatch;
+            if (!raw.ruleId || !raw.range?.start || typeof raw.file !== "string") {
+              parseFailed = true;
+              return;
+            }
+            matches.push({ ...fromRawMatch(raw), ruleId: raw.ruleId });
+          } catch {
+            parseFailed = true;
+          }
+        };
+        child.stdout.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => {
+          const lines = (carry + chunk).split("\n");
+          carry = lines.pop() ?? "";
+          for (const line of lines) accept(line);
+        });
+        child.stderr.resume();
+        child.on("error", () => finish(undefined));
+        child.on("close", (code) => {
+          if (carry.trim()) accept(carry);
+          finish(code === 0 && !timedOut && !parseFailed ? matches : undefined);
+        });
+        const timer = setTimeout(() => {
+          timedOut = true;
+          child.kill();
+        }, RUN_TIMEOUT);
+        timer.unref?.();
+      }),
+  );
 
 /**
  * Run a mixed-language rule set in one ast-grep parse per file chunk.
@@ -549,7 +624,9 @@ export const patternRunAll = async (
   files: string[],
   cwd: string,
 ): Promise<AgMatch[]> => {
-  const perPattern = await mapLimit(patterns, patterns.length || 1, (p) => patternRun(p, lang, files, cwd));
+  const perPattern = await mapLimit(patterns, patterns.length || 1, (p) =>
+    patternRun(p, lang, files, cwd),
+  );
   const out: AgMatch[] = [];
   for (const matches of perPattern) for (const m of matches) out.push(m);
   return out;

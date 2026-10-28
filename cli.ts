@@ -48,7 +48,9 @@ const rootAt = (i: number): string => {
   if (p.includes("/") || p === ".") return p;
   try {
     if (statSync(p).isDirectory()) return p;
-  } catch { /* not a path */ }
+  } catch {
+    /* not a path */
+  }
   return ".";
 };
 
@@ -58,10 +60,17 @@ try {
     const s = await sketch(rootAt(0), 256);
     const testAnchors = Number(s.details.testAnchors ?? 0);
     const failed = Number(s.details.extractionFailures ?? 0);
-    const unreadable = Array.isArray(s.details.extractionUnreadable) ? s.details.extractionUnreadable.length : 0;
-    const oversized = Array.isArray(s.details.extractionOversized) ? s.details.extractionOversized.length : 0;
-    const generated = Array.isArray(s.details.extractionGenerated) ? s.details.extractionGenerated.length : 0;
-    out = `${coverageSummary(s.details)}, ${s.details.nodes} symbols, ${s.details.productionAnchors ?? s.details.anchors} production anchors` +
+    const unreadable = Array.isArray(s.details.extractionUnreadable)
+      ? s.details.extractionUnreadable.length
+      : 0;
+    const oversized = Array.isArray(s.details.extractionOversized)
+      ? s.details.extractionOversized.length
+      : 0;
+    const generated = Array.isArray(s.details.extractionGenerated)
+      ? s.details.extractionGenerated.length
+      : 0;
+    out =
+      `${coverageSummary(s.details)}, ${s.details.nodes} symbols, ${s.details.productionAnchors ?? s.details.anchors} production anchors` +
       (testAnchors ? `, ${testAnchors} test/fixture anchors collapsed` : "") +
       (failed ? `, !${failed} files failed extraction` : "") +
       (unreadable ? `, !${unreadable} files unreadable` : "") +
@@ -74,7 +83,10 @@ try {
   } else if (cmd === "focus") {
     const root = rootAt(0);
     const q = pos[0] !== root ? pos[0] : pos[1];
-    if (!q) { console.error("fovea focus <query>"); process.exit(2); }
+    if (!q) {
+      console.error("fovea focus <query>");
+      process.exit(2);
+    }
     const bi = pos.indexOf(q) + 1;
     out = (await focus(root, q, numAt(bi) ?? 512)).text;
   } else if (cmd === "dwell") {
@@ -85,25 +97,31 @@ try {
   } else if (cmd === "impact") {
     const root = rootAt(0);
     const B = pos[0] === root ? numAt(1) : numAt(0);
-    out = (await impact(root, {
-      files: str("files")?.split(",").filter(Boolean),
-      symbols: str("symbols")?.split(",").filter(Boolean),
-      base: str("base"),
-      includeUncommitted: !flags.has("no-uncommitted"),
-      budget: B ?? 512,
-    })).text;
+    out = (
+      await impact(root, {
+        files: str("files")?.split(",").filter(Boolean),
+        symbols: str("symbols")?.split(",").filter(Boolean),
+        base: str("base"),
+        includeUncommitted: !flags.has("no-uncommitted"),
+        budget: B ?? 512,
+      })
+    ).text;
   } else if (cmd === "anchors") {
     const root = rootAt(0);
     const filter = pos.find((p) => p !== root);
     const rows = (await ensureState(root)).graph.anchors
       .map((a) => `${a.implicit ? "△" : " "}\t${a.kind}\t${a.id}\t${a.file}:${a.line}`)
-      .filter((r) => (!filter || r.includes(filter)) && (!flags.has("discovered") || r.startsWith("△")))
+      .filter(
+        (r) => (!filter || r.includes(filter)) && (!flags.has("discovered") || r.startsWith("△")),
+      )
       .sort();
     out = rows.join("\n");
   } else if (cmd === "rules") {
     const root = rootAt(0);
     const st = await ensureState(root);
-    const sigs = aggregateFiles(Object.fromEntries(Object.entries(st.facts).map(([k, v]) => [k, v.sigs])));
+    const sigs = aggregateFiles(
+      Object.fromEntries(Object.entries(st.facts).map(([k, v]) => [k, v.sigs])),
+    );
     const promoted = promote(sigs, DEFAULT_PACK);
     if (flags.has("adopt") && promoted.length) {
       const { mkdirSync, writeFileSync, readFileSync } = await import("node:fs");
@@ -111,7 +129,11 @@ try {
       mkdirSync(join(root, ".fovea"), { recursive: true });
       const rulesFile = join(root, ".fovea", "rules.json");
       let existing = { rules: [] as unknown[] };
-      try { existing = JSON.parse(readFileSync(rulesFile, "utf8")); } catch { /* new */ }
+      try {
+        existing = JSON.parse(readFileSync(rulesFile, "utf8"));
+      } catch {
+        /* new */
+      }
       const stamp = promoted.map((r) => ({
         id: r.id.slice("implicit:".length),
         langs: r.langs,
@@ -123,21 +145,29 @@ try {
       writeFileSync(rulesFile, JSON.stringify(existing, null, 2) + "\n");
       out = `wrote ${stamp.length} discovered rule(s) to .fovea/rules.json`;
     } else if (flags.has("sigs")) {
-      out = sigs.filter((s) => s.pathN > 0)
+      out = sigs
+        .filter((s) => s.pathN > 0)
         .sort((a, b) => posterior(b.pathN, b.n) - posterior(a.pathN, a.n))
-        .map((s) => `${posterior(s.pathN, s.n).toFixed(2)}  ${s.pathN}/${s.n} across ${s.files} files  ${s.key}`)
+        .map(
+          (s) =>
+            `${posterior(s.pathN, s.n).toFixed(2)}  ${s.pathN}/${s.n} across ${s.files} files  ${s.key}`,
+        )
         .join("\n");
     } else if (!promoted.length) {
       out = "(no unknown shape passes the promotion floor — tier-1/2 coverage is doing fine)";
     } else {
-      out = promoted.map((r) => JSON.stringify({
-        id: r.id.slice("implicit:".length),
-        langs: r.langs,
-        pattern: r.patterns[0],
-        methods: r.methods.replace(/\(\?i\)/, ""),
-        kind: r.kind,
-        _evidence: `p̂=${r.evidence.posterior.toFixed(2)} (${r.evidence.pathN}/${r.evidence.n} sites, ${r.evidence.files} files)`,
-      })).join("\n");
+      out = promoted
+        .map((r) =>
+          JSON.stringify({
+            id: r.id.slice("implicit:".length),
+            langs: r.langs,
+            pattern: r.patterns[0],
+            methods: r.methods.replace(/\(\?i\)/, ""),
+            kind: r.kind,
+            _evidence: `p̂=${r.evidence.posterior.toFixed(2)} (${r.evidence.pathN}/${r.evidence.n} sites, ${r.evidence.files} files)`,
+          }),
+        )
+        .join("\n");
     }
   } else {
     console.error(`unknown command: ${cmd}`);

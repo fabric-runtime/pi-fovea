@@ -28,26 +28,46 @@ export type FileSigs = Record<string, [number, number]>;
 // Line-local call scan: grabs the callee shape (recv chain, bare, decorator)
 // and the raw arg list of every `X(...)` on the line. Multi-line calls still
 // land because route strings overwhelmingly sit on the call's first line.
-const CALL_LINE_RE = /(?<at>@)?(?<recv>(?:[A-Za-z_$][\w$]*\.)+)?(?<method>[A-Za-z_$][\w$]*)\s*\((?<args>[^()]*)\)/g;
+const CALL_LINE_RE =
+  /(?<at>@)?(?<recv>(?:[A-Za-z_$][\w$]*\.)+)?(?<method>[A-Za-z_$][\w$]*)\s*\((?<args>[^()]*)\)/g;
 const STRING_RE = /([rbfuRBFU]{0,3})(["'`])((?:\\.|(?!\2)[^\\])*)\2/g;
 
 // Callees that are noise even at 100% precision (env/fs access, string ctors,
 // module loading — dynamic import()/require() hits the path channel but the
 // import edge already covers it, an anchor would double-count the site).
 const CALLEE_DENY = new Set([
-  "join", "resolve", "dirname", "basename", "expand_path",
-  "readFile", "readFileSync", "existsSync", "open", "load", "loads",
-  "import", "require",
+  "join",
+  "resolve",
+  "dirname",
+  "basename",
+  "expand_path",
+  "readFile",
+  "readFileSync",
+  "existsSync",
+  "open",
+  "load",
+  "loads",
+  "import",
+  "require",
   // String predicates: membership tests hit the path column at high rate but
   // never refer to routes. (Distinguishing cause from noise is callee-semantic.)
-  "startsWith", "endsWith", "contains", "includes", "equals", "equalsIgnoreCase",
-  "matches", "matchesPattern", "useParams", "matchPath",
+  "startsWith",
+  "endsWith",
+  "contains",
+  "includes",
+  "equals",
+  "equalsIgnoreCase",
+  "matches",
+  "matchesPattern",
+  "useParams",
+  "matchPath",
 ]);
 
 export const harvestFile = (lang: string, text: string): FileSigs => {
   const sigs: FileSigs = {};
   for (const line of text.split("\n")) {
-    if (!line.includes("(") || !(line.includes('"') || line.includes("'") || line.includes("`"))) continue;
+    if (!line.includes("(") || !(line.includes('"') || line.includes("'") || line.includes("`")))
+      continue;
     CALL_LINE_RE.lastIndex = 0;
     let c: RegExpExecArray | null;
     while ((c = CALL_LINE_RE.exec(line))) {
@@ -100,7 +120,16 @@ export const aggregateFiles = (perFile: Record<string, FileSigs | undefined>): S
         stat.files++;
       } else {
         const [lang, shape, callee, argIdx] = key.split("|");
-        agg.set(key, { key, lang: lang!, shape: shape as Shape, callee: callee!, argIdx: Number(argIdx), n, pathN: p, files: 1 });
+        agg.set(key, {
+          key,
+          lang: lang!,
+          shape: shape as Shape,
+          callee: callee!,
+          argIdx: Number(argIdx),
+          n,
+          pathN: p,
+          files: 1,
+        });
       }
     }
   }
@@ -123,7 +152,7 @@ const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 export interface SynthesizedRule {
   id: string;
   langs: string[];
-  patterns: string[];   // patternRunAll variants
+  patterns: string[]; // patternRunAll variants
   methods: string;
   kind: string;
   implicit: true;
@@ -136,9 +165,15 @@ export const synthesize = (s: SigStats): SynthesizedRule | undefined => {
   const inner = slots.join(", ");
   let variants: string[];
   switch (s.shape) {
-    case "recv": variants = [`$R.$M(${inner})`, `$R.$M(${inner}, $$$H)`]; break;
-    case "bare": variants = [`$M(${inner})`, `$M(${inner}, $$$H)`]; break;
-    case "dec":  variants = [`@$M(${inner})`, `@$M(${inner}, $$$H)`]; break;
+    case "recv":
+      variants = [`$R.$M(${inner})`, `$R.$M(${inner}, $$$H)`];
+      break;
+    case "bare":
+      variants = [`$M(${inner})`, `$M(${inner}, $$$H)`];
+      break;
+    case "dec":
+      variants = [`@$M(${inner})`, `@$M(${inner}, $$$H)`];
+      break;
   }
   return {
     id: `implicit:${s.lang.toLowerCase()}:${s.shape}:${s.callee}:${s.argIdx}`,
@@ -160,7 +195,10 @@ const shapeCompatPatterns: Record<Shape, RegExp> = {
   dec: /^@\$(R\.)?M\(/,
 };
 
-const isCovered = (sig: SigStats, pack: Array<{ langs: string[]; methods: string; pattern?: string; patterns?: string[] }>): boolean => {
+const isCovered = (
+  sig: SigStats,
+  pack: Array<{ langs: string[]; methods: string; pattern?: string; patterns?: string[] }>,
+): boolean => {
   const mre = (methods: string, callee: string): boolean => compileMethods(methods).test(callee);
   return pack.some((r) => {
     if (!r.langs.includes(sig.lang)) return false;
@@ -170,7 +208,16 @@ const isCovered = (sig: SigStats, pack: Array<{ langs: string[]; methods: string
   });
 };
 
-export const promote = (sigs: SigStats[], pack: Array<{ id: string; langs: string[]; methods: string; pattern?: string; patterns?: string[] }> = []): SynthesizedRule[] => {
+export const promote = (
+  sigs: SigStats[],
+  pack: Array<{
+    id: string;
+    langs: string[];
+    methods: string;
+    pattern?: string;
+    patterns?: string[];
+  }> = [],
+): SynthesizedRule[] => {
   const out: SynthesizedRule[] = [];
   for (const s of sigs) {
     if (s.n < MIN_SITES || s.files < MIN_FILES) continue;

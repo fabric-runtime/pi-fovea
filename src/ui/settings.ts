@@ -5,11 +5,7 @@
 // project override beneath pi's configured project resource directory; the
 // external-editor keybinding switches the configuration layer being viewed and saved.
 
-import {
-  DynamicBorder,
-  type ExtensionContext,
-  type Theme,
-} from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, type ExtensionContext, type Theme } from "@earendil-works/pi-coding-agent";
 import { configDirName, resolveAgentDir } from "../core/agent-dir.js";
 import {
   Container,
@@ -44,7 +40,6 @@ const SELECT_LAYOUT: SelectListLayoutOptions = {
   minPrimaryColumnWidth: 12,
   maxPrimaryColumnWidth: 32,
 };
-
 
 type SettingsSubmenu = (currentValue: string, done: (selectedValue?: string) => void) => Component;
 
@@ -103,31 +98,37 @@ class SelectSubmenu extends Container {
   }
 }
 
-const numericSubmenu = (
-  theme: Theme,
-  values: readonly number[],
-  title: string,
-  description: string,
-): SettingsSubmenu => (currentValue, done) => {
-  const options: SelectItem[] = values.map((v) => ({ value: String(v), label: String(v) }));
-  if (!options.some((o) => o.value === currentValue)) {
-    options.unshift({ value: currentValue, label: currentValue });
-  }
-  return new SelectSubmenu(
-    theme,
-    title,
-    description,
-    options,
-    currentValue,
-    (value) => done(value),
-    () => done(),
-  );
-};
+const numericSubmenu =
+  (theme: Theme, values: readonly number[], title: string, description: string): SettingsSubmenu =>
+  (currentValue, done) => {
+    const options: SelectItem[] = values.map((v) => ({ value: String(v), label: String(v) }));
+    if (!options.some((o) => o.value === currentValue)) {
+      options.unshift({ value: currentValue, label: currentValue });
+    }
+    return new SelectSubmenu(
+      theme,
+      title,
+      description,
+      options,
+      currentValue,
+      (value) => done(value),
+      () => done(),
+    );
+  };
 
-const formatKey = (key: string): string => key
-  .split("+")
-  .map((part) => part === "ctrl" ? "Ctrl" : part === "alt" ? "Alt" : part === "shift" ? "Shift" : part.toUpperCase())
-  .join("+");
+const formatKey = (key: string): string =>
+  key
+    .split("+")
+    .map((part) =>
+      part === "ctrl"
+        ? "Ctrl"
+        : part === "alt"
+          ? "Alt"
+          : part === "shift"
+            ? "Shift"
+            : part.toUpperCase(),
+    )
+    .join("+");
 
 export interface FoveaSettingsComponentOptions {
   keybindings?: Pick<KeybindingsManager, "matches" | "getKeys">;
@@ -161,9 +162,8 @@ export class FoveaSettingsComponent extends Container {
     this.theme = theme;
     this.keybindings = options.keybindings;
     this.projectScopeAvailable = options.projectScopeAvailable ?? true;
-    this.saveScope = options.initialSaveScope === "global" || !this.projectScopeAvailable
-      ? "global"
-      : "project";
+    this.saveScope =
+      options.initialSaveScope === "global" || !this.projectScopeAvailable ? "global" : "project";
     this.onChange = onChange;
     this.onCancel = onCancel;
     this.onSaveScopeChange = options.onSaveScopeChange ?? (() => {});
@@ -214,9 +214,10 @@ export class FoveaSettingsComponent extends Container {
   }
 
   private updateSaveScopeText(): void {
-    const destination = this.saveScope === "project"
-      ? `Project overrides (${configDirName}/fovea.json)`
-      : `Global defaults (~/${configDirName}/agent/fovea.json)`;
+    const destination =
+      this.saveScope === "project"
+        ? `Project overrides (${configDirName}/fovea.json)`
+        : `Global defaults (~/${configDirName}/agent/fovea.json)`;
     const keys = this.keybindings?.getKeys("app.editor.external") ?? [];
     const shortcut = keys.map(formatKey).join("/");
     const hint = !this.projectScopeAvailable
@@ -228,8 +229,8 @@ export class FoveaSettingsComponent extends Container {
           : ` · ${shortcut} switches scope`;
     this.saveScopeText.setText(
       this.theme.fg("muted", "Editing: ") +
-      this.theme.fg("accent", destination) +
-      this.theme.fg("dim", hint),
+        this.theme.fg("accent", destination) +
+        this.theme.fg("dim", hint),
     );
   }
 }
@@ -262,10 +263,7 @@ const coerceValue = (id: string, value: string, config: FoveaConfig): unknown =>
   return value;
 };
 
-const buildItems = (
-  theme: Theme,
-  config: FoveaConfig,
-): SettingItem[] => [
+const buildItems = (theme: Theme, config: FoveaConfig): SettingItem[] => [
   setting("sync.mode", "Continuous sync", config.sync.mode, {
     description:
       "enabled shows sync messages; hidden delivers them to the model without rendering them in the transcript; disabled turns sync off. FOVEA_TURN_SYNC=off overrides.",
@@ -278,7 +276,12 @@ const buildItems = (
   }),
   setting("sync.budget", "Sync budget", String(config.sync.budget), {
     description: "Max tokens for proactive repository steering sent to the model.",
-    submenu: numericSubmenu(theme, BUDGETS, "Sync budget", "Max tokens for proactive repository steering."),
+    submenu: numericSubmenu(
+      theme,
+      BUDGETS,
+      "Sync budget",
+      "Max tokens for proactive repository steering.",
+    ),
   }),
   setting("sync.ackClean", "Ack clean turns", config.sync.ackClean ? "true" : "false", {
     description:
@@ -288,7 +291,12 @@ const buildItems = (
   setting("sync.steerThreshold", "Steer threshold", String(config.sync.steerThreshold), {
     description:
       "Total surprise (channel-weighted heat above the session's sync memory) that justifies steering the model. Higher means fewer continuations; route changes always steer.",
-    submenu: numericSubmenu(theme, THRESHOLDS, "Steer threshold", "Surprise mass that steers the model."),
+    submenu: numericSubmenu(
+      theme,
+      THRESHOLDS,
+      "Steer threshold",
+      "Surprise mass that steers the model.",
+    ),
   }),
   setting("sync.pushFocus", "Push focus detail", config.sync.pushFocus ? "true" : "false", {
     description:
@@ -300,13 +308,28 @@ const buildItems = (
       "augment keeps native grep and appends a Fovea graph section to symbol-query results (default; also reaches pi.grep inside fabric_exec). replace installs the takeover where bare symbol queries navigate the graph only (legacy; changing it reloads extensions). off is native grep only.",
     values: ["augment", "replace", "off"],
   }),
-  setting("tools.grepAugmentBudget", "Grep augment budget", String(config.tools.grepAugmentBudget), {
-    description: "Max tokens for the graph section appended to grep results in augment mode.",
-    submenu: numericSubmenu(theme, BUDGETS, "Grep augment budget", "Max tokens for the appended Fovea graph section."),
-  }),
+  setting(
+    "tools.grepAugmentBudget",
+    "Grep augment budget",
+    String(config.tools.grepAugmentBudget),
+    {
+      description: "Max tokens for the graph section appended to grep results in augment mode.",
+      submenu: numericSubmenu(
+        theme,
+        BUDGETS,
+        "Grep augment budget",
+        "Max tokens for the appended Fovea graph section.",
+      ),
+    },
+  ),
   setting("tools.defaultBudget", "Default tool budget", String(config.tools.defaultBudget), {
     description: "Token budget applied when a fovea_* tool call omits maxTokens.",
-    submenu: numericSubmenu(theme, BUDGETS, "Default tool budget", "Fallback maxTokens for fovea tools."),
+    submenu: numericSubmenu(
+      theme,
+      BUDGETS,
+      "Default tool budget",
+      "Fallback maxTokens for fovea tools.",
+    ),
   }),
 ];
 
@@ -383,4 +406,3 @@ export const openFoveaSettings = async (
       (effectiveConfig.tools.grepMode === "replace") !== initialGrepRegistration,
   };
 };
-

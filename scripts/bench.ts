@@ -14,7 +14,7 @@ const root = resolve(process.argv[2] ?? join(import.meta.dirname, "..", "..", "p
 assert.ok(existsSync(root), `bench root not found: ${root}`);
 const repeats = 3;
 const refreshRows = [];
-for (let i = 0; i < repeats; i++) refreshRows.push(...await refreshProbe());
+for (let i = 0; i < repeats; i++) refreshRows.push(...(await refreshProbe()));
 
 // Refuse to time a cheaper workload caused by missing facts, evidence, or coverage.
 rmSync(cachePathFor(root), { force: true });
@@ -43,18 +43,29 @@ for (let i = 0; i < repeats; i++) {
 
 // Internal fidelity, NOT independently labeled relevance: compare structured
 // node identities against a finite 16k response, never substring/name matches.
-const queries = [...new Set(g.nodes.map((node, i) => ({ node, degree: state.csr.deg[i]! }))
-  .filter(({ node }) => node.kind !== "file" && node.kind !== "anchor")
-  .sort((a, b) => b.degree - a.degree)
-  .map(({ node }) => node.name))].slice(0, 12);
+const queries = [
+  ...new Set(
+    g.nodes
+      .map((node, i) => ({ node, degree: state.csr.deg[i]! }))
+      .filter(({ node }) => node.kind !== "file" && node.kind !== "anchor")
+      .sort((a, b) => b.degree - a.degree)
+      .map(({ node }) => node.name),
+  ),
+].slice(0, 12);
 assert.ok(queries.length > 0, "benchmark requires queryable symbols");
-const outline = g.nodes.filter((node) => node.kind !== "file" && node.kind !== "anchor")
+const outline = g.nodes
+  .filter((node) => node.kind !== "file" && node.kind !== "anchor")
   .sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)
   .map((node) => ({ id: node.id, text: `${node.file}:${node.line} ${node.sig}\n` }));
 const lines: string[] = [];
 for (const B of [500, 1000, 2000, 4000]) {
-  let hits = 0, naiveHits = 0, total = 0, used = 0, naiveUsed = 0;
-  const focusMs: number[] = [], dwellMs: number[] = [];
+  let hits = 0,
+    naiveHits = 0,
+    total = 0,
+    used = 0,
+    naiveUsed = 0;
+  const focusMs: number[] = [],
+    dwellMs: number[] = [];
   for (const query of queries) {
     resetSessions();
     const reference = revealedIds(await focus(root, query, 16000), 16000);
@@ -87,18 +98,30 @@ for (const B of [500, 1000, 2000, 4000]) {
     }
   }
   const n = queries.length * repeats;
-  lines.push(`${B}\t${(hits / total).toFixed(3)}\t${(naiveHits / total).toFixed(3)}\t${(used / n).toFixed(0)}/${(naiveUsed / n).toFixed(0)}\t${distribution(focusMs)}\t${distribution(dwellMs)}`);
+  lines.push(
+    `${B}\t${(hits / total).toFixed(3)}\t${(naiveHits / total).toFixed(3)}\t${(used / n).toFixed(0)}/${(naiveUsed / n).toFixed(0)}\t${distribution(focusMs)}\t${distribution(dwellMs)}`,
+  );
 }
 console.log(`equivalence gates: passed · ${process.version} · ${process.platform}/${process.arch}`);
-console.log(`root: ${root}\ngraph: ${g.files.length} files, ${g.nodes.length} nodes, ${g.edges.length} edges`);
+console.log(
+  `root: ${root}\ngraph: ${g.files.length} files, ${g.nodes.length} nodes, ${g.edges.length} edges`,
+);
 console.log(`build (single sample): cold ${coldMs.toFixed(0)}ms, disk-warm ${warmMs.toFixed(0)}ms`);
-console.log(`idle (probe-gated): ${distribution(idle)}\nforced unchanged sweep: ${distribution(sweep)}`);
+console.log(
+  `idle (probe-gated): ${distribution(idle)}\nforced unchanged sweep: ${distribution(sweep)}`,
+);
 for (const scenario of [...new Set(refreshRows.map((row) => row.scenario))]) {
   const rows = refreshRows.filter((row) => row.scenario === scenario);
-  console.log(`mini/${scenario}: refresh ${distribution(rows.map((row) => row.refreshMs))}; cold ${distribution(rows.map((row) => row.coldMs))}`);
+  console.log(
+    `mini/${scenario}: refresh ${distribution(rows.map((row) => row.refreshMs))}; cold ${distribution(rows.map((row) => row.coldMs))}`,
+  );
 }
-console.log("budget\tfovea fidelity@16k\toutline fidelity@16k\tmean estimated tokens f/o\tfocus\tdwell");
+console.log(
+  "budget\tfovea fidelity@16k\toutline fidelity@16k\tmean estimated tokens f/o\tfocus\tdwell",
+);
 console.log(lines.join("\n"));
-console.log(`process peak RSS: ${(process.resourceUsage().maxRSS / 1024).toFixed(1)} MiB (includes gates; not isolated graph memory)`);
+console.log(
+  `process peak RSS: ${(process.resourceUsage().maxRSS / 1024).toFixed(1)} MiB (includes gates; not isolated graph memory)`,
+);
 console.log(`queries: ${queries.join(", ")}`);
 resetSessions();

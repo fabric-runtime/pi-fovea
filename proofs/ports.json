@@ -1,0 +1,217 @@
+[
+  {
+    "lean": "Fovea.value_addDigits",
+    "status": "runtime-specialization",
+    "claims": ["add32_completed_exact"],
+    "equivalent": false,
+    "scope": "Unbounded addition streams at runtime radix 2^32; Lean quantifies over arbitrary radix and digit lists."
+  },
+  {
+    "lean": "Fovea.value_scaleDigits",
+    "status": "runtime-specialization",
+    "claims": ["multiply16_completed_exact"],
+    "equivalent": false,
+    "scope": "Executed 16-bit multiply/scale stream; not arbitrary-radix Lean recursion."
+  },
+  {
+    "lean": "Fovea.value_multiplyDigits",
+    "status": "runtime-specialization",
+    "claims": ["multiply16_completed_exact"],
+    "equivalent": false,
+    "scope": "Executed multiplication stream at radix 2^16; host scheduling and arbitrary-radix correspondence remain separate."
+  },
+  {
+    "lean": "Fovea.value_shiftDigits",
+    "status": "open",
+    "claims": [],
+    "equivalent": false,
+    "scope": "List-shift/value correspondence still needs a matching executed-stream proof."
+  },
+  {
+    "lean": "Fovea.divideDigits_length",
+    "status": "runtime-specialization",
+    "claims": ["divide16_cursor_bound", "divide16_done_exact"],
+    "equivalent": false,
+    "scope": "Finite stream extent before output trimming, not general list-length equivalence."
+  },
+  {
+    "lean": "Fovea.divideDigits_reconstructs",
+    "status": "runtime-specialization",
+    "claims": ["divide16_completed_exact", "divide16_witness_exact"],
+    "equivalent": false,
+    "scope": "Executed radix-2^16 quotient/remainder reconstruction."
+  },
+  {
+    "lean": "Fovea.divideDigits_remainder_lt",
+    "status": "runtime-specialization",
+    "claims": ["divide16_remainder_bound"],
+    "equivalent": false,
+    "scope": "Executed radix-2^16 division remainder bounds."
+  },
+  {
+    "lean": "Fovea.exp_scalar_one",
+    "status": "open",
+    "claims": [],
+    "equivalent": false,
+    "scope": "Real scalar exponential versus Banach-algebra exponential embedding."
+  },
+  {
+    "lean": "Fovea.poisson_identity",
+    "status": "constructive-rational",
+    "claims": [
+      "residual_binomial_cancellation",
+      "operator_cauchy_row_admission",
+      "operator_taylor_row_admission",
+      "operator_stochastic_basis_admission",
+      "cauchy_product_positive_pushforward",
+      "cauchy_product_negative_pushforward",
+      "residual_link_cauchy_precision",
+      "residual_link_normalized_precision",
+      "operator_plan_cutoff_ready",
+      "operator_limit_three_error_transfer"
+    ],
+    "equivalent": false,
+    "scope": "Finite rational stochastic operators at nonnegative rational time: coefficient cancellation, indexed evaluation, finite reindexing, all-later-prefix residual bounds and constructive Cauchy-name comparison. Not equivalence to the stronger arbitrary real Banach-algebra theorem or a refinement proof of the Float64/CSR evaluator."
+  },
+  {
+    "lean": "Fovea.geometric_norm_bound",
+    "status": "constructive-rational",
+    "claims": ["series_finite_tail_bound", "series_all_future_prefixes_cauchy"],
+    "equivalent": false,
+    "scope": "Exact rational tails and explicit Cauchy modulus, not arbitrary Banach-valued real series."
+  },
+  {
+    "lean": "Fovea.scalar_exp_nonneg",
+    "status": "open",
+    "claims": [],
+    "equivalent": false,
+    "scope": "Nonnegativity of real exp for all signed real arguments."
+  },
+  {
+    "lean": "Fovea.poissonCoefficient_nonneg",
+    "status": "constructive-rational",
+    "claims": ["series_exp_denominator_positive"],
+    "equivalent": false,
+    "scope": "Natural numerators and positive exact denominators at nonnegative rational inputs."
+  },
+  {
+    "lean": "Fovea.poissonCoefficient_succ",
+    "status": "constructive-rational",
+    "claims": ["series_exp_denominator_identity"],
+    "equivalent": false,
+    "scope": "Exact coefficient denominator recurrence; real exponential factor remains separate."
+  },
+  {
+    "lean": "Fovea.poisson_majorant",
+    "status": "constructive-rational",
+    "claims": ["series_bernoulli_majorant", "series_exp_cutoff_exists"],
+    "equivalent": false,
+    "scope": "Rational majorants and finite cutoffs for the constructive coefficient model."
+  },
+  {
+    "lean": "Fovea.poisson_tail_bound",
+    "status": "constructive-rational",
+    "claims": ["series_finite_tail_bound", "series_all_future_prefixes_cauchy"],
+    "equivalent": false,
+    "scope": "Scalar rational envelope for every later prefix, not the full real-vector limit identification."
+  },
+  {
+    "lean": "Fovea.weighted_bound",
+    "status": "constructive-rational",
+    "claims": ["focus_accumulator_budget", "focus_completed_row_bound"],
+    "equivalent": false,
+    "scope": "Signed rational row gathers with exact nonnegative weight budgets."
+  },
+  {
+    "lean": "Fovea.column_l1_bound",
+    "status": "constructive-rational",
+    "claims": ["transport_current_budget", "transport_completed_round_bound"],
+    "equivalent": false,
+    "scope": "Finite indexed signed rational transport protocol, not arbitrary real matrices or CSR refinement."
+  },
+  {
+    "lean": "Fovea.normalizedRow_nonneg",
+    "status": "constructive-rational",
+    "claims": [
+      "normalization_denominator_positive",
+      "normalization_nonnegative_range",
+      "normalization_ratio_preserved"
+    ],
+    "equivalent": false,
+    "scope": "Exact raw natural/dyadic row coefficients with positive denominators and checked rescaling; IEEE codec and CSR adapter correspondence remain separate."
+  },
+  {
+    "lean": "Fovea.normalizedRow_sum",
+    "status": "constructive-rational",
+    "claims": [
+      "normalization_unit_mass",
+      "normalization_isolate_identity",
+      "normalization_emit_budget"
+    ],
+    "equivalent": false,
+    "scope": "Native finite-map normalization has unit rational mass and an explicit zero-row identity; runtime rows replay against both consumer protocols, not a full host-code refinement."
+  },
+  {
+    "lean": "Fovea.row_iterate_bound",
+    "status": "constructive-rational",
+    "claims": ["focus_global_linf_bound", "focus_round_covers_rows"],
+    "equivalent": false,
+    "scope": "Unbounded completed rational gather rounds, all coordinates, explicit row coverage."
+  },
+  {
+    "lean": "Fovea.column_iterate_l1_bound",
+    "status": "constructive-rational",
+    "claims": ["transport_global_l1_bound", "transport_round_progress"],
+    "equivalent": false,
+    "scope": "Unbounded completed rational scatter rounds over native finite maps."
+  },
+  {
+    "lean": "Fovea.floorDiv_bounds",
+    "status": "constructive-rational",
+    "claims": ["enclosure_floor_bounds", "divide16_completed_exact"],
+    "equivalent": false,
+    "scope": "Unbounded natural quotient/remainder witness plus executed specialized division."
+  },
+  {
+    "lean": "Fovea.ceilDiv_bounds",
+    "status": "constructive-rational",
+    "claims": ["enclosure_ceil_bounds"],
+    "equivalent": false,
+    "scope": "Exact natural quotient/remainder witnesses; host ceiling implementation remains separately bounded."
+  },
+  {
+    "lean": "Fovea.add_enclosure",
+    "status": "constructive-rational",
+    "claims": ["enclosure_add"],
+    "equivalent": false,
+    "scope": "Exact common-scale rational endpoint addition; not real-completion or rounding correspondence."
+  },
+  {
+    "lean": "Fovea.multiply_enclosure",
+    "status": "constructive-rational",
+    "claims": ["enclosure_multiply"],
+    "equivalent": false,
+    "scope": "Exact nonnegative rational endpoint products, no IEEE rounding claim."
+  },
+  {
+    "lean": "Fovea.divide_enclosure",
+    "status": "constructive-rational",
+    "claims": ["enclosure_divide"],
+    "equivalent": false,
+    "scope": "Positive-denominator rational quotients encoded by checked cross products."
+  },
+  {
+    "lean": "Fovea.signed_enclosure",
+    "status": "constructive-rational",
+    "claims": ["enclosure_signed"],
+    "equivalent": false,
+    "scope": "Signed rational subtraction without truncated-difference ambiguity."
+  },
+  {
+    "lean": "Fovea.certificate_error_bound",
+    "status": "constructive-rational",
+    "claims": ["enclosure_certificate_error"],
+    "equivalent": false,
+    "scope": "Common-offset, common-scale exact rational endpoint distances; no IEEE codec or real-limit identification."
+  }
+]
