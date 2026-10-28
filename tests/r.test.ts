@@ -186,7 +186,7 @@ describe("R source reader", () => {
       ["after_sql", "function", 3],
     ]);
     expect(facts.literals.map(({ text: t, line }) => [t, line])).toEqual([
-      ["SELECT *  FROM t WHERE id IN (1, 2)", 1],
+      ["SELECT *\n  FROM t WHERE id IN (1, 2)", 1],
     ]);
     expect(facts.calls.map(({ callee }) => callee)).toEqual(["dbGetQuery"]);
   });
@@ -262,7 +262,7 @@ describe("R source reader", () => {
       ["after", "function", 3],
     ]);
     expect(facts.literals).toEqual([
-      { file: "rawml.R", line: 1, text: "SELECT [col]  FROM t WHERE x = 1" },
+      { file: "rawml.R", line: 1, text: "SELECT [col]\n  FROM t WHERE x = 1" },
     ]);
   });
 

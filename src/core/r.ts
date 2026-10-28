@@ -351,6 +351,7 @@ export const extractR = (file: string, text: string): RFacts => {
         visible += ch;
       }
     }
+    if (quote && at + 1 < lines.length) value += "\n";
     maskedLines.push(code.padEnd(raw.length, " "));
     // Section markers live entirely in comments, so `code` is empty and
     // the shared `decl` helper below never sees them; record them directly.

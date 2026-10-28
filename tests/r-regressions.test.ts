@@ -187,6 +187,22 @@ describe("R review regressions", () => {
     ]);
   });
 
+  it("does not read cell labels from code or string bodies", () => {
+    const facts = extractQuarto(
+      "nb.qmd",
+      [
+        "```{r real}",
+        'query <- "first line',
+        "#| label: fake",
+        'last line"',
+        "prep <- function(x) x",
+        "```",
+      ].join("\n"),
+    );
+    expect(facts.symbols.every((symbol) => symbol.chunkLabel === "real")).toBe(true);
+    expect(facts.literals[0]!.text).toBe("first line\n#| label: fake\nlast line");
+  });
+
   it("keeps same-named sections in different chunks distinct", async () => {
     const facts = extractQuarto(
       "nb.qmd",

@@ -39,10 +39,12 @@ export const extractQuarto = (file: string, text: string): QuartoFacts => {
   const flush = (): void => {
     if (engine && body.length) {
       chunk += 1;
-      const option = body
-        .map((line) => /^\s*#\|\s*label:\s*(.*?)\s*$/.exec(line)?.[1])
-        .find((value) => value !== undefined);
-      if (option) label = option.replace(/^(["'])(.*)\1$/, "$2");
+      for (const line of body) {
+        if (!line.trim()) continue;
+        if (!/^\s*#\|/.test(line)) break;
+        const option = /^\s*#\|\s*label:\s*(.*?)\s*$/.exec(line)?.[1];
+        if (option) label = option.replace(/^(["'])(.*)\1$/, "$2");
+      }
       if (engine === "r") {
         const inner = extractR(file, body.join("\n"));
         for (const s of inner.symbols)
