@@ -29,6 +29,26 @@ afterEach(() => {
 });
 
 describe("R review regressions", () => {
+  it("finds dependency calls in expressions without matching member calls", () => {
+    const facts = extractR(
+      "guard.R",
+      [
+        'if (!requireNamespace("ggplot2", quietly = TRUE)) stop("missing")',
+        "library(dplyr); library(tidyr)",
+        'base::library("tibble"); source("helper.R")',
+        'obj$source("false.R"); obj$ source("also-false.R")',
+        'custom::source("no.R"); my_require("fake")',
+      ].join("\n"),
+    );
+    expect(facts.imports.map(({ spec, line }) => [spec, line])).toEqual([
+      ["ggplot2", 1],
+      ["dplyr", 2],
+      ["tidyr", 2],
+      ["tibble", 3],
+      ["helper.R", 3],
+    ]);
+  });
+
   it("reads whitespace, named and multiline dependency arguments without inventing dynamic packages", () => {
     const text = [
       "library( dplyr )",

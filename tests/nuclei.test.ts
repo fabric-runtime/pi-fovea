@@ -198,6 +198,32 @@ const moduleText = (alpha: string, betaLine: string, betaReturn = "  return valu
   ].join("\n");
 
 describe("mass-conserving impact hunk nuclei", () => {
+  it.each([
+    [
+      "custom",
+      [
+        ["diff.srcPrefix", "x/"],
+        ["diff.dstPrefix", "y/"],
+      ],
+    ],
+    ["none", [["diff.noprefix", "true"]]],
+    ["mnemonic", [["diff.mnemonicPrefix", "true"]]],
+  ])("pins canonical diff paths over %s prefixes", async (_name, settings) => {
+    const root = repoWith({ "source.ts": moduleText("alpha", "before") });
+    try {
+      for (const [key, value] of settings as string[][]) git(root, ["config", key!, value!]);
+      writeFileSync(join(root, "source.ts"), moduleText("alpha", "after"), "utf8");
+      const parsed = await diffHunks(root);
+      expect([...parsed!.keys()]).toEqual(["source.ts"]);
+      expect(parsed!.get("source.ts")).toEqual({
+        hunks: [{ newStart: 7, newLines: 1 }],
+        fallback: false,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("concentrates a single-line edit on its enclosing symbol", async () => {
     const file = "source.ts";
     const root = repoWith({ [file]: moduleText("alpha", "before") });

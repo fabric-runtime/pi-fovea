@@ -72,7 +72,7 @@ export interface FileFacts {
   sigs?: FileSigs;
 }
 
-const CACHE_VERSION = 24; // v24: R dependency forms, complete arguments and notebook fences
+const CACHE_VERSION = 25; // v25: R dependencies in guarded and same-line expressions
 
 // Honest coverage: what the extractor could NOT see. Tools and status render
 // this so a thin graph never reads as a small repo; omissions are explicit.

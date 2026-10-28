@@ -38,9 +38,9 @@ const SET = (fn: string) => new RegExp(`^\\s*(?:(${LHS})\\s*(?:<<-|<-|=)\\s*)?${
 const SET_CLASS = SET("setClass");
 const SET_GENERIC = SET("setGeneric");
 const SET_METHOD = SET("setMethod");
-// Wrapped forms still count: suppressPackageStartupMessages(library(pkg)).
-const DEPENDENCY =
-  /^[ \t]*(?:[A-Za-z.][\w.]*[ \t]*\([ \t]*)*(library|require|requireNamespace|source)\s*\(/gm;
+// Masked strings/comments cannot forge a dependency. Admit expression-level
+// calls, but not identifiers or member/package calls (except base::).
+const DEPENDENCY = /(?<![\w.$@:])(?:base::)?(library|require|requireNamespace|source)\s*\(/g;
 // Qualified calls keep their qualifier whole: pkg::fun(x), self$method(x).
 const CALL = new RegExp(`((?:${NAME}(?:::|\\$))+${NAME})\\s*\\(|(${NAME})\\s*\\(`, "g");
 // Keywords are syntax, and the dependency forms are recorded as imports.
@@ -499,6 +499,9 @@ export const extractR = (file: string, text: string): RFacts => {
   DEPENDENCY.lastIndex = 0;
   let dependencyLine = 0;
   for (const match of maskedSource.matchAll(DEPENDENCY)) {
+    let before = match.index! - 1;
+    while (before >= 0 && /\s/.test(maskedSource[before]!)) before--;
+    if (before >= 0 && "$@:".includes(maskedSource[before]!)) continue;
     const source = match[1] === "source";
     const spec = firstArg(
       maskedSource,
