@@ -71,8 +71,10 @@ The CLI build checks the generated artifact receipt without loading the prover a
 rejects unbundled dependencies other than Node built-ins. Before a release, run
 `bun run check:package`: it checks a real Bun tarball outside the checkout,
 including receipt hashes, entry points, licenses and compiler-free execution.
-`bun run check:package path/to/package.tgz` checks an existing archive; publish
-that same checked tarball with `bun publish path/to/package.tgz`.
+`bun run check:package path/to/package.tgz` checks an existing archive. Never
+publish by hand: pushing a `chore(release): X.Y.Z` version bump to `main` makes
+`.github/workflows/publish.yml` pack, check, and publish those same tarballs
+through npm Trusted Publishing (see `docs/releasing.md`).
 
 ## Readable authored sources
 
