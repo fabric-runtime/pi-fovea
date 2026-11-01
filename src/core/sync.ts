@@ -1,5 +1,6 @@
 // Turn-sync is continuous repository intelligence for the active agent loop.
-// Before agent start and after each assistant turn it compares extracted facts
+// Requested in the background at prompt start and after each assistant turn
+// (the extension never awaits it on a Pi boundary), it compares extracted facts
 // against its baseline, regardless of whether edits came from Pi tools,
 // fabric_exec, bash, a subagent, or an external editor. Content hashes provide
 // the cheap unchanged path; semantic fingerprints ignore coordinate-only drift.
@@ -449,11 +450,54 @@ const snapshot = async (state: RepoState): Promise<SyncBaseline> => {
   };
 };
 
+/** Pre-edit content hashes captured on Pi's tool boundary while a root's first
+ * baseline was still being established in the background. */
+export type SyncPreimages = ReadonlyMap<string, { sha: string | undefined; at: number }>;
+// Never equal to a real semantic fingerprint, so the overlaid file drifts.
+const PREIMAGE_SEMANTICS = "preimage";
+
+/**
+ * A first baseline is captured asynchronously, so an edit can land between
+ * enrollment and the snapshot and be absorbed as if it predated the session.
+ * Re-seat such files at their captured pre-image: the next sync then sees
+ * them as drift instead of certifying them clean. Created files leave the
+ * baseline (with their anchors) and therefore surface as added. Anchors of
+ * edited files keep the post-edit set; the file still drives the cascade.
+ */
+const overlayPreimages = (
+  base: SyncBaseline,
+  preimages: SyncPreimages | undefined,
+): SyncBaseline => {
+  let overlaid = false;
+  for (const [file, { sha, at }] of preimages ?? []) {
+    if (base.shas.get(file) === sha) continue;
+    overlaid = true;
+    base.capturedAt = Math.min(base.capturedAt, at);
+    base.meta.delete(file);
+    base.dirty.add(file);
+    if (sha === undefined) {
+      base.shas.delete(file);
+      base.semantics.delete(file);
+      for (const [id, carrier] of base.anchors) if (carrier === file) base.anchors.delete(id);
+    } else {
+      base.shas.set(file, sha);
+      base.semantics.set(file, PREIMAGE_SEMANTICS);
+    }
+  }
+  // A distinct version keeps the version fast path from certifying it clean.
+  if (overlaid) base.version = `${base.version}+preimage`;
+  return base;
+};
+
 export const sync = async (
   root: string,
   params: SyncParams,
   now?: RepoState,
-  opts?: { probe?: "cheap" | "full" | "defer"; current?: () => boolean },
+  opts?: {
+    probe?: "cheap" | "full" | "defer";
+    current?: () => boolean;
+    preimages?: () => SyncPreimages | undefined;
+  },
 ): Promise<SyncOutcome> => {
   const isCurrent = () => opts?.current?.() !== false;
   const cancelled = (): SyncOutcome => ({
@@ -501,7 +545,7 @@ export const sync = async (
         if (!baseline && opts?.current)
           void kick.promise
             .then(async (built) => {
-              const fresh = await snapshot(built);
+              const fresh = overlayPreimages(await snapshot(built), opts.preimages?.());
               if (isCurrent() && !baselines.has(root)) commitBaseline(fresh);
             })
             .catch(() => {});
@@ -541,7 +585,7 @@ export const sync = async (
     return { structural: false, red: false, tokens: 0, details: { version: state.version } };
   }
   if (!prev) {
-    commitBaseline(await snapshot(state));
+    commitBaseline(overlayPreimages(await snapshot(state), opts?.preimages?.()));
     return {
       structural: true,
       red: false,

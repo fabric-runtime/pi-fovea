@@ -121,7 +121,7 @@ describe("startup compilation boundary", () => {
     expect(
       inputs.filter(
         (file) =>
-          /core\/(extension-runtime|ops|state|sync|build|extract|graph|heat|provenance)\.ts$/.test(
+          /core\/(extension-runtime|autosync|background|ops|state|sync|build|extract|graph|heat|provenance)\.ts$/.test(
             file,
           ) || file.endsWith("ui/settings.ts"),
       ),

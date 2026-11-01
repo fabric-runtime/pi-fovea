@@ -2,6 +2,7 @@
 // the baseline, then drives drifts the way the turn_end hook would.
 
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -421,6 +422,51 @@ describe.skipIf(!hasAstGrep())("turn sync", () => {
     execSync("git checkout -- server/main.go", { cwd: root });
     // Post-restore sync re-baselines; the restored repo is the new normal.
     await sync(root, { files: ["server/main.go"], budget: 512, steerThreshold: 0.01 });
+  });
+
+  it("re-seats edits captured before a background baseline at their pre-images", async () => {
+    // Enrollment establishes the first baseline asynchronously. An edit that
+    // lands before that snapshot must surface as drift on the next sync, not
+    // be certified clean as though it predated the session.
+    resetSyncBaselines();
+    resetSessions();
+    const users = join(root, "server/users.go");
+    const created = join(root, "server/late.go");
+    const src = readFileSync(users, "utf8");
+    const preimages = new Map([
+      ["server/users.go", { sha: createHash("sha1").update(src).digest("hex"), at: Date.now() }],
+      ["server/late.go", { sha: undefined, at: Date.now() }],
+    ]);
+    try {
+      writeFileSync(users, src.replace("return LoadUser(id)", "return SaveUser(id)"));
+      writeFileSync(
+        created,
+        'package server\n\nfunc LateHandler() string { return LoadUser("x") }\n',
+      );
+      const baseline = await sync(
+        root,
+        { files: [], budget: 512, steerThreshold: 0.01 },
+        undefined,
+        { preimages: () => preimages },
+      );
+      expect(baseline.details.baseline).toBe("established");
+      const stored = syncBaselineStore().get(root)!;
+      expect(stored.version).toMatch(/\+preimage$/);
+      expect(stored.shas.has("server/late.go")).toBe(false);
+      const next = await sync(root, { files: [], budget: 512, steerThreshold: 0.01 });
+      expect(next.structural).toBe(true);
+      expect(next.details.changedFiles).toEqual(
+        expect.arrayContaining(["server/users.go", "server/late.go"]),
+      );
+      expect(next.details.semanticChangedFiles).toContain("server/users.go");
+      // Without captured pre-images the same timing is absorbed as clean.
+      const quiet = await sync(root, { files: [], budget: 512, steerThreshold: 0.01 });
+      expect(quiet.structural).toBe(false);
+    } finally {
+      rmSync(created, { force: true });
+      execSync("git checkout -- server/users.go", { cwd: root });
+      await sync(root, { files: [], budget: 512, steerThreshold: 0.01 });
+    }
   });
 
   it("hintless drift is detected identically (fabric_exec / bash mutation path)", async () => {

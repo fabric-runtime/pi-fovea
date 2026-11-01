@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import {
   JOURNAL_TTL_MS,
   maintainTempStorage,
@@ -7,7 +7,10 @@ import {
   writeAtomicTemp,
 } from "./temp-storage.js";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { join, resolve } from "node:path";
+import { hashFile, repoPath, type MutationCapture } from "./capture.js";
+
+export { captureMutation, type MutationCapture } from "./capture.js";
 
 const JOURNAL_VERSION = 1;
 const JOURNAL_MAX_RECORDS = 256;
@@ -27,13 +30,6 @@ interface MutationJournal {
   root: string;
   owner: string;
   records: MutationRecord[];
-}
-
-export interface MutationCapture {
-  root: string;
-  file: string;
-  absolutePath: string;
-  beforeSha?: string;
 }
 
 export interface MutationTransition {
@@ -57,35 +53,6 @@ const prefixFor = (root: string): string => `pi-fovea-provenance-${rootKey(root)
 
 export const provenancePathFor = (root: string, sessionId: string): string =>
   join(tmpdir(), `${prefixFor(root)}${ownerFor(sessionId)}.json`);
-
-const hashFile = async (path: string): Promise<string | undefined> => {
-  try {
-    return createHash("sha1")
-      .update(await readFile(path))
-      .digest("hex");
-  } catch {
-    return undefined;
-  }
-};
-
-const repoPath = (
-  root: string,
-  path: string,
-): { file: string; absolutePath: string } | undefined => {
-  const absolutePath = resolve(root, path);
-  const file = relative(resolve(root), absolutePath);
-  if (!file || file === ".." || file.startsWith(`..${sep}`) || isAbsolute(file)) return undefined;
-  return { file: file.split(sep).join("/"), absolutePath };
-};
-
-export const captureMutation = async (
-  root: string,
-  path: string,
-): Promise<MutationCapture | undefined> => {
-  const located = repoPath(root, path);
-  if (!located) return undefined;
-  return { root: resolve(root), ...located, beforeSha: await hashFile(located.absolutePath) };
-};
 
 const writeQueues = new Map<string, Promise<void>>();
 

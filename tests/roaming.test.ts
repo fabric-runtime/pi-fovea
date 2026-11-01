@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { settleBackground } from "../src/core/background.js";
 import * as gitProbe from "../src/core/git.js";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync, existsSync } from "node:fs";
@@ -74,6 +75,8 @@ function host(cwd: string) {
   const emit = async (name: string, event: Record<string, unknown> = {}) => {
     const result = [];
     for (const fn of handlers.get(name) ?? []) result.push(await fn(event, ctx));
+    // Enrollment indexes in the background; observe the settled ring.
+    await settleBackground();
     return result;
   };
   const read = (root: string, error = false) =>

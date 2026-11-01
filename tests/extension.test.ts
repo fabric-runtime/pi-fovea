@@ -25,6 +25,7 @@ import { cachePathFor } from "../src/core/build.js";
 import { evictState, getInflight, getState } from "../src/core/ops.js";
 import { DEFAULT_FOVEA_CONFIG } from "../src/core/config.js";
 import { resetSyncBaselines, syncBaselineStore, warmCacheHas } from "../src/core/sync.js";
+import { settleBackground } from "../src/core/background.js";
 
 const tmpdir = () => realpathSync(systemTmpdir());
 
@@ -54,11 +55,17 @@ interface CommandDef {
   handler: (args: string, ctx: ReturnType<typeof fakeCtx>) => Promise<void>;
 }
 
-const fakeCtx = (cwd: string, trusted = false, sessionId = "test-session") => ({
+const fakeCtx = (
+  cwd: string,
+  trusted = false,
+  sessionId = "test-session",
+  run: { streaming?: boolean; queued?: boolean } = {},
+) => ({
   cwd,
   hasUI: false,
   sessionManager: { getSessionId: () => sessionId },
-  isIdle: () => true,
+  isIdle: () => !run.streaming,
+  hasPendingMessages: () => run.queued === true,
   isProjectTrusted: () => trusted,
   reload: async () => {},
   ui: { notify: () => {} },
@@ -103,6 +110,8 @@ const load = () => {
       const result = await handler(event, ctx);
       if (result !== undefined) results.push(result);
     }
+    // Lifecycle hooks only schedule analysis; tests observe its delivery.
+    await settleBackground();
     return results;
   };
   return { tools, commands, messages, emit, execCalls };
@@ -573,8 +582,8 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
 
   it("silently absorbs hintless drift before the session enters a directory", async () => {
     // A raw filesystem write has no activity path tying it to this task. The
-    // send path still defers the rebuild, then turn_end refreshes the broad
-    // index and baseline without injecting sibling work into the conversation.
+    // prompt-start request refreshes the broad index and baseline in the
+    // background without injecting sibling work into the conversation.
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-before-agent-"));
     cpSync(FIXTURE, root, { recursive: true });
     execSync("git init -qb main && git add -A", { cwd: root });
@@ -594,13 +603,13 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
           'r.POST("/api/users", server.CreateUserHandler)\n\tr.GET("/api/users/:id/idle", server.GetUserHandler)',
         ),
       );
+      const beforeVersion = getState(root)!.version;
       const results = await loaded.emit("before_agent_start", { prompt: "continue" }, ctx);
       expect(results.filter((result) => result !== undefined)).toEqual([]);
       expect(loaded.messages).toHaveLength(0);
-      const beforeVersion = getState(root)!.version;
+      expect(getState(root)!.version).not.toBe(beforeVersion);
       await loaded.emit("turn_end", {}, ctx);
       expect(loaded.messages).toHaveLength(0);
-      expect(getState(root)!.version).not.toBe(beforeVersion);
       // The outside-attention baseline advances, so the drift cannot replay.
       await loaded.emit("turn_end", {}, ctx);
       expect(loaded.messages).toHaveLength(0);
@@ -609,10 +618,10 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     }
   });
 
-  it("still injects a warmed verdict before the agent starts", async () => {
-    // When the tool-edit warm landed before the user sends, the prepared
-    // verdict renders on the send path — fast, no rebuild — and steers
-    // pre-prompt exactly as before.
+  it("delivers a warmed verdict requested at prompt start without blocking the prompt", async () => {
+    // When the tool-edit warm landed before the user sends, prompt start only
+    // requests the verdict; it arrives as context for the next turn instead of
+    // holding the run open or restarting an idle agent.
     const root = mkdtempSync(path.join(tmpdir(), "pi-fovea-warm-agent-"));
     cpSync(FIXTURE, root, { recursive: true });
     execSync("git init -qb main && git add -A", { cwd: root });
@@ -646,16 +655,16 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
       const results = await loaded.emit("before_agent_start", { prompt: "continue" }, ctx);
-      const injected = results.find((result) => typeof result === "object" && result !== null) as {
-        message: Record<string, unknown>;
-      };
+      expect(results).toEqual([]);
+      expect(loaded.messages).toHaveLength(1);
+      const injected = loaded.messages[0]!;
+      expect(injected.options).toEqual({ deliverAs: "nextTurn" });
       expect(injected.message).toMatchObject({ customType: "pi-fovea-sync", display: true });
       expect(String(injected.message.content)).toContain("GET /api/users/{*}/warmnext");
       expect(String(injected.message.content)).toContain("Origin: current session.");
       expect(injected.message.details).toMatchObject({
         provenance: { kind: "current-session", files: { "server/main.go": "current-session" } },
       });
-      expect(loaded.messages).toHaveLength(0);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -705,7 +714,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     resetSessions();
     resetSyncBaselines();
     const loaded = load();
-    const ctx = fakeCtx(root);
+    const ctx = fakeCtx(root, false, "test-session", { streaming: true });
     try {
       await enter(loaded, ctx); // explicit root enrollment without directory attention
       await loaded.emit("before_agent_start", { prompt: "change the route" }, ctx); // establish pre-edit baseline
@@ -725,7 +734,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
       );
       await loaded.emit("turn_end", {}, ctx);
       expect(loaded.messages).toHaveLength(1);
-      expect(loaded.messages[0]!.options).toEqual({ deliverAs: "steer", triggerTurn: true });
+      expect(loaded.messages[0]!.options).toEqual({ deliverAs: "steer" });
       expect(loaded.messages[0]!.message).toMatchObject({
         customType: "pi-fovea-sync",
         display: true,
@@ -841,7 +850,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     resetSessions();
     resetSyncBaselines();
     const loaded = load();
-    const ctx = fakeCtx(root, true);
+    const ctx = fakeCtx(root, true, "test-session", { streaming: true });
     try {
       await enter(loaded, ctx);
       await loaded.emit("before_agent_start", { prompt: "change the route" }, ctx);
@@ -861,7 +870,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
       );
       await loaded.emit("turn_end", {}, ctx);
       expect(loaded.messages).toHaveLength(1);
-      expect(loaded.messages[0]!.options).toEqual({ deliverAs: "steer", triggerTurn: true });
+      expect(loaded.messages[0]!.options).toEqual({ deliverAs: "steer" });
       expect(loaded.messages[0]!.message).toMatchObject({
         customType: "pi-fovea-sync",
         display: false,
@@ -911,7 +920,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
     resetSessions();
     resetSyncBaselines();
     const loaded = load();
-    const ctx = fakeCtx(root);
+    const ctx = fakeCtx(root, false, "test-session", { streaming: true });
     try {
       await enter(loaded, ctx);
       await loaded.emit("before_agent_start", { prompt: "add a route" }, ctx);
@@ -934,7 +943,7 @@ describe.skipIf(!hasAstGrep())("extension execution", () => {
       await new Promise((resolve) => setTimeout(resolve, 600));
       await loaded.emit("turn_end", {}, ctx);
       expect(loaded.messages).toHaveLength(1);
-      expect(loaded.messages[0]!.options).toEqual({ deliverAs: "steer", triggerTurn: true });
+      expect(loaded.messages[0]!.options).toEqual({ deliverAs: "steer" });
       expect(String(loaded.messages[0]!.message.content)).toContain(
         "Steer: account for this update",
       );

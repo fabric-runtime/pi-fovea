@@ -245,17 +245,18 @@ just because unrelated projects share a parent directory. Cold extraction keeps
 streamed JSONL caches, 64-file batches, adaptive ast-grep chunk splitting, and
 bounded I/O/process concurrency.
 
-| Variable                       |  Default  | Meaning                                                          |
-| ------------------------------ | :-------: | ---------------------------------------------------------------- |
-| `FOVEA_MAX_ROOTS`              |   `32`    | observed recency ring, clamped to 1–32                           |
-| `FOVEA_CACHE_ROOTS`            |    `2`    | hot graph/fact/vector cache residency, separate from observation |
-| `FOVEA_MAX_FILES`              |  `8000`   | maximum indexed files in one graph                               |
-| `FOVEA_MAX_FILE_BYTES`         | `1048576` | maximum bytes extracted from one source file                     |
-| `FOVEA_SPAWN_CONCURRENCY`      |    `3`    | concurrent ast-grep/Git subprocesses                             |
-| `FOVEA_IO_CONCURRENCY`         |   `32`    | concurrent file stat/read operations                             |
-| `FOVEA_MEMORY_HALF_LIFE_HOURS` |   `48`    | wall-clock half-life of charged cascade memory                   |
-| `FOVEA_GIT_UNTRACKED_CACHE`    |  enabled  | set `0` to disable Git's native untracked-directory cache        |
-| `FOVEA_MAX_SUBMODULE_DEPTH`    |    `4`    | recursion cap for nested submodules                              |
+| Variable                       |  Default  | Meaning                                                            |
+| ------------------------------ | :-------: | ------------------------------------------------------------------ |
+| `FOVEA_MAX_ROOTS`              |   `32`    | observed recency ring, clamped to 1–32                             |
+| `FOVEA_CACHE_ROOTS`            |    `2`    | hot graph/fact/vector cache residency, separate from observation   |
+| `FOVEA_MAX_FILES`              |  `8000`   | maximum indexed files in one graph                                 |
+| `FOVEA_MAX_FILE_BYTES`         | `1048576` | maximum bytes extracted from one source file                       |
+| `FOVEA_SPAWN_CONCURRENCY`      |    `3`    | concurrent ast-grep/Git subprocesses                               |
+| `FOVEA_IO_CONCURRENCY`         |   `32`    | concurrent file stat/read operations                               |
+| `FOVEA_MEMORY_HALF_LIFE_HOURS` |   `48`    | wall-clock half-life of charged cascade memory                     |
+| `FOVEA_SYNC_STALL_MS`          |  `10000`  | how long a background sync pass waits on one root before moving on |
+| `FOVEA_GIT_UNTRACKED_CACHE`    |  enabled  | set `0` to disable Git's native untracked-directory cache          |
+| `FOVEA_MAX_SUBMODULE_DEPTH`    |    `4`    | recursion cap for nested submodules                                |
 
 Root-discovery metadata is coalesced and TTL-cached; it never certifies source
 freshness. Git status/content hashes and bounded manifest/boundary sweeps remain
@@ -270,11 +271,26 @@ for boundaries, persistence, scheduling, and remaining limitations.
 
 ## Turn sync
 
-Continuous sync is enabled and visible by default. Before an agent starts,
-Fovea establishes its baseline or injects relevant drift ahead of the first
-model call. After every assistant turn it compares symbols, calls, imports,
-literals, and anchors again. Content hashes keep the unchanged fast path cheap.
-Edits that touch only comments or formatting raise no signal.
+Continuous sync is enabled and visible by default. When a prompt starts and
+after every assistant turn, Fovea requests a background comparison of symbols,
+calls, imports, literals, and anchors against its baseline. Content hashes keep
+the unchanged fast path cheap. Edits that touch only comments or formatting
+raise no signal.
+
+Automatic analysis never holds Pi's conversation lifecycle or tool boundaries
+open. `turn_end` and `before_agent_start` only schedule work; enrollment after a
+successful read, search, or `cd` binds the root at once and indexes it in the
+background; edit hooks hash one pre-image and leave provenance journaling to the
+background. Each root has one serial lane: at most one running job plus one
+queued job per kind (sync, baseline, warm), with later file hints merged into
+the queued job. A pass that waits more than `FOVEA_SYNC_STALL_MS` (default 10s)
+on one root moves on, so a stuck root cannot starve the rest of the ring. Late
+results are dropped after a session change, `/fovea reset`, shutdown, or root
+retirement. Failures surface once as a warning and in `/fovea status`, and the
+next turn retries. If an edit lands before a new root's first baseline is
+captured, its pre-image is kept, so the edit reports as drift instead of being
+absorbed. Explicit `fovea_*` tools still wait for the results they ask for, and
+they can be cancelled.
 
 The default `sync.scope` is `"session"`: path-bearing read/search/edit tools,
 explicit focus/dwell results, and file-seeded impact calls add the top-level
@@ -284,13 +300,15 @@ is absorbed silently, so broad umbrella coverage does not become broad model
 context. Set `sync.scope` to `"repository"` to restore root-wide steering.
 
 A meaningful current, mixed, or unattributed change inside the attention scope
-can still ship post-turn with `deliverAs: "steer"` and `triggerTurn`. If
+steers a live run with `deliverAs: "steer"`, which Pi absorbs at the run's next
+turn boundary. Fovea never sets `triggerTurn`. If the agent is idle, the user
+has queued messages, or
 [pi-queue-steer](https://github.com/monotykamary/pi-queue-steer-factory) still
-holds rows (`globalThis.__tmustierPiQueueSteerState.pending > 0`), that same
-notice rides `nextTurn` instead so a queued user row stays first in Pi's native
-lane and Fovea cannot `triggerTurn` ahead of it. A relevant
-change attributed solely to another Fovea-enabled session is queued for the
-next user prompt instead; it never restarts an idle agent. The compact update
+holds rows (`globalThis.__tmustierPiQueueSteerState.pending > 0`), the same
+notice rides `nextTurn` instead. Queued user input stays first, and a result
+that arrives after the run has finished does not restart the agent. A relevant
+change attributed solely to another Fovea-enabled session is always queued for
+the next user prompt. The compact update
 names changed files, route deltas, and newly relevant files. Shell commands,
 external editors, and agents without Fovea remain `unattributed` rather than
 being guessed, while the path scope still keeps unrelated sibling sandboxes
