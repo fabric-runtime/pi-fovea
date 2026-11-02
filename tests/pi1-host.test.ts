@@ -12,9 +12,9 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 it.each(["augment", "replace"])(
-  "Pi 1.3 loads %s mode, preserves callable tools and runs nested grep middleware",
+  "Pi 1.5 loads %s mode, preserves callable tools and runs nested grep middleware",
   async (grepMode) => {
-    expect(VERSION).toBe("1.3.0");
+    expect(VERSION).toBe("1.5.0");
     const root = await mkdtemp(join(tmpdir(), "fovea-pi1-"));
     const agentDir = join(root, "agent");
     await mkdir(agentDir);
@@ -99,6 +99,10 @@ it.each(["augment", "replace"])(
       session.subscribe((event) => {
         if (event.type === "tool_execution_start") events.push(event.toolName);
       });
+      // Augmentation deliberately passes cold graphs through without waiting.
+      // Warm the graph through the public tool before asserting enrichment.
+      const warm = await ctx.executeTool("fovea_sketch", { root, maxTokens: 512 });
+      expect(warm.isError, JSON.stringify(warm.result)).toBe(false);
       const grep = await ctx.executeTool("grep", {
         pattern: "migrationProbe",
         path: "entry.ts",
@@ -138,7 +142,7 @@ it.each(["augment", "replace"])(
           expect.objectContaining({ type: "text", text: expect.stringContaining("fovea sketch") }),
         ]),
       );
-      expect(events).toEqual(["grep", "grep", "fovea_sketch"]);
+      expect(events).toEqual(["fovea_sketch", "grep", "grep", "fovea_sketch"]);
       session.setActiveToolsByName(
         session.getActiveToolNames().filter((name) => name !== "codemode"),
       );
